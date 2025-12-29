@@ -1,0 +1,19 @@
+# Netlify build configuration for a Next.js app
+
+[build]
+  # Command to build the site
+  command = "npm run build"
+
+  # Directory to publish
+  publish = ".next"
+
+[build.environment]
+  # Disable Genkit's telemetry during the build on Netlify
+  GENKIT_TELEMETRY_DISABLED = "true"
+
+# The Essential Next.js Build Plugin is automatically installed
+# for Next.js sites on Netlify. It handles things like server-side
+# rendering, API routes, and image optimization.
+# You can add the following to ensure it's used, but it's often not necessary.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
