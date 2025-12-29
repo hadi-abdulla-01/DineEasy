@@ -1,0 +1,112 @@
+  const MenuComponent = isCustomerFacing ? MenuList : AdminMenuGrid;
+
+  return (
+    <div className="relative">
+      {isCustomerFacing && showFeatured ? (
+        // Featured Home View for Customers
+        <FeaturedSections 
+          menu={menu}
+          onViewAllMenu={() => setShowFeatured(false)}
+          onItemClick={(item) => setSelectedItemForDetails(item)}
+        />
+      ) : (
+        // Full Menu View
+        <>
+          {isCustomerFacing ? (
+            <div className="mb-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-['League_Spartan',sans-serif] font-bold text-[#391713] text-xl">Browse Menu</h2>
+                <button
+                  onClick={() => setShowFeatured(true)}
+                  className="font-['League_Spartan',sans-serif] font-semibold text-[#E95322] text-sm"
+                >
+                  Back to Home
+                </button>
+              </div>
+              
+              <Input 
+                type="text" 
+                placeholder="Search menu..."
+                className="w-full rounded-[30px] border-2 border-gray-200 focus:border-[#CB1E1D] h-12 px-6 font-['League_Spartan',sans-serif]"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              
+              <CategoryScroll 
+                categories={categories}
+                selectedCategory={selectedCategory}
+                onSelectCategory={setSelectedCategory}
+              />
+            </div>
+          ) : (
+            <div className="mb-6 space-y-4">
+              <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+                <h2 className="font-headline text-3xl font-bold">Menu</h2>
+                <Input 
+                  type="text" 
+                  placeholder="Search menu..."
+                  className="w-full sm:max-w-xs"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {categories.map(category => (
+                  <Button
+                    key={category}
+                    variant={selectedCategory === category ? "default" : "outline"}
+                    onClick={() => setSelectedCategory(category)}
+                    size="sm"
+                    className="text-xs h-8"
+                  >
+                    {category}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+          <MenuComponent items={availableMenu} />
+          {unavailableMenu.length > 0 && (
+            <>
+              <Separator className="my-8" />
+              <h3 className="font-['League_Spartan',sans-serif] font-bold text-[#676767] text-xl mb-6">Unavailable Items</h3>
+              <MenuComponent items={unavailableMenu} isUnavailable={true} />
+            </>
+          )}
+        </>
+      )}
+
+      <CartSheet 
+        cart={cart}
+        tableId={tableId}
+        isCustomerFacing={isCustomerFacing}
+        onRemoveFromCart={removeFromCart}
+        onNotesChange={handleNoteChangeForCartItem}
+        onOrderPlaced={handleOrderPlaced}
+        existingOrder={existingOrder}
+      />
+      
+      {selectedItemForDetails && (
+        <ItemDetailsDialog 
+            item={selectedItemForDetails}
+            open={!!selectedItemForDetails}
+            onOpenChange={(isOpen) => !isOpen && setSelectedItemForDetails(null)}
+            onAddToCart={handleAddMultipleToCart}
+            onRemoveFromCart={handleRemoveFromCart}
+            getQuantityInCart={getQuantity}
+            settings={settings}
+        />
+      )}
+
+      {selectedItemForAddons && (
+        <AddonDialog
+          item={selectedItemForAddons}
+          open={!!selectedItemForAddons}
+          onOpenChange={(isOpen) => !isOpen && setSelectedItemForAddons(null)}
+          onAddToCart={handleAddToCart}
+          settings={settings}
+        />
+      )}
+    </div>
+  );
+}
