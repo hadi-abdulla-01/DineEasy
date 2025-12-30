@@ -6,6 +6,7 @@ import { notFound, redirect, useParams, useRouter } from "next/navigation";
 import type { Order, MenuItem, MealSession, RestaurantSettings } from "@/lib/definitions";
 import { useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
+import { OrderHeader } from "@/components/order-header";
 
 type CustomerInfo = {
     name: string;
@@ -28,18 +29,30 @@ export default function OrderPage() {
     useEffect(() => {
         if (!tableId) return;
 
-        // Check for customer info in session storage
+        // This effect only runs once on mount to check for customer info.
         const storedCustomerInfo = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
         if (storedCustomerInfo) {
-            const info: CustomerInfo = JSON.parse(storedCustomerInfo);
-            setCustomerInfo(info);
+            try {
+                const info = JSON.parse(storedCustomerInfo);
+                if (info.name && info.phone) {
+                    setCustomerInfo(info);
+                } else {
+                    router.replace(`/order/${tableId}/welcome`);
+                }
+            } catch {
+                router.replace(`/order/${tableId}/welcome`);
+            }
         } else {
-            // If no info, redirect to the welcome page to collect it
             router.replace(`/order/${tableId}/welcome`);
-            return; // Stop further execution until redirected
         }
+    }, [tableId, router]);
 
-        async function fetchData(customerPhone: string) {
+    useEffect(() => {
+        // This effect runs only when customerInfo is set.
+        if (!customerInfo || !tableId) return;
+
+        async function fetchData() {
+            setIsLoading(true);
             const fetchedTable = await getTableById(tableId);
             if (!fetchedTable || !fetchedTable.branchId) {
                 notFound();
@@ -59,27 +72,27 @@ export default function OrderPage() {
 
             // Filter menu items by current session
             const availableMenuItems = allMenuItems.filter(item => {
-                if (!item.availableSessions || item.availableSessions.length === 0) return true;
+                if (!item.isAvailable) return false;
+                // If item has no assigned sessions, it's available only if there's no active session.
+                if (!item.availableSessions || item.availableSessions.length === 0) {
+                     return true;
+                }
+                 // If there is an active session, the item must be in it.
                 if (!session) return false;
                 return item.availableSessions.includes(session.id);
             });
             setMenuItems(availableMenuItems);
 
             // Find an existing order for this specific customer at this table
-            const existingOrder = activeOrders.find(order => order.tableId === tableId && order.customerPhone === customerPhone);
+            const existingOrder = activeOrders.find(order => order.tableId === tableId && order.customerPhone === customerInfo.phone);
             setActiveOrderForCustomer(existingOrder);
             
             setIsLoading(false);
         }
 
-        if (customerInfo?.phone) {
-            fetchData(customerInfo.phone);
-        } else if (storedCustomerInfo) {
-             const info: CustomerInfo = JSON.parse(storedCustomerInfo);
-             fetchData(info.phone);
-        }
+        fetchData();
 
-    }, [tableId, router, customerInfo]);
+    }, [customerInfo, tableId]); // Only re-run when customerInfo is available.
     
     if (!customerInfo || isLoading) {
          return (
@@ -114,4 +127,3 @@ export default function OrderPage() {
         </div>
     );
 }
-
