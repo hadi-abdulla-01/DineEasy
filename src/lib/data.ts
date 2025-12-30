@@ -327,7 +327,9 @@ export async function getMainBranch(): Promise<Branch | null> {
             await setMainBranch(allBranches[0].id);
             return getBranchById(allBranches[0].id);
         }
-        return null;
+        // If still no branches, create one
+        const newMainBranch = await createBranch('Main Branch', true);
+        return newMainBranch;
     }
     return docToObj<Branch>(snapshot.docs[0]);
 }
@@ -1025,9 +1027,11 @@ export async function logActivity(userId: string, username: string, action: stri
 
 export async function getActivityLogsByUser(userId: string): Promise<ActivityLog[]> {
     const activityLogsRef = getCollections().activityLogs;
-    const q = query(activityLogsRef, where('userId', '==', userId), orderBy('timestamp', 'desc'));
+    const q = query(activityLogsRef, where('userId', '==', userId));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => docToObj<ActivityLog>(d));
+    const logs = snapshot.docs.map(d => docToObj<ActivityLog>(d));
+    // Sort in code to avoid needing a composite index
+    return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
 
