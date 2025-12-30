@@ -17,6 +17,7 @@ import { useFormStatus } from 'react-dom';
 import { ScrollArea } from './ui/scroll-area';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/app/admin/auth-provider';
 
 function SubmitButton({ isCustomerFacing }: { isCustomerFacing: boolean }) {
   const { pending } = useFormStatus();
@@ -42,6 +43,7 @@ type CartSheetProps = {
 };
 
 export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, onNotesChange, onOrderPlaced, existingOrder, branchId, settings, customerInfo }: CartSheetProps) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,15 +56,18 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
     setIsSubmitting(true);
     setError(null);
     
+    // Add current user id if available
+    if(user?.id) {
+        formData.append('createdBy', user.id);
+    }
+    
     const state = await placeOrder(null, formData);
 
     if (state?.success && state.orderId) {
       onOrderPlaced();
       setOpen(false);
 
-      if (isCustomerFacing) {
-        router.push(`/order/${tableId}/status/${state.orderId}`);
-      } else {
+      if (!isCustomerFacing) {
         toast({
           title: 'Order Placed Successfully!',
           description: 'The order has been sent to the kitchen.',

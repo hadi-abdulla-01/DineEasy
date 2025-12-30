@@ -8,12 +8,13 @@
 
 
 
+
 'use server';
 
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { OrderItem, OrderStatus, MenuItem, Table, RemoteOrder, Order, KitchenUser, RestaurantSettings, AddonGroup, SelectedAddon, UserRole, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch } from './definitions';
+import type { OrderItem, OrderStatus, MenuItem, Table, RemoteOrder, Order, KitchenUser, RestaurantSettings, AddonGroup, SelectedAddon, UserRole, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog } from './definitions';
 import {
     createOrder,
     updateTableStatus,
@@ -46,6 +47,7 @@ import {
     getKitchenUserByUsername,
     getTableById,
     logActivity,
+    getKitchenUserById,
 } from './data';
 
 
@@ -82,7 +84,7 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
     const customerName = formData.get('customerName') as string;
     const customerPhone = formData.get('customerPhone') as string;
     const isCustomerFacing = formData.get('isCustomerFacing') === 'true';
-    const createdByName = formData.get('createdByName') as string | null;
+    const createdByForm = formData.get('createdBy') as string | null;
 
 
     const CustomerSchema = z.object({
@@ -127,6 +129,13 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
         isReady: false,
         status: 'active',
     }));
+    
+    let createdByName = isCustomerFacing ? 'Customer' : 'Staff';
+    if(createdByForm){
+        const user = await getKitchenUserById(createdByForm);
+        if(user) createdByName = user.username;
+    }
+
 
     const activeOrders = await getActiveOrders(branchId);
     const existingOrderForCustomer = activeOrders.find(o => o.tableId === tableId && o.customerPhone === customerPhone);
@@ -148,7 +157,7 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
                 items: newItems,
                 orderType: 'Dine-in' as Order['orderType'],
                 notes: orderNotes,
-                createdByName: createdByName || (isCustomerFacing ? 'Customer' : undefined)
+                createdByName: createdByName
             };
             finalOrder = await createOrder(orderToCreate);
         }
@@ -158,6 +167,9 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
         }
 
         await updateTableStatus(tableId, 'occupied');
+        if (createdByForm) {
+            await logActivity(createdByForm, createdByName, 'Order Placed', `Placed order for ${customerName} at table.`);
+        }
 
     } catch (error) {
         console.error(error);
@@ -165,15 +177,13 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
             message: 'Database Error: Failed to Place Order.',
         };
     }
-
-    revalidatePath('/kitchen', 'layout');
+    
     revalidatePath('/admin', 'layout');
+    revalidatePath('/kitchen', 'layout');
 
-    if (!isCustomerFacing) {
-        redirect('/admin/table-order');
+    if (isCustomerFacing) {
+        redirect(`/order/${tableId}/status/${finalOrder.id}`);
     }
-
-    revalidatePath(`/order/${tableId}/status/${finalOrder.id}`);
 
     return { success: true, orderId: finalOrder.id };
 }
@@ -465,6 +475,8 @@ export async function createKitchenUserAction(prevState: CreateUserState, formDa
     const branchId = formData.get('branchId') as string;
     let categories = formData.getAll('categories').map(String);
     const permissionsString = formData.get('permissions') as string | null;
+    const createdBy = formData.get('createdBy') as string | null;
+
 
     if (!username || !password || !role || !branchId) {
         return { message: "Missing required fields." };
@@ -485,7 +497,13 @@ export async function createKitchenUserAction(prevState: CreateUserState, formDa
     const uniqueCategories = Array.from(new Set(categories));
 
     const newUser = await createKitchenUser({ username, password, categories: uniqueCategories, role, permissions, branchId });
-    await logActivity(newUser.id, newUser.username, 'Created User', `Created new user: ${username} with role ${role}`);
+    if(createdBy){
+        const creator = await getKitchenUserById(createdBy);
+        if(creator) {
+            await logActivity(creator.id, creator.username, 'Created User', `Created new user: ${username} with role ${role}`);
+        }
+    }
+
 
     revalidatePath('/admin/user-management');
 
@@ -500,6 +518,8 @@ export async function updateKitchenUserAction(userId: string, formData: FormData
     const branchId = formData.get('branchId') as string;
     const categories = formData.getAll('categories').map(String);
     const permissionsString = formData.get('permissions') as string | null;
+    const updatedBy = formData.get('updatedBy') as string | null;
+
 
     if (!permissionsString) {
         console.log("Validation failed: Missing permissions.");
@@ -524,24 +544,29 @@ export async function updateKitchenUserAction(userId: string, formData: FormData
 
     try {
         const updatedUser = await updateKitchenUser(userId, updateData);
-        if (updatedUser) {
-            await logActivity(userId, updatedUser.username, 'Updated Profile', `Updated profile for ${username}`);
+        if(updatedBy) {
+            const updater = await getKitchenUserById(updatedBy);
+            if (updater && updatedUser) {
+                await logActivity(updater.id, updater.username, 'Updated User', `Updated profile for ${updatedUser.username}`);
+            }
         }
         revalidatePath('/admin/user-management');
     } catch (error) {
         return { message: 'Database Error: Failed to update user.' };
     }
-    redirect('/admin/user-management');
 }
 
 
-export async function deleteKitchenUserAction(userId: string) {
+export async function deleteKitchenUserAction(userId: string, deletedBy: string | null) {
     try {
         const userToDelete = await getKitchenUserById(userId);
-        if (userToDelete) {
-             await deleteKitchenUser(userId);
-             await logActivity(userId, userToDelete.username, 'Deleted User', `Deleted user: ${userToDelete.username}`);
+        if (userToDelete && deletedBy) {
+            const deleter = await getKitchenUserById(deletedBy);
+            if(deleter) {
+                await logActivity(deleter.id, deleter.username, 'Deleted User', `Deleted user: ${userToDelete.username}`);
+            }
         }
+        await deleteKitchenUser(userId);
         revalidatePath('/admin/user-management');
     } catch (error) {
         return { message: 'Database Error: Failed to delete user.' };
@@ -706,7 +731,6 @@ export async function setMainBranchAction(branchId: string) {
 
 // Session Management Actions
 import { addMealSession, updateMealSession, deleteMealSession } from './data';
-import type { MealSession } from './definitions';
 
 export async function addMealSessionAction(formData: FormData) {
     const branchId = formData.get('branchId') as string;
