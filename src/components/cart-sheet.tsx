@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useActionState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { Order, OrderItem, RestaurantSettings } from '@/lib/definitions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,13 +43,19 @@ type CartSheetProps = {
 
 export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, onNotesChange, onOrderPlaced, existingOrder, branchId, settings, customerInfo }: CartSheetProps) {
   const [open, setOpen] = useState(false);
-  const [state, formAction] = useActionState(placeOrder, null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  useEffect(() => {
+  const handleFormSubmit = async (formData: FormData) => {
+    setIsSubmitting(true);
+    setError(null);
+    
+    const state = await placeOrder(null, formData);
+
     if (state?.success && state.orderId) {
       onOrderPlaced();
       setOpen(false);
@@ -63,8 +69,13 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
         });
         router.push('/admin/table-order');
       }
+    } else {
+       setError(state?.message || 'An unexpected error occurred.');
     }
-  }, [state, onOrderPlaced, router, tableId, isCustomerFacing, toast]);
+    
+    setIsSubmitting(false);
+  };
+
 
   const renderCartContent = () => {
     if (!settings) {
@@ -95,7 +106,7 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
     }
 
     return (
-      <form action={formAction} className="flex h-full flex-col">
+      <form action={handleFormSubmit} className="flex h-full flex-col">
         <div className="flex-1 overflow-y-auto">
           <ScrollArea className="h-full pr-6">
             <div className="space-y-4">
@@ -170,8 +181,11 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
             <Textarea id="orderNotes-sheet" name="orderNotes" placeholder="Any special requests for the whole order?" />
           </div>
 
-          <SubmitButton isCustomerFacing={isCustomerFacing} />
-          {state?.message && <p className="text-sm font-medium text-destructive">{state.message}</p>}
+          <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? 'Placing Order...' : isCustomerFacing ? 'Place My Order' : 'Place Order for Customer'}
+            <ShoppingCart className="ml-2 h-5 w-5" />
+          </Button>
+          {error && <p className="text-sm font-medium text-destructive">{error}</p>}
         </div>
       </form>
     );
