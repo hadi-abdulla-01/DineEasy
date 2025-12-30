@@ -2,7 +2,7 @@
 'use client';
 import { getMenuItems, getTableById, getActiveOrders, getSettings, getOrderById, getCurrentSession } from "@/lib/data";
 import { OrderForm } from "@/components/order-form";
-import { notFound, redirect, useParams, useRouter } from "next/navigation";
+import { notFound, redirect, useParams, useRouter, useSearchParams } from "next/navigation";
 import type { Order, MenuItem, MealSession, RestaurantSettings } from "@/lib/definitions";
 import { useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
@@ -16,7 +16,10 @@ type CustomerInfo = {
 export default function OrderPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const tableId = params.tableId as string;
+    const addItems = searchParams.get('add_items') === 'true';
+    const orderId = searchParams.get('order_id');
 
     const [table, setTable] = useState<{ id: string, branchId: string, number: number } | null>(null);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
@@ -33,7 +36,6 @@ export default function OrderPage() {
         if (storedCustomerInfo) {
             try {
                 const info = JSON.parse(storedCustomerInfo);
-                // Only phone number is required to proceed.
                 if (info.phone) {
                     setCustomerInfo(info);
                 } else {
@@ -65,14 +67,14 @@ export default function OrderPage() {
                 getCurrentSession(fetchedTable.branchId),
                 getActiveOrders(fetchedTable.branchId)
             ]);
-
+            
             const existingOrder = activeOrders.find(order => order.tableId === tableId && order.customerPhone === customerInfo.phone);
 
-            if (existingOrder) {
+            if (existingOrder && !addItems) {
                 router.replace(`/order/${tableId}/status/${existingOrder.id}`);
-                return; // Stop further execution since we are redirecting
+                return;
             }
-
+            
             setSettings(fetchedSettings);
             setCurrentSession(session);
 
@@ -86,14 +88,19 @@ export default function OrderPage() {
             });
             setMenuItems(availableMenuItems);
 
-            setActiveOrderForCustomer(undefined); // No active order found, show menu
+            if(addItems && orderId) {
+                const orderToModify = await getOrderById(orderId);
+                setActiveOrderForCustomer(orderToModify);
+            } else {
+                setActiveOrderForCustomer(undefined);
+            }
             
             setIsLoading(false);
         }
 
         fetchData();
 
-    }, [customerInfo, tableId, router]);
+    }, [customerInfo, tableId, router, addItems, orderId]);
     
     if (!customerInfo || isLoading) {
          return (
