@@ -1,6 +1,5 @@
 
 
-
 'use client';
 
 import { useState, useActionState, useEffect } from 'react';
@@ -153,7 +152,7 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
           {customerInfo?.name && <input type="hidden" name="customerName" value={customerInfo.name} />}
           {customerInfo?.phone && <input type="hidden" name="customerPhone" value={customerInfo.phone} />}
           
-          {!customerInfo && (
+          {!isCustomerFacing && !customerInfo && (
             <>
                 <div className="space-y-2">
                     <Label htmlFor="customerName-sheet">Customer Name</Label>
