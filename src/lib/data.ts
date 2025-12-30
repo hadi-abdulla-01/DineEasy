@@ -207,12 +207,10 @@ export async function getSettings(branchId?: string): Promise<RestaurantSettings
 
 async function seedInitialData() {
     const branches = await getBranches();
-    if (branches.length === 0) {
-        console.log("No branches found. Seeding Main Branch.");
-        await createBranch('Main Branch', true);
+    if (branches.length > 0) {
+        await seedInitialAdminUser();
+        await seedInitialOrder();
     }
-    await seedInitialAdminUser();
-    await seedInitialOrder();
 }
 
 export async function updateSettings(branchId: string | undefined, newSettings: Partial<RestaurantSettings>): Promise<void> {
@@ -1010,3 +1008,4 @@ export async function removeMenuCategory(branchId: string, categoryName: string)
 
 // Ensure initial data is seeded on startup
 seedInitialData();
+
