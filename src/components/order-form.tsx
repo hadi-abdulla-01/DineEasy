@@ -48,35 +48,51 @@ const MenuList = ({ items, isUnavailable = false, onSelect, getQuantity, onAdd, 
                 <p className="text-sm text-muted-foreground mt-2 line-clamp-3 flex-grow">{item.description}</p>
               </div>
             </button>
-            <div className="flex flex-col items-center justify-between w-24 flex-shrink-0 pl-4">
-              <div className="w-full h-28 flex flex-col justify-end">
+            <div className="flex flex-col items-center justify-between w-auto flex-shrink-0 pl-4">
+              <div className="h-28 flex flex-col justify-end">
                 {totalQuantity > 0 && !baseItemInCart ? (
-                  <div className="flex w-full items-center justify-between text-sm">
-                    <span>In Cart:</span>
-                    <span className="font-bold text-lg">{totalQuantity}</span>
+                  <div className="flex w-full items-center justify-center text-sm">
+                    <span className="text-xs text-muted-foreground">In Cart: {totalQuantity}</span>
                   </div>
                 ) : getQuantity(item.id) > 0 && !item.addonGroups?.length ? (
-                  <div className="flex items-center justify-between">
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => onRemove(item)}>
-                      <MinusCircle className="h-4 w-4" />
-                    </Button>
-                    <span className="font-bold text-lg">{getQuantity(item.id)}</span>
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => onAdd(item)}>
-                      <PlusCircle className="h-4 w-4" />
-                    </Button>
+                  <div className="flex items-center gap-2 bg-[#E95322] rounded-full px-3 py-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemove(item);
+                      }}
+                      className="text-white hover:text-gray-200 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9" />
+                      </svg>
+                    </button>
+                    <span className="text-white font-semibold text-base min-w-[2rem] text-center">
+                      {getQuantity(item.id)}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAdd(item);
+                      }}
+                      className="text-white hover:text-gray-200 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                    </button>
                   </div>
                 ) : (
-                  <Button
-                    variant="outline"
-                    className="w-full border-primary text-primary hover:bg-primary/10 hover:text-primary mt-auto"
+                  <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onAdd(item);
                     }}
                     disabled={!item.isAvailable}
+                    className="bg-[#E95322] hover:bg-[#CB1E1D] disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-6 py-2 rounded-full text-sm font-semibold transition-colors"
                   >
                     {item.isAvailable ? 'Add' : 'Unavailable'}
-                  </Button>
+                  </button>
                 )}
               </div>
             </div>
@@ -183,6 +199,9 @@ function MenuDisplay({ isCustomerFacing, menu, onSelectItem, getQuantity, onAddT
         menu={menu}
         onViewAllMenu={() => setShowFeatured(false)}
         onItemClick={onSelectItem}
+        onAddToCart={onAddToCart}
+        getQuantity={getQuantity}
+        onRemoveFromCart={onRemoveFromCart}
         settings={settings}
         currentSession={currentSession}
       />
