@@ -1,7 +1,7 @@
 
 
 'use server';
-import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, KitchenUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, InvoiceSettings, AppliedTax, Tax, PrintSettings, Branch, UserPermissions, NavMenuKey, MealSession } from './definitions';
+import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, KitchenUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, InvoiceSettings, AppliedTax, Tax, PrintSettings, Branch, UserPermissions, NavMenuKey, MealSession, ActivityLog } from './definitions';
 import { initializeFirebase } from '@/firebase/server';
 import {
     collection,
@@ -38,6 +38,7 @@ const getCollections = () => {
         remoteOrders: collection(firestore, `restaurants/${RESTAURANT_ID}/remoteOrders`),
         kitchenUsers: collection(firestore, `restaurants/${RESTAURANT_ID}/kitchenUsers`),
         branches: collection(firestore, `restaurants/${RESTAURANT_ID}/branches`),
+        activityLogs: collection(firestore, `restaurants/${RESTAURANT_ID}/activityLogs`),
         settings: doc(firestore, `restaurants/${RESTAURANT_ID}`),
     };
 };
@@ -206,6 +207,8 @@ export async function getSettings(branchId?: string): Promise<RestaurantSettings
 
 
 async function seedInitialData() {
+    // This function will not auto-create a branch. It will only seed
+    // other data if a branch *already* exists.
     const branches = await getBranches();
     if (branches.length > 0) {
         await seedInitialAdminUser();
@@ -888,8 +891,10 @@ export async function getCurrentSession(branchId: string): Promise<MealSession |
 
         // Handle sessions that cross midnight
         if (endMinutes < startMinutes) {
+            // Session crosses midnight (e.g., 22:00 - 02:00)
             return currentMinutes >= startMinutes || currentMinutes < endMinutes;
         } else {
+            // Normal session within same day
             return currentMinutes >= startMinutes && currentMinutes < endMinutes;
         }
     });
@@ -1006,6 +1011,25 @@ export async function removeMenuCategory(branchId: string, categoryName: string)
     await updateSettings(branchId, { menuCategories: updatedCategories });
 }
 
+// --- Activity Log ---
+export async function logActivity(userId: string, username: string, action: string, details: string): Promise<void> {
+    const activityLogsRef = getCollections().activityLogs;
+    await addDoc(activityLogsRef, {
+        userId,
+        username,
+        action,
+        details,
+        timestamp: serverTimestamp(),
+    });
+}
+
+export async function getActivityLogsByUser(userId: string): Promise<ActivityLog[]> {
+    const activityLogsRef = getCollections().activityLogs;
+    const q = query(activityLogsRef, where('userId', '==', userId), orderBy('timestamp', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => docToObj<ActivityLog>(d));
+}
+
+
 // Ensure initial data is seeded on startup
 seedInitialData();
-
