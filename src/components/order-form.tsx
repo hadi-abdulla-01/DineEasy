@@ -1,6 +1,4 @@
 
-
-
 'use client';
 
 import type { MenuItem, OrderItem, RestaurantSettings, AddonGroup, AddonOption, Order, Branch, MealSession } from '@/lib/definitions';
@@ -321,41 +319,60 @@ export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existi
     }
   }, [existingOrder]);
 
-
-  const getNextOrderItemId = () => `temp-item-${Date.now()}-${Math.random()}`;
+  const getAddonCombinationId = (selectedAddons?: Record<string, AddonOption>): string => {
+    if (!selectedAddons || Object.keys(selectedAddons).length === 0) {
+        return 'base';
+    }
+    // Create a stable ID from sorted addon group and option IDs
+    return Object.keys(selectedAddons)
+        .sort()
+        .map(groupId => `${groupId}:${selectedAddons[groupId].id}`)
+        .join(';');
+  };
 
   const handleAddToCart = (menuItem: MenuItem, selectedAddons?: Record<string, AddonOption>) => {
-    let notes = '';
-    let addonPrice = 0;
-
-    if (selectedAddons && Object.keys(selectedAddons).length > 0) {
-      notes = Object.entries(selectedAddons).map(([groupId, option]) => {
-        const group = menuItem.addonGroups?.find(g => g.id === groupId);
-        return group ? `${group.title}: ${option.name}` : option.name;
-      }).join('; ');
-      addonPrice = Object.values(selectedAddons).reduce((sum, addon) => sum + addon.price, 0);
-    }
+    const addonId = getAddonCombinationId(selectedAddons);
+    const orderItemId = `${menuItem.id}-${addonId}`;
 
     setCart((prevCart) => {
-      const newOrderItem: Omit<OrderItem, 'orderItemId'> = {
-        menuItemId: menuItem.id,
-        name: menuItem.name,
-        price: menuItem.price + addonPrice,
-        quantity: 1,
-        category: menuItem.category,
-        isReady: false,
-        status: 'active',
-        notes: notes,
-      };
+        const existingItem = prevCart.find(item => item.orderItemId === orderItemId);
 
-      const existingItem = prevCart.find(item => item.menuItemId === newOrderItem.menuItemId && item.notes === newOrderItem.notes);
-      if (existingItem) {
-        return prevCart.map(item => item.orderItemId === existingItem.orderItemId ? { ...item, quantity: item.quantity + 1 } : item);
-      }
+        if (existingItem) {
+            // Item with same addons exists, just increment quantity
+            return prevCart.map(item =>
+                item.orderItemId === orderItemId
+                    ? { ...item, quantity: item.quantity + 1 }
+                    : item
+            );
+        } else {
+            // Item is new or has a new combination of addons
+            let notes = '';
+            let addonPrice = 0;
 
-      return [...prevCart, { ...newOrderItem, orderItemId: getNextOrderItemId() }];
+            if (selectedAddons && Object.keys(selectedAddons).length > 0) {
+                notes = Object.entries(selectedAddons).map(([groupId, option]) => {
+                    const group = menuItem.addonGroups?.find(g => g.id === groupId);
+                    return group ? `${group.title}: ${option.name}` : option.name;
+                }).join('; ');
+                addonPrice = Object.values(selectedAddons).reduce((sum, addon) => sum + addon.price, 0);
+            }
+
+            const newOrderItem: OrderItem = {
+                orderItemId: orderItemId,
+                menuItemId: menuItem.id,
+                name: menuItem.name,
+                price: menuItem.price + addonPrice,
+                quantity: 1,
+                category: menuItem.category,
+                isReady: false,
+                status: 'active',
+                notes: notes,
+            };
+
+            return [...prevCart, newOrderItem];
+        }
     });
-  };
+};
 
   const handleAddMultipleToCart = (menuItem: MenuItem, quantity: number) => {
     if (menuItem.addonGroups && menuItem.addonGroups.length > 0) {
@@ -363,14 +380,16 @@ export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existi
       return;
     }
 
+    const orderItemId = `${menuItem.id}-base`;
+
     setCart((prevCart) => {
-      const existingItem = prevCart.find(item => item.menuItemId === menuItem.id && !item.notes);
+      const existingItem = prevCart.find(item => item.orderItemId === orderItemId);
       if (existingItem) {
         return prevCart.map(item => item.orderItemId === existingItem.orderItemId ? { ...item, quantity: item.quantity + quantity } : item);
       }
 
       const newOrderItem: OrderItem = {
-        orderItemId: getNextOrderItemId(),
+        orderItemId: orderItemId,
         menuItemId: menuItem.id,
         name: menuItem.name,
         price: menuItem.price,
@@ -409,7 +428,9 @@ export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existi
   };
 
   const handleRemoveFromCart = (item: MenuItem) => {
-    const baseItemInCart = cart.find(i => i.menuItemId === item.id && !i.notes);
+    // This only works for base items without addons from the main list.
+    const orderItemId = `${item.id}-base`;
+    const baseItemInCart = cart.find(i => i.orderItemId === orderItemId);
     if (baseItemInCart) {
       removeFromCart(baseItemInCart.orderItemId);
     }
