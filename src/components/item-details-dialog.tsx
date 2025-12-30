@@ -23,7 +23,7 @@ type ItemDetailsDialogProps = {
 }
 
 export function ItemDetailsDialog({ item, open, onOpenChange, onAddToCart, onRemoveFromCart, getQuantityInCart, settings }: ItemDetailsDialogProps) {
-    
+
     const imagePlaceholder = placeholderImages.find(p => p.id === item.imageId);
     const imageSrc = item.imageId?.startsWith('data:image') ? item.imageId : imagePlaceholder?.imageUrl;
 
@@ -45,7 +45,7 @@ export function ItemDetailsDialog({ item, open, onOpenChange, onAddToCart, onRem
                     <DialogTitle className="font-headline text-2xl flex justify-between items-center">
                         {item.name}
                         {item.prepTime && (
-                             <Badge variant="outline" className="flex items-center gap-1.5 h-6">
+                            <Badge variant="outline" className="flex items-center gap-1.5 h-6">
                                 <Clock className="h-3 w-3" />
                                 <span className="text-xs">{item.prepTime} Min</span>
                             </Badge>
@@ -67,18 +67,18 @@ export function ItemDetailsDialog({ item, open, onOpenChange, onAddToCart, onRem
                         </ul>
                     </div>
                 )}
-                
+
                 <DialogFooter className="mt-6 p-6 bg-muted/50 rounded-b-lg flex-row justify-between items-center">
-                     <div>
+                    <div>
                         {settings ? (
                             <p className="text-2xl font-bold">{settings.currencySymbol}{item.price.toFixed(settings.currencyDecimalPlaces)}</p>
                         ) : (
                             <div className="h-8 w-20 bg-gray-200 rounded animate-pulse" />
                         )}
                     </div>
-                     <div>
+                    <div>
                         {quantityInCart === 0 ? (
-                             <Button
+                            <Button
                                 size="sm"
                                 onClick={handleInitialAddToCart}
                             >
@@ -86,7 +86,7 @@ export function ItemDetailsDialog({ item, open, onOpenChange, onAddToCart, onRem
                                 <PlusCircle className="ml-2 h-4 w-4" />
                             </Button>
                         ) : (
-                             <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2">
                                 <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => onRemoveFromCart(item)}>
                                     <MinusCircle className="h-4 w-4" />
                                 </Button>
@@ -94,7 +94,7 @@ export function ItemDetailsDialog({ item, open, onOpenChange, onAddToCart, onRem
                                 <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => onAddToCart(item, 1)}>
                                     <PlusCircle className="h-4 w-4" />
                                 </Button>
-                             </div>
+                            </div>
                         )}
                     </div>
                 </DialogFooter>

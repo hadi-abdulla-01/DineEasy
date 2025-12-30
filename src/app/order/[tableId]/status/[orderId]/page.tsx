@@ -46,14 +46,14 @@ export default function OrderStatusPage() {
 
   if (isLoading || !order || !settings) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--order-status-bg)]">
         <p>Loading order status...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-muted p-4">
+    <div className="min-h-screen bg-[var(--order-status-bg)] flex items-center justify-center">
       <OrderStatusView initialOrder={order} settings={settings} tableId={tableId} />
     </div>
   );

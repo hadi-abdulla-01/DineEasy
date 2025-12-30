@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=League+Spartan:wght@300;400;500;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -42,6 +44,16 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
+
+    /* Order Status Page Colors */
+    --order-status-yellow: #F5CB58;
+    --order-status-bg: #F8F8F8;
+    --order-status-red: #CB1E1D;
+    --order-status-orange: #E95322;
+    --order-status-text: #391713;
+    --order-status-text-muted: rgba(57, 23, 19, 0.73);
+    --order-status-line: #FFD8C7;
+    --order-status-line-dashed: #FFDECF;
   }
 
   .dark {
