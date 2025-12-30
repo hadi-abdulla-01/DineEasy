@@ -7,6 +7,7 @@
 
 
 
+
 'use server';
 
 import { z } from 'zod';
@@ -75,14 +76,30 @@ type PlaceOrderState = {
 } | null;
 
 export async function placeOrder(prevState: PlaceOrderState, formData: FormData): Promise<PlaceOrderState> {
-    const isCustomerFacing = formData.get('isCustomerFacing') === 'true';
     const tableId = formData.get('tableId') as string;
     const itemsJson = formData.get('items') as string;
     const orderNotes = formData.get('orderNotes') as string | undefined;
+    const customerName = formData.get('customerName') as string;
+    const customerPhone = formData.get('customerPhone') as string;
+    const isCustomerFacing = formData.get('isCustomerFacing') === 'true';
     const createdByName = formData.get('createdByName') as string | null;
 
-    let branchId = formData.get('branchId') as string;
 
+    const CustomerSchema = z.object({
+        customerName: z.string().min(1, "Name is required."),
+        customerPhone: z.string().min(1, "Phone is required."),
+    });
+
+    const validatedCustomerFields = CustomerSchema.safeParse({ customerName, customerPhone });
+
+    if (!validatedCustomerFields.success) {
+        return {
+            errors: validatedCustomerFields.error.flatten().fieldErrors,
+            message: 'Customer name and phone are required.',
+        };
+    }
+
+    let branchId = formData.get('branchId') as string;
     if (!branchId) {
         const table = await getTableById(tableId);
         if (table?.branchId) {
@@ -91,6 +108,7 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
             return { message: "Could not determine branch for this table." };
         }
     }
+
 
     let parsedItems: unknown;
     try {
@@ -111,34 +129,13 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
     }));
 
     const activeOrders = await getActiveOrders(branchId);
-    const existingOrderForTable = activeOrders.find(o => o.tableId === tableId);
-
-    const CustomerSchema = z.object({
-        customerName: z.string().min(1, "Name is required."),
-        customerPhone: z.string().min(1, "Phone is required."),
-    });
-
-    if (isCustomerFacing && !existingOrderForTable) {
-        const validatedCustomerFields = CustomerSchema.safeParse({
-            customerName: formData.get('customerName'),
-            customerPhone: formData.get('customerPhone'),
-        });
-        if (!validatedCustomerFields.success) {
-            return {
-                errors: validatedCustomerFields.error.flatten().fieldErrors,
-                message: 'Missing Fields. Failed to Place Order.',
-            };
-        }
-    }
-
-    const customerName = formData.get('customerName') as string;
-    const customerPhone = formData.get('customerPhone') as string;
+    const existingOrderForCustomer = activeOrders.find(o => o.tableId === tableId && o.customerPhone === customerPhone);
 
     let finalOrder: Order | undefined;
 
     try {
-        if (existingOrderForTable) {
-            finalOrder = await addItemsToOrder(existingOrderForTable.id, newItems, orderNotes);
+        if (existingOrderForCustomer) {
+            finalOrder = await addItemsToOrder(existingOrderForCustomer.id, newItems, orderNotes);
             if (finalOrder && finalOrder.status === 'ready') {
                 finalOrder = await updateOrderStatus(finalOrder.id, 'preparing');
             }
@@ -146,8 +143,8 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
             const orderToCreate = {
                 tableId,
                 branchId,
-                customerName: customerName || (isCustomerFacing ? 'N/A' : 'Dine-in Customer'),
-                customerPhone: customerPhone || '-',
+                customerName: customerName,
+                customerPhone: customerPhone,
                 items: newItems,
                 orderType: 'Dine-in' as Order['orderType'],
                 notes: orderNotes,

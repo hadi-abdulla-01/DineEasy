@@ -1,5 +1,6 @@
 
 
+
 'use client';
 
 import { useState, useActionState, useEffect } from 'react';
@@ -38,9 +39,10 @@ type CartSheetProps = {
   existingOrder?: Order;
   branchId?: string;
   settings: RestaurantSettings | null;
+  customerInfo?: {name: string, phone: string};
 };
 
-export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, onNotesChange, onOrderPlaced, existingOrder, branchId, settings }: CartSheetProps) {
+export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, onNotesChange, onOrderPlaced, existingOrder, branchId, settings, customerInfo }: CartSheetProps) {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useActionState(placeOrder, null);
   const router = useRouter();
@@ -148,33 +150,22 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
           <input type="hidden" name="items" value={JSON.stringify(cart)} />
           <input type="hidden" name="isCustomerFacing" value={String(isCustomerFacing)} />
           {branchId && <input type="hidden" name="branchId" value={branchId} />}
-
-
-          {isCustomerFacing ? (
+          {customerInfo?.name && <input type="hidden" name="customerName" value={customerInfo.name} />}
+          {customerInfo?.phone && <input type="hidden" name="customerPhone" value={customerInfo.phone} />}
+          
+          {!customerInfo && (
             <>
-              <div className="space-y-2">
-                <Label htmlFor="customerName-sheet">Your Name</Label>
-                <Input id="customerName-sheet" name="customerName" placeholder="John Doe" defaultValue={existingOrder?.customerName} required />
-                {state?.errors?.customerName && <p className="text-sm font-medium text-destructive">{state.errors.customerName[0]}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="customerPhone-sheet">Your Phone Number</Label>
-                <Input id="customerPhone-sheet" name="customerPhone" placeholder="e.g., 555-123-4567" defaultValue={existingOrder?.customerPhone} required />
-                {state?.errors?.customerPhone && <p className="text-sm font-medium text-destructive">{state.errors.customerPhone[0]}</p>}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="customerName-sheet">Customer Name (Optional)</Label>
-                <Input id="customerName-sheet" name="customerName" placeholder="For dine-in" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="customerPhone-sheet">Customer Phone (Optional)</Label>
-                <Input id="customerPhone-sheet" name="customerPhone" placeholder="For dine-in" />
-              </div>
+                <div className="space-y-2">
+                    <Label htmlFor="customerName-sheet">Customer Name</Label>
+                    <Input id="customerName-sheet" name="customerName" placeholder="For dine-in" required/>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="customerPhone-sheet">Customer Phone</Label>
+                    <Input id="customerPhone-sheet" name="customerPhone" placeholder="For dine-in" required/>
+                </div>
             </>
           )}
+
           <div className="space-y-2">
             <Label htmlFor="orderNotes-sheet">Order Notes (Optional)</Label>
             <Textarea id="orderNotes-sheet" name="orderNotes" placeholder="Any special requests for the whole order?" />

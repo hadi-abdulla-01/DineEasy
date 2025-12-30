@@ -8,13 +8,13 @@ interface OrderHeaderProps {
     restaurantName: string;
     tableNumber: number;
     currentSession?: MealSession | null;
+    customerName: string;
 }
 
-export function OrderHeader({ restaurantName, tableNumber, currentSession }: OrderHeaderProps) {
+export function OrderHeader({ restaurantName, tableNumber, currentSession, customerName }: OrderHeaderProps) {
     const { greeting: defaultGreeting, subtitle: defaultSubtitle, mounted } = useGreeting();
 
-    // Use session greeting if available, otherwise use default time-based greeting
-    const greeting = currentSession?.greeting || defaultGreeting;
+    const greeting = currentSession?.greeting ? `Hi ${customerName}, ${currentSession.greeting.toLowerCase()}`: `Hi ${customerName}, ${defaultGreeting.toLowerCase()}`;
     const subtitle = currentSession?.displayMessage || defaultSubtitle;
 
     return (

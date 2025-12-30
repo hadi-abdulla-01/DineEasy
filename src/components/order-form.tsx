@@ -1,5 +1,6 @@
 
 
+
 'use client';
 
 import type { MenuItem, OrderItem, RestaurantSettings, AddonGroup, AddonOption, Order, Branch, MealSession } from '@/lib/definitions';
@@ -293,7 +294,7 @@ function MenuDisplay({ isCustomerFacing, menu, onSelectItem, getQuantity, onAddT
 }
 
 
-export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existingOrder, currentSession }: { menu: MenuItem[]; tableId: string, isCustomerFacing: boolean, existingOrder?: Order, currentSession?: MealSession | null }) {
+export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existingOrder, currentSession, customerInfo }: { menu: MenuItem[]; tableId: string, isCustomerFacing: boolean, existingOrder?: Order, currentSession?: MealSession | null, customerInfo?: {name: string, phone: string} }) {
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
   const [table, setTable] = useState<{ id: string, branchId: string } | null>(null);
@@ -313,6 +314,13 @@ export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existi
     }
     fetchData();
   }, [tableId]);
+  
+  useEffect(() => {
+    if (existingOrder?.items) {
+      setCart(existingOrder.items);
+    }
+  }, [existingOrder]);
+
 
   const getNextOrderItemId = () => `temp-item-${Date.now()}-${Math.random()}`;
 
@@ -444,6 +452,7 @@ export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existi
         existingOrder={existingOrder}
         branchId={table?.branchId}
         settings={settings}
+        customerInfo={customerInfo}
       />
 
       {selectedItemForDetails && (
