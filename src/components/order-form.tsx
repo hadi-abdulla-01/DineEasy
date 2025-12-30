@@ -313,11 +313,6 @@ export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existi
     fetchData();
   }, [tableId]);
   
-  useEffect(() => {
-    if (existingOrder?.items) {
-      setCart(existingOrder.items);
-    }
-  }, [existingOrder]);
 
   const getAddonCombinationId = (selectedAddons?: Record<string, AddonOption>): string => {
     if (!selectedAddons || Object.keys(selectedAddons).length === 0) {
@@ -470,7 +465,7 @@ export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existi
         onRemoveFromCart={removeFromCart}
         onNotesChange={handleNoteChangeForCartItem}
         onOrderPlaced={handleOrderPlaced}
-        existingOrder={existingOrder}
+        existingOrderId={existingOrder?.id}
         branchId={table?.branchId}
         settings={settings}
         customerInfo={customerInfo}

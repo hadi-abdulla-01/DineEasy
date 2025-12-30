@@ -1,14 +1,4 @@
 
-
-
-
-
-
-
-
-
-
-
 'use server';
 
 import { z } from 'zod';
@@ -85,6 +75,7 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
     const customerPhone = formData.get('customerPhone') as string;
     const isCustomerFacing = formData.get('isCustomerFacing') === 'true';
     const createdByForm = formData.get('createdBy') as string | null;
+    const existingOrderId = formData.get('existingOrderId') as string | null;
 
 
     const CustomerSchema = z.object({
@@ -136,15 +127,11 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
         if(user) createdByName = user.username;
     }
 
-
-    const activeOrders = await getActiveOrders(branchId);
-    const existingOrderForCustomer = activeOrders.find(o => o.tableId === tableId && o.customerPhone === customerPhone);
-
     let finalOrder: Order | undefined;
 
     try {
-        if (existingOrderForCustomer) {
-            finalOrder = await addItemsToOrder(existingOrderForCustomer.id, newItems, orderNotes);
+        if (existingOrderId) {
+            finalOrder = await addItemsToOrder(existingOrderId, newItems, orderNotes);
             if (finalOrder && finalOrder.status === 'ready') {
                 finalOrder = await updateOrderStatus(finalOrder.id, 'preparing');
             }

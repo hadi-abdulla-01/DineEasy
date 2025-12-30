@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -36,16 +35,15 @@ type CartSheetProps = {
   onRemoveFromCart: (orderItemId: string) => void;
   onNotesChange: (orderItemId: string, notes: string) => void;
   onOrderPlaced: () => void;
-  existingOrder?: Order;
+  existingOrderId?: string;
   branchId?: string;
   settings: RestaurantSettings | null;
   customerInfo?: {name: string, phone: string};
 };
 
-export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, onNotesChange, onOrderPlaced, existingOrder, branchId, settings, customerInfo }: CartSheetProps) {
+export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, onNotesChange, onOrderPlaced, existingOrderId, branchId, settings, customerInfo }: CartSheetProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
@@ -53,10 +51,8 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleFormSubmit = async (formData: FormData) => {
-    setIsSubmitting(true);
     setError(null);
     
-    // Add current user id if available
     if(user?.id) {
         formData.append('createdBy', user.id);
     }
@@ -77,8 +73,6 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
     } else {
        setError(state?.message || 'An unexpected error occurred.');
     }
-    
-    setIsSubmitting(false);
   };
 
 
@@ -164,6 +158,7 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
           <input type="hidden" name="tableId" value={tableId} />
           <input type="hidden" name="items" value={JSON.stringify(cart)} />
           <input type="hidden" name="isCustomerFacing" value={String(isCustomerFacing)} />
+          {existingOrderId && <input type="hidden" name="existingOrderId" value={existingOrderId} />}
           {branchId && <input type="hidden" name="branchId" value={branchId} />}
           {customerInfo?.name && <input type="hidden" name="customerName" value={customerInfo.name} />}
           {customerInfo?.phone && <input type="hidden" name="customerPhone" value={customerInfo.phone} />}
@@ -186,10 +181,7 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
             <Textarea id="orderNotes-sheet" name="orderNotes" placeholder="Any special requests for the whole order?" />
           </div>
 
-          <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? 'Placing Order...' : isCustomerFacing ? 'Place My Order' : 'Place Order for Customer'}
-            <ShoppingCart className="ml-2 h-5 w-5" />
-          </Button>
+          <SubmitButton isCustomerFacing={isCustomerFacing} />
           {error && <p className="text-sm font-medium text-destructive">{error}</p>}
         </div>
       </form>
