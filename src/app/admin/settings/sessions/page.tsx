@@ -9,45 +9,34 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { addMealSessionAction, updateMealSessionAction, deleteMealSessionAction, updateManualSessionOverrideAction } from '@/lib/actions';
 import { useAuth } from '../../auth-provider';
-import { getSettings, getMainBranch } from '@/lib/data';
+import { getSettings } from '@/lib/data';
 import { useEffect } from 'react';
 import type { MealSession, RestaurantSettings } from '@/lib/definitions';
 import { Clock, Plus, Trash2, Edit2, Settings2 } from 'lucide-react';
 import { formatSessionTime, getCurrentActiveSession } from '@/lib/utils/session-utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useSearchParams } from 'next/navigation';
 
 export default function SessionsPage() {
     const { user } = useAuth();
+    const searchParams = useSearchParams();
+    const branchId = searchParams.get('branchId');
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [editingSession, setEditingSession] = useState<MealSession | null>(null);
     const [isAdding, setIsAdding] = useState(false);
     const [manualOverrideEnabled, setManualOverrideEnabled] = useState(false);
     const [selectedSessionId, setSelectedSessionId] = useState<string>('');
-    const [branchId, setBranchId] = useState<string | null>(null);
     const [isActiveSwitch, setIsActiveSwitch] = useState(true); // Default to true for new sessions
 
     useEffect(() => {
-        async function fetchData() {
-            let activeBranchId = user?.branchId;
-
-            // If no branchId, get main branch
-            if (!activeBranchId) {
-                const mainBranch = await getMainBranch();
-                activeBranchId = mainBranch?.id || null;
-            }
-
-            setBranchId(activeBranchId);
-
-            if (activeBranchId) {
-                getSettings(activeBranchId).then(s => {
-                    setSettings(s);
-                    setManualOverrideEnabled(s.manualSessionOverride?.enabled || false);
-                    setSelectedSessionId(s.manualSessionOverride?.sessionId || '');
-                });
-            }
+        if (branchId) {
+            getSettings(branchId).then(s => {
+                setSettings(s);
+                setManualOverrideEnabled(s.manualSessionOverride?.enabled || false);
+                setSelectedSessionId(s.manualSessionOverride?.sessionId || '');
+            });
         }
-        fetchData();
-    }, [user]);
+    }, [branchId]);
 
     const handleAddSession = async (formData: FormData) => {
         if (!branchId) return;

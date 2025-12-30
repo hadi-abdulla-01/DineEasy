@@ -25,11 +25,11 @@ function TableList({ tables, settings }: { tables: Table[], settings: Restaurant
     if (printWindow) {
       const qrCodeWrapper = document.getElementById(`qr-code-wrapper-${tableId}`);
       if (!qrCodeWrapper) {
-          printWindow.document.write('QR Code container not found.');
-          printWindow.document.close();
-          return;
+        printWindow.document.write('QR Code container not found.');
+        printWindow.document.close();
+        return;
       }
-      
+
       // A small delay is needed to ensure canvas is rendered before we try to grab it.
       setTimeout(() => {
         const qrCodeCanvas = qrCodeWrapper.querySelector('canvas');
@@ -112,8 +112,14 @@ function TableList({ tables, settings }: { tables: Table[], settings: Restaurant
           </div>
 
           <div id={`qr-code-wrapper-${table.id}`} className="flex flex-col items-center justify-center py-4 bg-white dark:bg-gray-700 rounded-xl border dark:border-gray-600">
-            <QRCode tableId={table.id} settings={settings} />
-            <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">Scan to order</p>
+            {settings ? (
+              <>
+                <QRCode tableId={table.id} settings={settings} />
+                <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">Scan to order</p>
+              </>
+            ) : (
+              <div className="w-32 h-32 bg-gray-200 dark:bg-gray-600 animate-pulse rounded" />
+            )}
           </div>
         </div>
       ))}
@@ -130,63 +136,69 @@ export default function TableManagementPage() {
   const [mainBranch, setMainBranch] = useState<Branch | null>(null);
   const [tableNumber, setTableNumber] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
-  
+
   const isMainBranchManager = user?.role === 'Manager' && user?.branchId === mainBranch?.id;
   const canManageAllBranches = user?.role === 'Admin' || isMainBranchManager;
 
   useEffect(() => {
     async function fetchInitialData() {
-        const fetchedMainBranch = await getMainBranch();
-        setMainBranch(fetchedMainBranch);
+      const fetchedMainBranch = await getMainBranch();
+      setMainBranch(fetchedMainBranch);
 
-        if (user?.role === 'Admin' && fetchedMainBranch && !selectedBranchId) {
-            setSelectedBranchId(fetchedMainBranch.id);
-        } else if (user?.branchId) {
-            setSelectedBranchId(user.branchId);
-        }
+      if (user?.role === 'Admin' && fetchedMainBranch && !selectedBranchId) {
+        setSelectedBranchId(fetchedMainBranch.id);
+      } else if (user?.branchId) {
+        setSelectedBranchId(user.branchId);
+      }
 
-        if (canManageAllBranches) {
-            getBranches().then(setAllBranches);
-        }
+      if (canManageAllBranches) {
+        getBranches().then(setAllBranches);
+      }
     }
 
     if (user) {
-        fetchInitialData();
+      fetchInitialData();
     }
   }, [user, canManageAllBranches, selectedBranchId]);
 
   useEffect(() => {
-      async function fetchBranchData() {
-          if(selectedBranchId) {
-              getTables(selectedBranchId).then(setTables);
-              getSettings(selectedBranchId).then(setSettings);
-          }
+    async function fetchBranchData() {
+      if (selectedBranchId) {
+        // Fetch both in parallel for better performance
+        Promise.all([
+          getTables(selectedBranchId),
+          getSettings(selectedBranchId)
+        ]).then(([tables, settings]) => {
+          setTables(tables);
+          setSettings(settings);
+        });
       }
-      fetchBranchData();
-      
-      const interval = setInterval(fetchBranchData, 5000);
-      return () => clearInterval(interval);
+    }
+    fetchBranchData();
+
+    const interval = setInterval(fetchBranchData, 5000);
+    return () => clearInterval(interval);
 
   }, [selectedBranchId]);
 
   const handleAddTable = async (formData: FormData) => {
     if (!selectedBranchId) {
-        console.error("No branch ID found for creating a table.");
-        return;
+      console.error("No branch ID found for creating a table.");
+      return;
     }
     formData.append('branchId', selectedBranchId);
 
     await createTableAction(formData);
     // Refetch tables after adding a new one
     if (selectedBranchId) {
-        getTables(selectedBranchId).then(setTables);
+      getTables(selectedBranchId).then(setTables);
     }
     setTableNumber('');
     formRef.current?.reset();
   };
 
   if (!user) {
-      return <div>Loading...</div>;
+    return <div>Loading...</div>;
   }
 
   return (
@@ -198,15 +210,15 @@ export default function TableManagementPage() {
             <p className="text-sm text-gray-600 dark:text-gray-400">Add or manage tables for a branch.</p>
           </div>
           {canManageAllBranches && (
-             <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-                <SelectTrigger className="w-full sm:w-[220px]">
-                    <SelectValue placeholder="Select a branch" />
-                </SelectTrigger>
-                <SelectContent>
-                    {allBranches.map(branch => (
-                        <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                    ))}
-                </SelectContent>
+            <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+              <SelectTrigger className="w-full sm:w-[220px]">
+                <SelectValue placeholder="Select a branch" />
+              </SelectTrigger>
+              <SelectContent>
+                {allBranches.map(branch => (
+                  <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           )}
         </div>

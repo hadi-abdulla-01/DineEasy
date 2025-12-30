@@ -170,7 +170,7 @@ export default function MenuManagementPage() {
 
   useEffect(() => {
     async function loadData() {
-      let activeBranchId = user?.branchId;
+      let activeBranchId = user?.branchId || null;
 
       // If no branchId, get main branch
       if (!activeBranchId) {
@@ -180,9 +180,9 @@ export default function MenuManagementPage() {
 
       setBranchId(activeBranchId);
 
+      // Immediately start fetching settings without blocking
       if (activeBranchId) {
-        const branchSettings = await getSettings(activeBranchId);
-        setSettings(branchSettings);
+        getSettings(activeBranchId).then(setSettings);
       }
     }
 
@@ -333,7 +333,7 @@ export default function MenuManagementPage() {
             <Separator className="my-4" />
 
             {/* Session Availability */}
-            {settings?.mealSessions && settings.mealSessions.length > 0 && (
+            {settings?.mealSessions && settings.mealSessions.length > 0 ? (
               <div className="space-y-4">
                 <h3 className="font-semibold text-lg">Session Availability</h3>
                 <p className="text-sm text-muted-foreground">
@@ -360,7 +360,17 @@ export default function MenuManagementPage() {
                   ))}
                 </div>
               </div>
-            )}
+            ) : settings === null ? (
+              <div className="space-y-4">
+                <div className="h-7 w-48 bg-muted animate-pulse rounded" />
+                <div className="h-4 w-full bg-muted animate-pulse rounded" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <Button type="submit">Add Item</Button>
           </form>
