@@ -374,6 +374,20 @@
         "name",
         "price"
       ]
+    },
+    "ActivityLog": {
+        "title": "Activity Log",
+        "type": "object",
+        "description": "Records significant actions performed by users.",
+        "properties": {
+            "id": { "type": "string" },
+            "userId": { "type": "string" },
+            "username": { "type": "string" },
+            "action": { "type": "string" },
+            "details": { "type": "string" },
+            "timestamp": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "userId", "username", "action", "timestamp"]
     }
   },
   "auth": {
@@ -442,6 +456,16 @@
             "$ref": "#/entities/MenuItem"
           },
           "description": "Stores menu items. Each menu item belongs to a branch."
+        }
+      },
+       {
+        "path": "/restaurants/{restaurantId}/activityLogs/{logId}",
+        "definition": {
+          "entityName": "ActivityLog",
+          "schema": {
+            "$ref": "#/entities/ActivityLog"
+          },
+          "description": "Stores a log of user activities for auditing."
         }
       }
     ]

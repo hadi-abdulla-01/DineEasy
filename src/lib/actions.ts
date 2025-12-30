@@ -6,6 +6,7 @@
 
 
 
+
 'use server';
 
 import { z } from 'zod';
@@ -43,6 +44,7 @@ import {
     setMainBranch,
     getKitchenUserByUsername,
     getTableById,
+    logActivity,
 } from './data';
 
 
@@ -485,7 +487,9 @@ export async function createKitchenUserAction(prevState: CreateUserState, formDa
     // Remove duplicates
     const uniqueCategories = Array.from(new Set(categories));
 
-    await createKitchenUser({ username, password, categories: uniqueCategories, role, permissions, branchId });
+    const newUser = await createKitchenUser({ username, password, categories: uniqueCategories, role, permissions, branchId });
+    await logActivity(newUser.id, newUser.username, 'Created User', `Created new user: ${username} with role ${role}`);
+
     revalidatePath('/admin/user-management');
 
     return { message: "User created successfully." };
@@ -522,7 +526,10 @@ export async function updateKitchenUserAction(userId: string, formData: FormData
 
 
     try {
-        await updateKitchenUser(userId, updateData);
+        const updatedUser = await updateKitchenUser(userId, updateData);
+        if (updatedUser) {
+            await logActivity(userId, updatedUser.username, 'Updated Profile', `Updated profile for ${username}`);
+        }
         revalidatePath('/admin/user-management');
     } catch (error) {
         return { message: 'Database Error: Failed to update user.' };
@@ -533,7 +540,11 @@ export async function updateKitchenUserAction(userId: string, formData: FormData
 
 export async function deleteKitchenUserAction(userId: string) {
     try {
-        await deleteKitchenUser(userId);
+        const userToDelete = await getKitchenUserById(userId);
+        if (userToDelete) {
+             await deleteKitchenUser(userId);
+             await logActivity(userId, userToDelete.username, 'Deleted User', `Deleted user: ${userToDelete.username}`);
+        }
         revalidatePath('/admin/user-management');
     } catch (error) {
         return { message: 'Database Error: Failed to delete user.' };

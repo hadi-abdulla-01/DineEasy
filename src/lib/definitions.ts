@@ -1,4 +1,5 @@
 
+
 export type MealSession = {
     id: string;
     name: string; // e.g., "Breakfast", "Lunch", "Dinner"
@@ -220,4 +221,13 @@ export type PrintSettings = {
     invoiceCustomWidth?: number;
     kitchenTicketPrintSize: PrintSize;
     kitchenTicketCustomWidth?: number;
+};
+
+export type ActivityLog = {
+  id: string;
+  userId: string;
+  username: string;
+  action: string;
+  details: string;
+  timestamp: string;
 };

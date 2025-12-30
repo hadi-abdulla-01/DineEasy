@@ -2,19 +2,23 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { updateKitchenUserAction } from '@/lib/actions';
-import type { KitchenUser } from '@/lib/definitions';
+import type { ActivityLog, KitchenUser } from '@/lib/definitions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
-import { User, KeyRound, ShieldCheck, CheckCircle } from 'lucide-react';
+import { User, KeyRound, ShieldCheck, CheckCircle, Clock, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/app/admin/auth-provider';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { ALL_PERMISSIONS_CONFIG } from '@/lib/permissions';
+import { getActivityLogsByUser } from '@/lib/data';
+import { formatDistanceToNow } from 'date-fns';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
 
 export default function EditProfilePage() {
     const { user: currentUser, login } = useAuth();
@@ -24,10 +28,12 @@ export default function EditProfilePage() {
     const [error, setError] = useState('');
     const router = useRouter();
     const { toast } = useToast();
+    const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
 
     useEffect(() => {
         if (currentUser) {
             setUser(currentUser);
+            getActivityLogsByUser(currentUser.id).then(setActivityLogs);
         }
     }, [currentUser]);
 
@@ -137,7 +143,7 @@ export default function EditProfilePage() {
                     </form>
                 </Card>
             </div>
-            <div>
+            <div className="space-y-8">
                  <Card>
                     <CardHeader>
                         <CardTitle className="font-headline flex items-center gap-2">
@@ -169,6 +175,37 @@ export default function EditProfilePage() {
                                })}
                             </ul>
                         </div>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="font-headline flex items-center gap-2">
+                            <BookOpen className="h-6 w-6 text-primary"/>
+                            Recent Activity
+                        </CardTitle>
+                        <CardDescription>A log of your recent actions in the app.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ScrollArea className="h-72">
+                            <div className="space-y-4">
+                                {activityLogs.length > 0 ? activityLogs.map(log => (
+                                    <div key={log.id} className="flex items-start gap-3">
+                                        <div className="mt-1">
+                                            <Clock className="h-4 w-4 text-muted-foreground" />
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-sm">{log.action}</p>
+                                            <p className="text-sm text-muted-foreground">{log.details}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <p className="text-sm text-muted-foreground text-center py-8">No activity recorded yet.</p>
+                                )}
+                            </div>
+                        </ScrollArea>
                     </CardContent>
                 </Card>
             </div>
