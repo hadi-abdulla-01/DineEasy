@@ -7,15 +7,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { notFound, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { User, KeyRound } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/app/admin/auth-provider';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function EditProfilePage() {
     const { user: currentUser, login } = useAuth();
     const [user, setUser] = useState<KitchenUser | null>(null);
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [error, setError] = useState('');
     const router = useRouter();
     const { toast } = useToast();
 
@@ -25,7 +29,20 @@ export default function EditProfilePage() {
         }
     }, [currentUser]);
 
-    const handleSubmit = async (formData: FormData) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setError('');
+
+        if (password && password !== confirmPassword) {
+            setError("Passwords do not match.");
+            return;
+        }
+
+        const formData = new FormData(e.currentTarget);
+        if (!password) {
+            formData.delete('password');
+        }
+
         if (!user) return;
 
         const result = await updateKitchenUserAction(user.id, formData);
@@ -36,7 +53,6 @@ export default function EditProfilePage() {
         });
 
         // Refetch user data and update auth context
-        // This is a simplified way to update the context. In a real app, you might want a dedicated function.
         const updatedUser = {
             ...user,
             username: formData.get('username') as string
@@ -60,7 +76,7 @@ export default function EditProfilePage() {
                 <CardTitle className="font-headline">Edit My Profile</CardTitle>
                 <CardDescription>Update your username and password.</CardDescription>
             </CardHeader>
-            <form action={handleSubmit}>
+            <form onSubmit={handleSubmit}>
                 <CardContent className="space-y-6">
                     <div className="space-y-2">
                         <Label htmlFor="username">Username</Label>
@@ -73,10 +89,40 @@ export default function EditProfilePage() {
                         <Label htmlFor="password">New Password</Label>
                         <div className="relative">
                             <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input id="password" name="password" type="password" placeholder="Leave blank to keep current password" className="pl-9" />
+                            <Input 
+                                id="password" 
+                                name="password" 
+                                type="password" 
+                                placeholder="Leave blank to keep current password" 
+                                className="pl-9" 
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                            />
                         </div>
                          <p className="text-xs text-muted-foreground">Leave the password field blank if you do not wish to change it.</p>
                     </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                        <div className="relative">
+                            <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                id="confirmPassword" 
+                                name="confirmPassword" 
+                                type="password" 
+                                placeholder="Confirm your new password" 
+                                className="pl-9"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                disabled={!password}
+                            />
+                        </div>
+                    </div>
+
+                    {error && (
+                        <Alert variant="destructive">
+                            <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                    )}
                 </CardContent>
                 <CardFooter className="gap-2">
                     <Button type="submit">Save Changes</Button>
@@ -88,4 +134,3 @@ export default function EditProfilePage() {
         </Card>
     );
 }
-
