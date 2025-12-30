@@ -5,6 +5,7 @@ import { useAuth } from '@/app/admin/auth-provider';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ThemeToggle } from '@/components/theme-toggle';
+import Link from 'next/link';
 
 interface AdminHeaderProps {
   isSidebarOpen: boolean;
@@ -77,6 +78,10 @@ export default function AdminHeader({ isSidebarOpen, setIsSidebarOpen }: AdminHe
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user?.username || 'User'}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{getUserRole()}</p>
                 </div>
+                 <Link href={`/admin/profile/edit`} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  <User size={16} />
+                  <span>My Profile</span>
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
