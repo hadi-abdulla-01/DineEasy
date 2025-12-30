@@ -1,3 +1,4 @@
+
 'use client';
 
 import { getOrderById, getSettings, getTableById } from "@/lib/data";
@@ -19,40 +20,53 @@ export default function OrderStatusPage() {
 
   useEffect(() => {
     async function fetchData() {
-      if (orderId) {
-        try {
-          const fetchedOrder = await getOrderById(orderId);
+      if (!orderId || !tableId) return;
 
-          if (!fetchedOrder) {
-            notFound();
-            return;
-          }
+      // First, check if customer info is in session. If not, redirect to welcome.
+      const storedCustomerInfo = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
+      let customerPhone: string | null = null;
 
-          // Ensure the customer viewing this order is the one who placed it
-          const storedCustomerInfo = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
-          if (storedCustomerInfo) {
+      if (storedCustomerInfo) {
+          try {
               const info = JSON.parse(storedCustomerInfo);
-              if (info.phone !== fetchedOrder.customerPhone) {
-                  // If phone numbers don't match, this customer shouldn't see this order.
-                  // Redirect them to the welcome page to start their own order.
-                  router.replace(`/order/${tableId}/welcome`);
-                  return;
-              }
-          } else {
-              // If there's no info, they need to identify themselves.
-              router.replace(`/order/${tableId}/welcome?next=/order/${tableId}/status/${orderId}`);
-              return;
+              customerPhone = info.phone;
+          } catch {
+              // Invalid JSON, force re-authentication
           }
-          
-          const fetchedSettings = await getSettings(fetchedOrder.branchId);
+      }
 
-          setOrder(fetchedOrder);
-          setSettings(fetchedSettings);
-        } catch (error) {
-          console.error("Failed to fetch initial data", error);
-        } finally {
-          setIsLoading(false);
+      if (!customerPhone) {
+          // No phone number found, user must identify themselves.
+          // We pass the current URL as 'next' so they can be redirected back here.
+          router.replace(`/order/${tableId}/welcome?next=/order/${tableId}/status/${orderId}`);
+          return;
+      }
+
+      try {
+        const fetchedOrder = await getOrderById(orderId);
+
+        if (!fetchedOrder) {
+          notFound();
+          return;
         }
+
+        // Validate that the customer phone number matches the order.
+        if (customerPhone !== fetchedOrder.customerPhone) {
+            // Mismatch. This person shouldn't see this order.
+            // Redirect them to the welcome page to start their *own* order.
+            router.replace(`/order/${tableId}/welcome`);
+            return;
+        }
+        
+        const fetchedSettings = await getSettings(fetchedOrder.branchId);
+
+        setOrder(fetchedOrder);
+        setSettings(fetchedSettings);
+      } catch (error) {
+        console.error("Failed to fetch initial data", error);
+        // You might want to show a more user-friendly error state here
+      } finally {
+        setIsLoading(false);
       }
     }
 

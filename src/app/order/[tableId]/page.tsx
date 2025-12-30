@@ -29,12 +29,12 @@ export default function OrderPage() {
     useEffect(() => {
         if (!tableId) return;
 
-        // This effect only runs once on mount to check for customer info.
         const storedCustomerInfo = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
         if (storedCustomerInfo) {
             try {
                 const info = JSON.parse(storedCustomerInfo);
-                if (info.name && info.phone) {
+                // Only phone number is required to proceed.
+                if (info.phone) {
                     setCustomerInfo(info);
                 } else {
                     router.replace(`/order/${tableId}/welcome`);
@@ -48,7 +48,6 @@ export default function OrderPage() {
     }, [tableId, router]);
 
     useEffect(() => {
-        // This effect runs only when customerInfo is set.
         if (!customerInfo || !tableId) return;
 
         async function fetchData() {
@@ -67,32 +66,34 @@ export default function OrderPage() {
                 getActiveOrders(fetchedTable.branchId)
             ]);
 
+            const existingOrder = activeOrders.find(order => order.tableId === tableId && order.customerPhone === customerInfo.phone);
+
+            if (existingOrder) {
+                router.replace(`/order/${tableId}/status/${existingOrder.id}`);
+                return; // Stop further execution since we are redirecting
+            }
+
             setSettings(fetchedSettings);
             setCurrentSession(session);
 
-            // Filter menu items by current session
             const availableMenuItems = allMenuItems.filter(item => {
                 if (!item.isAvailable) return false;
-                // If item has no assigned sessions, it's available only if there's no active session.
                 if (!item.availableSessions || item.availableSessions.length === 0) {
                      return true;
                 }
-                 // If there is an active session, the item must be in it.
                 if (!session) return false;
                 return item.availableSessions.includes(session.id);
             });
             setMenuItems(availableMenuItems);
 
-            // Find an existing order for this specific customer at this table
-            const existingOrder = activeOrders.find(order => order.tableId === tableId && order.customerPhone === customerInfo.phone);
-            setActiveOrderForCustomer(existingOrder);
+            setActiveOrderForCustomer(undefined); // No active order found, show menu
             
             setIsLoading(false);
         }
 
         fetchData();
 
-    }, [customerInfo, tableId]); // Only re-run when customerInfo is available.
+    }, [customerInfo, tableId, router]);
     
     if (!customerInfo || isLoading) {
          return (
