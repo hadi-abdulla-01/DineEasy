@@ -78,7 +78,7 @@ export default function EditProfilePage() {
     
     return (
         <div className="grid gap-8 md:grid-cols-3">
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 space-y-8">
                 <Card>
                     <CardHeader>
                         <CardTitle className="font-headline">Edit My Profile</CardTitle>
@@ -142,6 +142,37 @@ export default function EditProfilePage() {
                         </CardFooter>
                     </form>
                 </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="font-headline flex items-center gap-2">
+                            <BookOpen className="h-6 w-6 text-primary"/>
+                            Recent Activity
+                        </CardTitle>
+                        <CardDescription>A log of your recent actions in the app.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ScrollArea className="h-72">
+                            <div className="space-y-4">
+                                {activityLogs.length > 0 ? activityLogs.map(log => (
+                                    <div key={log.id} className="flex items-start gap-3">
+                                        <div className="mt-1">
+                                            <Clock className="h-4 w-4 text-muted-foreground" />
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-sm">{log.action}</p>
+                                            <p className="text-sm text-muted-foreground">{log.details}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <p className="text-sm text-muted-foreground text-center py-8">No activity recorded yet.</p>
+                                )}
+                            </div>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
             </div>
             <div className="space-y-8">
                  <Card>
@@ -177,38 +208,8 @@ export default function EditProfilePage() {
                         </div>
                     </CardContent>
                 </Card>
-                 <Card>
-                    <CardHeader>
-                        <CardTitle className="font-headline flex items-center gap-2">
-                            <BookOpen className="h-6 w-6 text-primary"/>
-                            Recent Activity
-                        </CardTitle>
-                        <CardDescription>A log of your recent actions in the app.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-72">
-                            <div className="space-y-4">
-                                {activityLogs.length > 0 ? activityLogs.map(log => (
-                                    <div key={log.id} className="flex items-start gap-3">
-                                        <div className="mt-1">
-                                            <Clock className="h-4 w-4 text-muted-foreground" />
-                                        </div>
-                                        <div>
-                                            <p className="font-medium text-sm">{log.action}</p>
-                                            <p className="text-sm text-muted-foreground">{log.details}</p>
-                                            <p className="text-xs text-muted-foreground mt-0.5">
-                                                {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )) : (
-                                    <p className="text-sm text-muted-foreground text-center py-8">No activity recorded yet.</p>
-                                )}
-                            </div>
-                        </ScrollArea>
-                    </CardContent>
-                </Card>
             </div>
         </div>
     );
 }
+
