@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { Order, OrderItem, OrderStatus, RestaurantSettings, Table, Branch } from "@/lib/definitions";
 import { updateOrderStatusAction, cancelOrderItemAction } from "@/lib/actions";
 import { Clock, User, Phone, ShoppingBasket, Utensils, CheckCircle, MessageSquare, XCircle, Trash2, Printer, CreditCard } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceInTimezone } from "@/lib/format-date";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState, useCallback } from "react";
@@ -166,7 +166,7 @@ export default function AdminKitchenPage() {
             setMainBranch(fetchedMainBranch);
 
             const savedBranchId = sessionStorage.getItem('kitchenViewBranchId');
-            
+
             let initialBranchId: string | undefined;
 
             if (savedBranchId) {
@@ -176,7 +176,7 @@ export default function AdminKitchenPage() {
             } else {
                 initialBranchId = user.branchId;
             }
-            
+
             if (initialBranchId) {
                 setSelectedBranchId(initialBranchId);
             }
@@ -188,9 +188,9 @@ export default function AdminKitchenPage() {
         }
         fetchInitialData();
     }, [user, canManageAllBranches]);
-    
+
     useEffect(() => {
-        if(selectedBranchId) {
+        if (selectedBranchId) {
             getSettings(selectedBranchId).then(setSettings);
             fetchOrders(selectedBranchId, true); // Initial fetch with loading state
             const interval = setInterval(() => fetchOrders(selectedBranchId, false), 5000); // Subsequent fetches without loading state
@@ -227,7 +227,7 @@ export default function AdminKitchenPage() {
     if (isLoading || !settings) {
         return (
             <div className="space-y-4">
-                 <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center mb-4">
                     <Skeleton className="h-9 w-48" />
                     <Skeleton className="h-9 w-48" />
                 </div>
@@ -251,7 +251,7 @@ export default function AdminKitchenPage() {
         <>
             <div className="flex justify-between items-center mb-4">
                 <h2 className="font-headline text-2xl font-semibold">Kitchen View</h2>
-                 {canManageAllBranches && (
+                {canManageAllBranches && (
                     <Select value={selectedBranchId} onValueChange={handleBranchChange}>
                         <SelectTrigger className="w-full sm:w-[220px]">
                             <SelectValue placeholder="Select a branch" />
@@ -264,7 +264,7 @@ export default function AdminKitchenPage() {
                     </Select>
                 )}
             </div>
-             {orders.length === 0 ? (
+            {orders.length === 0 ? (
                 <div className="flex h-[60vh] flex-col items-center justify-center rounded-xl border border-dashed">
                     <div className="text-center">
                         <h3 className="font-headline text-2xl font-semibold tracking-tight">No active orders</h3>
@@ -273,97 +273,97 @@ export default function AdminKitchenPage() {
                 </div>
             ) : (
                 <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {orders.map((order) => (
-                    <Card key={order.id} className="flex flex-col">
-                        <CardHeader>
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <CardTitle className="font-headline text-lg flex items-center">
-                                        {getOrderIcon(order)}
-                                        {getOrderTitle(order)}
-                                    </CardTitle>
-                                    <p className="text-xs text-muted-foreground">Order #{order.id}</p>
-                                </div>
-                                <OrderStatusBadge status={order.status} />
-                            </div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-1 pt-2">
-                                <Clock className="h-3 w-3" />
-                                <span>{formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}</span>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="flex-1">
-                            <div className="space-y-2 text-sm">
-                                <div className="flex items-center gap-2">
-                                    <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                    <span>{order.customerName}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                    <span>{order.customerPhone}</span>
-                                </div>
-                                {order.notes && (
-                                    <div className="flex items-start gap-2 pt-1">
-                                        <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                                        <p className="text-xs italic text-muted-foreground">{order.notes}</p>
+                    {orders.map((order) => (
+                        <Card key={order.id} className="flex flex-col">
+                            <CardHeader>
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <CardTitle className="font-headline text-lg flex items-center">
+                                            {getOrderIcon(order)}
+                                            {getOrderTitle(order)}
+                                        </CardTitle>
+                                        <p className="text-xs text-muted-foreground">Order #{order.id}</p>
                                     </div>
-                                )}
-                            </div>
-                            <Separator className="my-4" />
-                            <ul className="space-y-3 text-sm">
-                                {order.items.map((item) => (
-                                    <li key={item.orderItemId} className="flex justify-between items-start gap-2">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2">
-                                                {item.isReady && <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />}
-                                                <span className={cn("font-semibold", (item.isReady || item.status === 'cancelled') && "line-through text-muted-foreground")}>
-                                                    {item.quantity}x {item.name}
-                                                </span>
+                                    <OrderStatusBadge status={order.status} />
+                                </div>
+                                <div className="text-xs text-muted-foreground flex items-center gap-1 pt-2">
+                                    <Clock className="h-3 w-3" />
+                                    <span>{formatDistanceInTimezone(order.createdAt, settings?.timezone)}</span>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="flex-1">
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex items-center gap-2">
+                                        <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                        <span>{order.customerName}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                        <span>{order.customerPhone}</span>
+                                    </div>
+                                    {order.notes && (
+                                        <div className="flex items-start gap-2 pt-1">
+                                            <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                            <p className="text-xs italic text-muted-foreground">{order.notes}</p>
+                                        </div>
+                                    )}
+                                </div>
+                                <Separator className="my-4" />
+                                <ul className="space-y-3 text-sm">
+                                    {order.items.map((item) => (
+                                        <li key={item.orderItemId} className="flex justify-between items-start gap-2">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    {item.isReady && <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />}
+                                                    <span className={cn("font-semibold", (item.isReady || item.status === 'cancelled') && "line-through text-muted-foreground")}>
+                                                        {item.quantity}x {item.name}
+                                                    </span>
+                                                </div>
+                                                {item.notes && (
+                                                    <ul className="text-xs text-muted-foreground pl-6">
+                                                        {item.notes.split(';').map(note => note.trim()).filter(note => note).map((note, index) => {
+                                                            const [group, option] = note.split(':');
+                                                            return (
+                                                                <li key={index} className="list-disc list-outside">
+                                                                    <span className="font-semibold italic">{group}:</span> {option}
+                                                                </li>
+                                                            )
+                                                        })}
+                                                    </ul>
+                                                )}
                                             </div>
-                                            {item.notes && (
-                                                <ul className="text-xs text-muted-foreground pl-6">
-                                                    {item.notes.split(';').map(note => note.trim()).filter(note => note).map((note, index) => {
-                                                        const [group, option] = note.split(':');
-                                                        return (
-                                                            <li key={index} className="list-disc list-outside">
-                                                                <span className="font-semibold italic">{group}:</span> {option}
-                                                            </li>
-                                                        )
-                                                    })}
-                                                </ul>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-2 flex-shrink-0">
-                                            {item.status === 'cancelled' ? (
-                                                <Badge variant="destructive" className="flex items-center gap-1">
-                                                    <XCircle className="h-3 w-3" />
-                                                    Cancelled
-                                                </Badge>
-                                            ) : item.isReady ? (
-                                                <span className="font-mono text-right text-green-600">Ready</span>
-                                            ) : (
-                                                <>
-                                                    <span className="font-mono text-right">{currencySymbol}{(item.quantity * item.price).toFixed(currencyDecimalPlaces)}</span>
-                                                    <CancelItemButton orderId={order.id} orderItemId={item.orderItemId} />
-                                                </>
-                                            )}
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
-                        </CardContent>
-                        <CardFooter className="flex flex-col items-start gap-3">
-                            <div className="w-full flex justify-between items-center font-bold text-base">
-                                <span>Total:</span>
-                                <span className="font-mono">{currencySymbol}{order.total.toFixed(currencyDecimalPlaces)}</span>
-                            </div>
-                            {order.status !== 'completed' && order.status !== 'cancelled' && (
-                                <PrintInvoiceButton order={order} settings={settings} />
-                            )}
-                            <UpdateStatusButton order={order} currentStatus={order.status} />
-                        </CardFooter>
-                    </Card>
-                ))}
-            </div>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                {item.status === 'cancelled' ? (
+                                                    <Badge variant="destructive" className="flex items-center gap-1">
+                                                        <XCircle className="h-3 w-3" />
+                                                        Cancelled
+                                                    </Badge>
+                                                ) : item.isReady ? (
+                                                    <span className="font-mono text-right text-green-600">Ready</span>
+                                                ) : (
+                                                    <>
+                                                        <span className="font-mono text-right">{currencySymbol}{(item.quantity * item.price).toFixed(currencyDecimalPlaces)}</span>
+                                                        <CancelItemButton orderId={order.id} orderItemId={item.orderItemId} />
+                                                    </>
+                                                )}
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </CardContent>
+                            <CardFooter className="flex flex-col items-start gap-3">
+                                <div className="w-full flex justify-between items-center font-bold text-base">
+                                    <span>Total:</span>
+                                    <span className="font-mono">{currencySymbol}{order.total.toFixed(currencyDecimalPlaces)}</span>
+                                </div>
+                                {order.status !== 'completed' && order.status !== 'cancelled' && (
+                                    <PrintInvoiceButton order={order} settings={settings} />
+                                )}
+                                <UpdateStatusButton order={order} currentStatus={order.status} />
+                            </CardFooter>
+                        </Card>
+                    ))}
+                </div>
             )}
         </>
     );

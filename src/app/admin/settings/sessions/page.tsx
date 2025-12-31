@@ -15,11 +15,12 @@ import type { MealSession, RestaurantSettings } from '@/lib/definitions';
 import { Clock, Plus, Trash2, Edit2, Settings2 } from 'lucide-react';
 import { formatSessionTime, getCurrentActiveSession } from '@/lib/utils/session-utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 export default function SessionsPage() {
     const { user } = useAuth();
     const searchParams = useSearchParams();
+    const router = useRouter();
     const branchId = searchParams.get('branchId');
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [editingSession, setEditingSession] = useState<MealSession | null>(null);
@@ -48,6 +49,7 @@ export default function SessionsPage() {
         const updatedSettings = await getSettings(branchId);
         setSettings(updatedSettings);
         setIsAdding(false);
+        router.refresh(); // Force Next.js to refetch data
     };
 
     const handleUpdateSession = async (formData: FormData) => {
@@ -61,6 +63,7 @@ export default function SessionsPage() {
         const updatedSettings = await getSettings(branchId);
         setSettings(updatedSettings);
         setEditingSession(null);
+        router.refresh(); // Force Next.js to refetch data
     };
 
     const handleDeleteSession = async (sessionId: string) => {
@@ -72,6 +75,7 @@ export default function SessionsPage() {
         // Refresh settings
         const updatedSettings = await getSettings(branchId);
         setSettings(updatedSettings);
+        router.refresh(); // Force Next.js to refetch data
     };
 
     const handleManualOverrideUpdate = async () => {
@@ -87,6 +91,7 @@ export default function SessionsPage() {
         // Refresh settings
         const updatedSettings = await getSettings(branchId);
         setSettings(updatedSettings);
+        router.refresh(); // Force Next.js to refetch data
     };
 
     const sessions = settings?.mealSessions || [];

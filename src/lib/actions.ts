@@ -120,11 +120,11 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
         isReady: false,
         status: 'active',
     }));
-    
+
     let createdByName = isCustomerFacing ? 'Customer' : 'Staff';
-    if(createdByForm){
+    if (createdByForm) {
         const user = await getKitchenUserById(createdByForm);
-        if(user) createdByName = user.username;
+        if (user) createdByName = user.username;
     }
 
     let finalOrder: Order | undefined;
@@ -164,7 +164,7 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
             message: 'Database Error: Failed to Place Order.',
         };
     }
-    
+
     revalidatePath('/admin', 'layout');
     revalidatePath('/kitchen', 'layout');
 
@@ -484,9 +484,9 @@ export async function createKitchenUserAction(prevState: CreateUserState, formDa
     const uniqueCategories = Array.from(new Set(categories));
 
     const newUser = await createKitchenUser({ username, password, categories: uniqueCategories, role, permissions, branchId });
-    if(createdBy){
+    if (createdBy) {
         const creator = await getKitchenUserById(createdBy);
-        if(creator) {
+        if (creator) {
             await logActivity(creator.id, creator.username, 'Created User', `Created new user: ${username} with role ${role}`);
         }
     }
@@ -531,7 +531,7 @@ export async function updateKitchenUserAction(userId: string, formData: FormData
 
     try {
         const updatedUser = await updateKitchenUser(userId, updateData);
-        if(updatedBy) {
+        if (updatedBy) {
             const updater = await getKitchenUserById(updatedBy);
             if (updater && updatedUser) {
                 await logActivity(updater.id, updater.username, 'Updated User', `Updated profile for ${updatedUser.username}`);
@@ -549,7 +549,7 @@ export async function deleteKitchenUserAction(userId: string, deletedBy: string 
         const userToDelete = await getKitchenUserById(userId);
         if (userToDelete && deletedBy) {
             const deleter = await getKitchenUserById(deletedBy);
-            if(deleter) {
+            if (deleter) {
                 await logActivity(deleter.id, deleter.username, 'Deleted User', `Deleted user: ${userToDelete.username}`);
             }
         }
@@ -589,6 +589,7 @@ export async function updateSettingsAction(formData: FormData) {
     // Branch-Specific or Global Fallback Settings
     if (formData.has('currencySymbol')) newSettings.currencySymbol = formData.get('currencySymbol') as string;
     if (formData.has('currencyDecimalPlaces')) newSettings.currencyDecimalPlaces = Number(formData.get('currencyDecimalPlaces'));
+    if (formData.has('timezone')) newSettings.timezone = formData.get('timezone') as string;
     if (formData.has('qrCodeColor')) newSettings.qrCodeColor = formData.get('qrCodeColor') as string;
     if (formData.has('qrCodeBackgroundColor')) newSettings.qrCodeBackgroundColor = formData.get('qrCodeBackgroundColor') as string;
 
@@ -741,7 +742,9 @@ export async function addMealSessionAction(formData: FormData) {
             displayMessage,
             isActive,
         });
-        revalidatePath('/admin/settings');
+        // Revalidate all pages that might use meal sessions
+        revalidatePath('/', 'layout'); // Revalidate entire app
+        revalidatePath('/admin/settings/sessions');
         revalidatePath('/admin/menu');
         revalidatePath('/order', 'layout');
     } catch (error) {
@@ -772,7 +775,10 @@ export async function updateMealSessionAction(formData: FormData) {
             displayMessage,
             isActive,
         });
-        revalidatePath('/admin/settings');
+
+        // Revalidate all pages that might use meal sessions
+        revalidatePath('/', 'layout'); // Revalidate entire app
+        revalidatePath('/admin/settings/sessions');
         revalidatePath('/admin/menu');
         revalidatePath('/order', 'layout');
     } catch (error) {
@@ -783,7 +789,9 @@ export async function updateMealSessionAction(formData: FormData) {
 export async function deleteMealSessionAction(branchId: string, sessionId: string) {
     try {
         await deleteMealSession(branchId, sessionId);
-        revalidatePath('/admin/settings');
+        // Revalidate all pages that might use meal sessions
+        revalidatePath('/', 'layout'); // Revalidate entire app
+        revalidatePath('/admin/settings/sessions');
         revalidatePath('/admin/menu');
         revalidatePath('/order', 'layout');
     } catch (error) {

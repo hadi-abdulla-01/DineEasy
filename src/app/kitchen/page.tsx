@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { Order, OrderItem, RestaurantSettings, Table } from "@/lib/definitions";
 import { updateKitchenOrderStatusAction, updateOrderItemStatusAction } from "@/lib/actions";
 import { Clock, User, Phone, ShoppingBasket, Utensils, CheckCircle, MessageSquare, Printer } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceInTimezone } from "@/lib/format-date";
 import { cn } from "@/lib/utils";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/app/admin/auth-provider";
@@ -205,7 +205,7 @@ export default function KitchenPage() {
                         </div>
                         <div className="text-xs text-muted-foreground flex items-center gap-1 pt-1">
                             <Clock className="h-3 w-3" />
-                            <span>{formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}</span>
+                            <span>{formatDistanceInTimezone(order.createdAt, settings.timezone)}</span>
                         </div>
                     </CardHeader>
                     <CardContent className="flex-1 pb-3">

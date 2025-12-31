@@ -163,7 +163,8 @@ export async function getSettings(branchId?: string): Promise<RestaurantSettings
         return defaultSettings;
     }
 
-    if (settingsCache[branchId]) return settingsCache[branchId];
+    // DISABLED CACHE - Always fetch fresh data to ensure immediate updates
+    // if (settingsCache[branchId]) return settingsCache[branchId];
 
     // 2. Fetch branch-specific settings
     const branchRef = doc(firestore, `restaurants/${RESTAURANT_ID}/branches`, branchId);
@@ -197,11 +198,14 @@ export async function getSettings(branchId?: string): Promise<RestaurantSettings
         // Session settings
         mealSessions: branchData.mealSessions,
         manualSessionOverride: branchData.manualSessionOverride,
+        // Timezone setting
+        timezone: branchData.timezone,
         // Category settings - use branch categories or fall back to defaults
         menuCategories: branchData.menuCategories || defaultSettings.menuCategories,
     };
 
-    settingsCache[branchId] = finalSettings;
+    // Cache disabled for immediate updates
+    // settingsCache[branchId] = finalSettings;
     return finalSettings;
 }
 
@@ -878,9 +882,14 @@ export async function getCurrentSession(branchId: string): Promise<MealSession |
         }
     }
 
-    // Fall back to automatic time-based detection
+    // Use configured timezone (defaults to Asia/Kolkata for India)
+    const timezone = settings.timezone || 'Asia/Kolkata';
     const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    // Convert current time to the restaurant's timezone
+    const { toZonedTime } = require('date-fns-tz');
+    const zonedNow = toZonedTime(now, timezone);
+    const currentMinutes = zonedNow.getHours() * 60 + zonedNow.getMinutes();
 
     const activeSession = settings.mealSessions.find(session => {
         if (!session.isActive) return false;

@@ -16,6 +16,7 @@ export type RestaurantSettings = {
     currencySymbol: string;
     taxes: Tax[];
     currencyDecimalPlaces: number;
+    timezone?: string; // IANA timezone identifier (e.g., 'Asia/Kolkata', 'UTC')
     qrCodeColor?: string;
     qrCodeBackgroundColor?: string;
     qrCodeLogo?: string;
@@ -224,10 +225,10 @@ export type PrintSettings = {
 };
 
 export type ActivityLog = {
-  id: string;
-  userId: string;
-  username: string;
-  action: string;
-  details: string;
-  timestamp: string;
+    id: string;
+    userId: string;
+    username: string;
+    action: string;
+    details: string;
+    timestamp: string;
 };

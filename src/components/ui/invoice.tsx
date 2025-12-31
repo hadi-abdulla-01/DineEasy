@@ -2,6 +2,7 @@
 'use client';
 import type { Order, RemoteOrder, RestaurantSettings } from "@/lib/definitions";
 import React from 'react';
+import { formatInTimezone } from '@/lib/format-date';
 
 type CombinedOrder = Order | RemoteOrder;
 
@@ -19,7 +20,7 @@ export function Invoice({ order, settings }: { order: CombinedOrder, settings: R
     const currencySymbol = settings.currencySymbol || '$';
     const currencyDecimalPlaces = settings.currencyDecimalPlaces ?? 2;
     const printSize = settings.printSettings?.invoicePrintSize || 'a4';
-    
+
     let containerWidth = '100%';
     let baseFontSize = '14px';
     let stylePreset = 'a4';
@@ -58,7 +59,7 @@ export function Invoice({ order, settings }: { order: CombinedOrder, settings: R
                 <h2 style={{ fontSize: stylePreset === 'a4' ? '18px' : '12pt', margin: '5px 0' }}>{settings.restaurantName}</h2>
                 <p style={{ margin: '0', fontSize: stylePreset === 'a4' ? '14px' : '9pt' }}>{settings.restaurantAddress}</p>
                 <p style={{ margin: '5px 0 0 0', fontSize: '9pt' }}>- - - - - - - - - - - - - - - - - -</p>
-                <p style={{ margin: '0', fontSize: stylePreset === 'a4' ? '12px' : '9pt' }}>Date: {new Date(order.createdAt).toLocaleString()}</p>
+                <p style={{ margin: '0', fontSize: stylePreset === 'a4' ? '12px' : '9pt' }}>Date: {formatInTimezone(order.createdAt, 'PPpp', settings.timezone)}</p>
                 {order.invoiceNumber && <p style={{ margin: '0', fontSize: stylePreset === 'a4' ? '12px' : '9pt' }}>Invoice #: {order.invoiceNumber}</p>}
                 <p style={{ margin: '0', fontSize: stylePreset === 'a4' ? '12px' : '9pt' }}>Order ID: {order.id}</p>
                 {isDineInOrder(order) && order.table && <p style={{ margin: '0', fontSize: stylePreset === 'a4' ? '12px' : '9pt' }}>Table: {order.table.number}</p>}
@@ -105,14 +106,14 @@ export function Invoice({ order, settings }: { order: CombinedOrder, settings: R
                             <td style={{ width: '80px', padding: '2px 5px', textAlign: 'right' }}>{currencySymbol}{order.subtotal.toFixed(currencyDecimalPlaces)}</td>
                         </tr>
                         {Array.isArray(order.taxes) && order.taxes.map((tax, index) => (
-                             <tr key={index}>
+                            <tr key={index}>
                                 <td style={{ padding: '2px 5px', textAlign: 'right' }}>{tax.name} ({tax.rate}%):</td>
                                 <td style={{ width: '80px', padding: '2px 5px', textAlign: 'right' }}>{currencySymbol}{tax.amount.toFixed(currencyDecimalPlaces)}</td>
-                             </tr>
+                            </tr>
                         ))}
                         <tr>
                             <td style={{ padding: '5px', textAlign: 'right', fontWeight: 'bold', borderTop: '1px solid black', borderBottom: '1px solid black' }}>Total:</td>
-                            <td style={{ width: '80px', padding: '5px', textAlign: 'right', fontWeight: 'bold', borderTop: '1px solid black', borderBottom: '1px solid black'  }}>{currencySymbol}{order.total.toFixed(currencyDecimalPlaces)}</td>
+                            <td style={{ width: '80px', padding: '5px', textAlign: 'right', fontWeight: 'bold', borderTop: '1px solid black', borderBottom: '1px solid black' }}>{currencySymbol}{order.total.toFixed(currencyDecimalPlaces)}</td>
                         </tr>
                     </tbody>
                 </table>
