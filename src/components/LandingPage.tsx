@@ -20,8 +20,15 @@ export default function LandingPage() {
 
       {/* 🔶 YELLOW BACKGROUND SHAPE */}
       <motion.div
-        className="absolute z-0"
+        className="hidden lg:block absolute z-0"
+        initial={{
+          left: "-20%",
+          top: "calc(50% - 740px)", // Start vertically centered on left
+          width: "1464.159px",
+          height: "1478.766px",
+        }}
         animate={currentPage}
+        style={{ willChange: "left, top, width, height, transform" }}
         variants={{
           home: {
             left: "calc(41.67% + 82px)",
@@ -49,7 +56,7 @@ export default function LandingPage() {
           },
         }}
         transition={{
-          duration: 0.6,
+          duration: 0.8,
           ease: [0.43, 0.13, 0.23, 0.96],
         }}
       >
@@ -113,6 +120,6 @@ export default function LandingPage() {
           />
         )}
       </AnimatePresence>
-    </div>
+    </div >
   );
 }

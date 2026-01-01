@@ -12,91 +12,7 @@ interface HomePageProps {
 
 /* ================ MOBILE/TABLET COMPONENTS ================ */
 
-function MobileLogo() {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center justify-center h-6 w-5">
-        <svg
-          className="block size-full"
-          fill="none"
-          preserveAspectRatio="none"
-          viewBox="0 0 13.0569 16.6654"
-        >
-          <path d={svgPaths.p372f1e00} fill="#9E090F" />
-        </svg>
-      </div>
-      <p className="font-['Mulish:Bold',sans-serif] text-[17px] md:text-[19.5px] leading-none text-[#9e090f] font-bold">
-        D<span className="text-black font-bold">ineEzee</span>
-      </p>
-    </div>
-  );
-}
-
-function MobileHeader({
-  onNavigateToAbout,
-  onNavigateToContact,
-}: {
-  onNavigateToAbout: () => void;
-  onNavigateToContact: () => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <header className="w-full px-4 py-6 md:px-8 z-10">
-      <div className="max-w-7xl mx-auto flex items-center justify-between">
-        <MobileLogo />
-
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-8">
-          <button className="font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none text-[#9e090f] hover:opacity-80 transition-opacity font-bold">
-            Home
-          </button>
-          <button
-            onClick={onNavigateToAbout}
-            className="font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none text-[#171717] hover:text-[#9e090f] transition-colors font-bold"
-          >
-            About us
-          </button>
-          <button
-            onClick={onNavigateToContact}
-            className="font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none text-[#171717] hover:text-[#9e090f] transition-colors font-bold"
-          >
-            Contact
-          </button>
-        </nav>
-
-        {/* Desktop Sign In Button */}
-        <Link href="/login?role=admin" className="hidden md:block bg-[#9e090f] text-white font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none px-6 py-2 md:px-7 md:py-2 rounded-full hover:bg-[#8a0810] transition-all font-bold">
-          Sign In
-        </Link>
-
-        {/* Mobile Menu Button */}
-        <button
-          className="md:hidden text-[#171717] hover:text-[#9e090f] transition-colors"
-          onClick={() => setIsOpen(!isOpen)}
-          aria-label="Toggle menu"
-        >
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-      </div>
-
-      {/* Mobile Menu */}
-      {isOpen && (
-        <nav className="md:hidden mt-4">
-          <button onClick={() => setIsOpen(false)} className="block font-['Mulish:Bold',sans-serif] text-[15px] leading-none text-[#9e090f] hover:opacity-80 transition-opacity py-2 px-4 w-full text-left font-bold">
-            Home
-          </button>
-          <button onClick={() => { onNavigateToAbout(); setIsOpen(false); }} className="block font-['Mulish:Bold',sans-serif] text-[15px] leading-none text-[#171717] hover:text-[#9e090f] transition-colors py-2 px-4 w-full text-left font-bold">
-            About us
-          </button>
-          <button onClick={() => { onNavigateToContact(); setIsOpen(false); }} className="block font-['Mulish:Bold',sans-serif] text-[15px] leading-none text-[#171717] hover:text-[#9e090f] transition-colors py-2 px-4 w-full text-left font-bold">
-            Contact
-          </button>
-        </nav>
-      )}
-    </header>
-  );
-}
+import { ResponsiveNavbar } from "./ResponsiveNavbar";
 
 function MobileHeroContent() {
   return (
@@ -104,7 +20,7 @@ function MobileHeroContent() {
       className="w-full px-4 md:px-8 py-8 md:py-12 z-10"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35 }}
+      transition={{ duration: 0.7 }}
     >
       <div className="max-w-7xl mx-auto">
         <div className="text-center max-w-4xl mx-auto space-y-6 md:space-y-8">
@@ -144,7 +60,7 @@ function MobileHeroImage() {
       className="w-full px-4 md:px-8 py-8 md:py-12"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: 0.1 }}
+      transition={{ duration: 0.7, delay: 0.1 }}
     >
       <div className="max-w-2xl mx-auto">
         <div className="relative w-full aspect-[3/2] md:aspect-[5/3] rounded-[50px] md:rounded-[99px] overflow-hidden opacity-80">
@@ -280,11 +196,11 @@ export function HomePage({
   onNavigateToContact,
 }: HomePageProps) {
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    <>
       {/* Mobile/Tablet: Normal flow layout */}
-      <div className="lg:hidden min-h-screen w-full overflow-x-hidden bg-[#ffce46]">
+      <div className="lg:hidden h-screen w-full overflow-x-hidden overflow-y-auto bg-[#ffce46]">
         <div className="flex flex-col min-h-screen">
-          <MobileHeader
+          <ResponsiveNavbar
             onNavigateToAbout={onNavigateToAbout}
             onNavigateToContact={onNavigateToContact}
           />
@@ -296,7 +212,7 @@ export function HomePage({
       </div>
 
       {/* Desktop: Scale wrapper with absolute positioning (ORIGINAL LAYOUT) */}
-      <div className="hidden lg:block">
+      <div className="hidden lg:block absolute inset-0 overflow-hidden">
         <div
           className="origin-top-left"
           style={{
@@ -313,6 +229,6 @@ export function HomePage({
           <DesktopHeroImage />
         </div>
       </div>
-    </div>
+    </>
   );
 }
