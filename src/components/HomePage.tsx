@@ -2,15 +2,166 @@ import { motion } from "motion/react";
 import svgPaths from "../imports/svg-xk929g7nkl";
 import imgFlatChineseNewYearReunionDinnerIllustration1 from "../assets/e469a5ef4a653f0f58194891b580d935bd7fc2ba.png";
 import Link from "next/link";
+import { useState } from "react";
+import { Menu, X } from "lucide-react";
 
 interface HomePageProps {
   onNavigateToAbout: () => void;
   onNavigateToContact: () => void;
 }
 
-/* ---------------- LOGO ---------------- */
+/* ================ MOBILE/TABLET COMPONENTS ================ */
 
-function Logo() {
+function MobileLogo() {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex items-center justify-center h-6 w-5">
+        <svg
+          className="block size-full"
+          fill="none"
+          preserveAspectRatio="none"
+          viewBox="0 0 13.0569 16.6654"
+        >
+          <path d={svgPaths.p372f1e00} fill="#9E090F" />
+        </svg>
+      </div>
+      <p className="font-['Mulish:Bold',sans-serif] text-[17px] md:text-[19.5px] leading-none text-[#9e090f] font-bold">
+        D<span className="text-black font-bold">ineEzee</span>
+      </p>
+    </div>
+  );
+}
+
+function MobileHeader({
+  onNavigateToAbout,
+  onNavigateToContact,
+}: {
+  onNavigateToAbout: () => void;
+  onNavigateToContact: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <header className="w-full px-4 py-6 md:px-8 z-10">
+      <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <MobileLogo />
+
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex items-center gap-8">
+          <button className="font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none text-[#9e090f] hover:opacity-80 transition-opacity font-bold">
+            Home
+          </button>
+          <button
+            onClick={onNavigateToAbout}
+            className="font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none text-[#171717] hover:text-[#9e090f] transition-colors font-bold"
+          >
+            About us
+          </button>
+          <button
+            onClick={onNavigateToContact}
+            className="font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none text-[#171717] hover:text-[#9e090f] transition-colors font-bold"
+          >
+            Contact
+          </button>
+        </nav>
+
+        {/* Desktop Sign In Button */}
+        <Link href="/login?role=admin" className="hidden md:block bg-[#9e090f] text-white font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none px-6 py-2 md:px-7 md:py-2 rounded-full hover:bg-[#8a0810] transition-all font-bold">
+          Sign In
+        </Link>
+
+        {/* Mobile Menu Button */}
+        <button
+          className="md:hidden text-[#171717] hover:text-[#9e090f] transition-colors"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-label="Toggle menu"
+        >
+          {isOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
+
+      {/* Mobile Menu */}
+      {isOpen && (
+        <nav className="md:hidden mt-4">
+          <button onClick={() => setIsOpen(false)} className="block font-['Mulish:Bold',sans-serif] text-[15px] leading-none text-[#9e090f] hover:opacity-80 transition-opacity py-2 px-4 w-full text-left font-bold">
+            Home
+          </button>
+          <button onClick={() => { onNavigateToAbout(); setIsOpen(false); }} className="block font-['Mulish:Bold',sans-serif] text-[15px] leading-none text-[#171717] hover:text-[#9e090f] transition-colors py-2 px-4 w-full text-left font-bold">
+            About us
+          </button>
+          <button onClick={() => { onNavigateToContact(); setIsOpen(false); }} className="block font-['Mulish:Bold',sans-serif] text-[15px] leading-none text-[#171717] hover:text-[#9e090f] transition-colors py-2 px-4 w-full text-left font-bold">
+            Contact
+          </button>
+        </nav>
+      )}
+    </header>
+  );
+}
+
+function MobileHeroContent() {
+  return (
+    <motion.div
+      className="w-full px-4 md:px-8 py-8 md:py-12 z-10"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+    >
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center max-w-4xl mx-auto space-y-6 md:space-y-8">
+          <h1 className="font-['Mulish:Bold',sans-serif] font-bold text-[32px] md:text-[48px] leading-[1.2] text-black capitalize px-4 md:px-8">
+            Effortless Dining, Unforgettable Experience
+          </h1>
+
+          <p className="font-['Outfit:Medium',sans-serif] text-[14px] md:text-[16px] leading-[1.5] text-[#5a5a5a] max-w-xl mx-auto px-4">
+            Revolutionize your restaurant with seamless QR code ordering. Increase
+            efficiency, reduce wait times, and delight your customers.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            <Link
+              href="/login?role=kitchen"
+              className="bg-[#9e090f] text-white font-['Outfit:Medium',sans-serif] text-[15px] md:text-[17px] leading-none px-8 py-3 rounded-full hover:bg-[#8a0810] transition-all w-full sm:w-auto max-w-[200px]"
+            >
+              Kitchen Login
+            </Link>
+
+            <Link
+              href="/login?role=admin"
+              className="bg-[#f3f3f3] text-[#171717] font-['Outfit:Medium',sans-serif] text-[15px] md:text-[17px] leading-none px-8 py-3 rounded-full hover:bg-[#e3e3e3] transition-all w-full sm:w-auto max-w-[200px]"
+            >
+              Admin Login
+            </Link>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function MobileHeroImage() {
+  return (
+    <motion.div
+      className="w-full px-4 md:px-8 py-8 md:py-12"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: 0.1 }}
+    >
+      <div className="max-w-2xl mx-auto">
+        <div className="relative w-full aspect-[3/2] md:aspect-[5/3] rounded-[50px] md:rounded-[99px] overflow-hidden opacity-80">
+          <img
+            alt="Family dining together illustration"
+            src={imgFlatChineseNewYearReunionDinnerIllustration1.src}
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          />
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ================ DESKTOP COMPONENTS (ORIGINAL) ================ */
+
+function DesktopLogo() {
   return (
     <div className="flex items-center gap-2">
       <div className="flex items-center justify-center h-[15.256px] w-[18.848px] rotate-[348.136deg] skew-x-[7.001deg]">
@@ -31,9 +182,7 @@ function Logo() {
   );
 }
 
-/* ---------------- HEADER ---------------- */
-
-function Header({
+function DesktopHeader({
   onNavigateToAbout,
   onNavigateToContact,
 }: {
@@ -42,7 +191,7 @@ function Header({
 }) {
   return (
     <header className="absolute left-[105px] right-[105px] top-[35px] flex items-center justify-between z-10">
-      <Logo />
+      <DesktopLogo />
 
       <nav className="flex items-center gap-[60px]">
         <button className="font-['Mulish:Bold',sans-serif] font-bold text-[18px] text-[#9e090f]">
@@ -71,9 +220,7 @@ function Header({
   );
 }
 
-/* ---------------- HERO CONTENT ---------------- */
-
-function HeroContent() {
+function DesktopHeroContent() {
   return (
     <motion.div
       className="absolute left-[78px] top-[201px] z-10 max-w-[674px]"
@@ -109,9 +256,7 @@ function HeroContent() {
   );
 }
 
-/* ---------------- HERO IMAGE ---------------- */
-
-function HeroImage() {
+function DesktopHeroImage() {
   return (
     <motion.div
       className="absolute h-[388px] left-[calc(58.33%+27px)] top-[281px] w-[582px]"
@@ -128,7 +273,7 @@ function HeroImage() {
   );
 }
 
-/* ---------------- PAGE ---------------- */
+/* ================ MAIN PAGE COMPONENT ================ */
 
 export function HomePage({
   onNavigateToAbout,
@@ -136,21 +281,37 @@ export function HomePage({
 }: HomePageProps) {
   return (
     <div className="absolute inset-0 overflow-hidden">
-      {/* SCALE WRAPPER — KEEP CONSISTENT WITH OTHER PAGES */}
-      <div
-        className="origin-top-left"
-        style={{
-          transform: "scale(0.92)", // slightly better than 0.9 (less white gap)
-          width: "108.7%",
-          height: "108.7%",
-        }}
-      >
-        <Header
-          onNavigateToAbout={onNavigateToAbout}
-          onNavigateToContact={onNavigateToContact}
-        />
-        <HeroContent />
-        <HeroImage />
+      {/* Mobile/Tablet: Normal flow layout */}
+      <div className="lg:hidden min-h-screen w-full overflow-x-hidden bg-[#ffce46]">
+        <div className="flex flex-col min-h-screen">
+          <MobileHeader
+            onNavigateToAbout={onNavigateToAbout}
+            onNavigateToContact={onNavigateToContact}
+          />
+          <main className="flex-1 flex flex-col">
+            <MobileHeroContent />
+            <MobileHeroImage />
+          </main>
+        </div>
+      </div>
+
+      {/* Desktop: Scale wrapper with absolute positioning (ORIGINAL LAYOUT) */}
+      <div className="hidden lg:block">
+        <div
+          className="origin-top-left"
+          style={{
+            transform: "scale(0.92)",
+            width: "108.7%",
+            height: "108.7%",
+          }}
+        >
+          <DesktopHeader
+            onNavigateToAbout={onNavigateToAbout}
+            onNavigateToContact={onNavigateToContact}
+          />
+          <DesktopHeroContent />
+          <DesktopHeroImage />
+        </div>
       </div>
     </div>
   );
