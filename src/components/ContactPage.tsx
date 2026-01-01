@@ -151,17 +151,52 @@ function MobileContactForm() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    message: ''
+    message: '',
+    company: '' // Honeypot field (hidden)
   });
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('submitting');
+
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setStatus('success');
+        setFormData({ name: '', email: '', message: '' });
+        alert('Message sent successfully!');
+      } else {
+        setStatus('error');
+        alert(data.error || 'Failed to send message. Please try again.');
+      }
+    } catch (error) {
+      console.error(error);
+      setStatus('error');
+      alert('An error occurred. Please try again.');
+    } finally {
+      setStatus('idle');
+    }
+  };
 
   return (
     <div className="bg-[#eee] rounded-3xl p-6 md:p-8">
-      <form onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-6">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         {/* Name Input */}
         <div className="flex flex-col gap-2">
           <input
             type="text"
             placeholder="Your name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            required
             className="bg-transparent border-b-[2px] border-[#9e090f] pb-2 text-lg text-black placeholder:text-black/40 outline-none font-['Poppins:Medium',sans-serif] focus:border-[#9e090f] transition-colors"
           />
         </div>
@@ -171,6 +206,9 @@ function MobileContactForm() {
           <input
             type="email"
             placeholder="Your email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            required
             className="bg-transparent border-b-[2px] border-[#9e090f]/30 pb-2 text-lg text-black placeholder:text-black/40 outline-none font-['Poppins:Medium',sans-serif] focus:border-[#9e090f] transition-colors"
           />
         </div>
@@ -180,19 +218,159 @@ function MobileContactForm() {
           <textarea
             placeholder="Your message"
             rows={4}
+            value={formData.message}
+            onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+            required
             className="bg-transparent border-b-[2px] border-[#9e090f]/30 pb-2 text-lg text-black placeholder:text-black/40 outline-none font-['Poppins:Medium',sans-serif] focus:border-[#9e090f] transition-colors resize-none"
           />
         </div>
 
+        {/* HONEYPOT FIELD (Hidden) - Anti-spam */}
+        <input
+          type="text"
+          name="company"
+          value={formData.company}
+          onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+          style={{ display: 'none' }}
+          tabIndex={-1}
+          autoComplete="off"
+        />
+
         {/* Submit Button */}
         <button
-          className="bg-[#9e090f] text-white rounded-2xl px-8 py-3 flex items-center justify-center gap-3 self-start hover:bg-[#7a0709] transition-all"
+          type="submit"
+          disabled={status === 'submitting'}
+          className="bg-[#9e090f] text-white rounded-2xl px-8 py-3 flex items-center justify-center gap-3 self-start hover:bg-[#7a0709] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Send className="size-5" />
-          <span className="text-lg font-bold font-['Poppins:Medium',sans-serif]">Send Message</span>
+          {status === 'submitting' ? (
+            <span className="text-lg font-bold font-['Poppins:Medium',sans-serif]">Sending...</span>
+          ) : (
+            <>
+              <Send className="size-5" />
+              <span className="text-lg font-bold font-['Poppins:Medium',sans-serif]">Send Message</span>
+            </>
+          )}
         </button>
       </form>
     </div>
+  );
+}
+
+/* ================ DESKTOP COMPONENTS (Original) ================ */
+
+function DesktopContactForm() {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    message: ''
+  });
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('submitting');
+
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setStatus('success');
+        setFormData({ name: '', email: '', message: '' });
+        alert('Message sent successfully!');
+      } else {
+        setStatus('error');
+        alert(data.error || 'Failed to send message. Please try again.');
+      }
+    } catch (error) {
+      console.error(error);
+      setStatus('error');
+      alert('An error occurred. Please try again.');
+    } finally {
+      setStatus('idle');
+    }
+  };
+
+  return (
+    <motion.div className="absolute left-[calc(33.33%+123px)] top-[200px] w-[722px] h-[896px] bg-[#eee] rounded-[44px]">
+      <form onSubmit={handleSubmit}>
+        <div className="absolute left-[48px] top-[48px] flex flex-col gap-[64px]">
+          {/* Name */}
+          <div className="flex flex-col gap-[8px]">
+            <input
+              type="text"
+              placeholder="Your name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+              className="bg-transparent text-[20px] outline-none font-['Poppins:Medium',sans-serif] w-[600px]"
+            />
+            <div className="h-[3px] w-[600px] bg-[#9e090f] opacity-50" />
+          </div>
+
+          {/* Email */}
+          <div className="flex flex-col gap-[8px]">
+            <input
+              type="email"
+              placeholder="Your email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              required
+              className="bg-transparent text-[20px] outline-none font-['Poppins:Medium',sans-serif] w-[600px]"
+            />
+            <div className="h-[3px] w-[600px] bg-[#9e090f] opacity-50" />
+          </div>
+
+          {/* Message */}
+          <div className="flex flex-col gap-[8px]">
+            <textarea
+              placeholder="Your message"
+              value={formData.message}
+              onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+              required
+              rows={6}
+              className="bg-transparent text-[20px] outline-none font-['Poppins:Medium',sans-serif] w-[600px] resize-none"
+            />
+            <div className="h-[3px] w-[600px] bg-[#9e090f] opacity-50" />
+          </div>
+
+          {/* HONEYPOT FIELD (Hidden) */}
+          <input
+            type="text"
+            name="company"
+            value={formData.company}
+            onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+            style={{ display: 'none' }}
+            tabIndex={-1}
+            autoComplete="off"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={status === 'submitting'}
+          className="absolute left-[33px] top-[480px] flex items-center gap-[16px] px-[64px] py-[24px] bg-[#9e090f] rounded-[16px] hover:bg-[#7a0709] hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
+        >
+          {status === 'submitting' ? (
+            <span className="text-[20px] text-[#eee] font-['Poppins:Medium',sans-serif]">
+              Sending...
+            </span>
+          ) : (
+            <>
+              <Send className="size-[24px] text-[#eee]" />
+              <span className="text-[20px] text-[#eee] font-['Poppins:Medium',sans-serif]">
+                Send Message
+              </span>
+            </>
+          )}
+        </button>
+      </form>
+    </motion.div>
   );
 }
 
@@ -361,26 +539,7 @@ export function ContactPage({ onNavigateToHome, onNavigateToAbout }: ContactPage
           </motion.div>
 
           {/* Contact Form */}
-          <motion.div className="absolute left-[calc(33.33%+123px)] top-[200px] w-[722px] h-[896px] bg-[#eee] rounded-[44px]">
-            <div className="absolute left-[48px] top-[48px] flex flex-col gap-[64px]">
-              {["Your name", "Your email", "Your message"].map((placeholder, i) => (
-                <div key={i} className="flex flex-col gap-[8px]">
-                  <input
-                    placeholder={placeholder}
-                    className="bg-transparent text-[20px] outline-none font-['Poppins:Medium',sans-serif]"
-                  />
-                  <div className="h-[3px] w-[600px] bg-[#9e090f] opacity-50" />
-                </div>
-              ))}
-            </div>
-
-            <button className="absolute left-[33px] top-[448px] flex items-center gap-[16px] px-[64px] py-[24px] bg-[#9e090f] rounded-[16px] hover:bg-[#7a0709] hover:scale-105 transition-all">
-              <Send className="size-[24px] text-[#eee]" />
-              <span className="text-[20px] text-[#eee] font-['Poppins:Medium',sans-serif]">
-                Send Message
-              </span>
-            </button>
-          </motion.div>
+          <DesktopContactForm />
 
           {/* Social Icons */}
           <motion.div className="absolute left-[151px] top-[941px] w-[228px] flex justify-between">
