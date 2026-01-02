@@ -6,13 +6,14 @@ import type { MenuItem, Order, RemoteOrder, MealSession } from "@/lib/definition
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "../auth-provider";
-import { LoaderCircle } from "lucide-react";
+import { Clock, LoaderCircle } from "lucide-react";
 
 export default function TakeAwayPage() {
     const { user } = useAuth();
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [correctionOrder, setCorrectionOrder] = useState<Order | RemoteOrder | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [session, setSession] = useState<MealSession | null>(null);
     const searchParams = useSearchParams();
     const correctionId = searchParams.get('correction_for');
     const correctionType = searchParams.get('order_type');
@@ -21,19 +22,21 @@ export default function TakeAwayPage() {
         if (!user?.branchId) return; // Guard clause
 
         try {
-            const [session, allMenuItems] = await Promise.all([
+            const [currentSession, allMenuItems] = await Promise.all([
                 getCurrentSession(user.branchId),
                 getMenuItems(user.branchId)
             ]);
 
+            setSession(currentSession);
+
             const availableMenuItems = allMenuItems.filter(item => {
                 if (!item.isAvailable) return false;
                 // If no sessions are configured for the item, or no session is active, it's available.
-                if (!session || !item.availableSessions || item.availableSessions.length === 0) {
+                if (!currentSession || !item.availableSessions || item.availableSessions.length === 0) {
                     return true;
                 }
                 // Otherwise, check if the item is in the current session.
-                return item.availableSessions.includes(session.id);
+                return item.availableSessions.includes(currentSession.id);
             });
             setMenuItems(availableMenuItems);
         } catch (error) {
@@ -84,5 +87,20 @@ export default function TakeAwayPage() {
         );
     }
 
-    return <RemoteOrderForm menu={menuItems} orderType="Take-away" onItemsUpdate={fetchItems} correctionOrder={correctionOrder} branchId={user.branchId} />;
+    return (
+        <div className="space-y-4">
+            {session && (
+                <div className="bg-primary/10 border-l-4 border-primary text-primary-foreground p-4 rounded-lg">
+                    <div className="flex items-center gap-3">
+                         <Clock className="h-5 w-5 text-primary" />
+                         <div>
+                            <p className="font-bold text-primary">Current Session: {session.name}</p>
+                            <p className="text-sm text-primary/80">{session.startTime} - {session.endTime}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+            <RemoteOrderForm menu={menuItems} orderType="Take-away" onItemsUpdate={fetchItems} correctionOrder={correctionOrder} branchId={user.branchId} />
+        </div>
+    );
 }

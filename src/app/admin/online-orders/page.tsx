@@ -5,11 +5,13 @@ import { RemoteOrderForm } from "@/components/remote-order-form";
 import type { MenuItem, MealSession } from "@/lib/definitions";
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "../auth-provider";
+import { Clock } from "lucide-react";
 import { LoaderCircle } from "lucide-react";
 
 export default function OnlineOrdersPage() {
     const { user } = useAuth();
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+    const [session, setSession] = useState<MealSession | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     const fetchItems = useCallback(async () => {
@@ -20,17 +22,19 @@ export default function OnlineOrdersPage() {
 
         setIsLoading(true);
         try {
-            const [allMenuItems, session] = await Promise.all([
-                getMenuItems(user.branchId),
-                getCurrentSession(user.branchId)
+            const [currentSession, allMenuItems] = await Promise.all([
+                getCurrentSession(user.branchId),
+                getMenuItems(user.branchId)
             ]);
+
+            setSession(currentSession);
 
             const availableMenuItems = allMenuItems.filter(item => {
                 if (!item.isAvailable) return false;
-                if (!session || !item.availableSessions || item.availableSessions.length === 0) {
+                if (!currentSession || !item.availableSessions || item.availableSessions.length === 0) {
                     return true;
                 }
-                return item.availableSessions.includes(session.id);
+                return item.availableSessions.includes(currentSession.id);
             });
             setMenuItems(availableMenuItems);
         } catch (error) {
@@ -42,8 +46,12 @@ export default function OnlineOrdersPage() {
     }, [user?.branchId]);
 
     useEffect(() => {
-        fetchItems();
-    }, [fetchItems]);
+        if (user?.branchId) {
+            fetchItems();
+        } else {
+            setIsLoading(false);
+        }
+    }, [user?.branchId, fetchItems]);
 
     if (isLoading) {
         return (
@@ -62,6 +70,19 @@ export default function OnlineOrdersPage() {
 
 
     return (
-        <RemoteOrderForm menu={menuItems} orderType="Online" onItemsUpdate={fetchItems} branchId={user.branchId} />
+        <div className="space-y-4">
+             {session && (
+                <div className="bg-primary/10 border-l-4 border-primary text-primary-foreground p-4 rounded-lg">
+                    <div className="flex items-center gap-3">
+                         <Clock className="h-5 w-5 text-primary" />
+                         <div>
+                            <p className="font-bold text-primary">Current Session: {session.name}</p>
+                            <p className="text-sm text-primary/80">{session.startTime} - {session.endTime}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+            <RemoteOrderForm menu={menuItems} orderType="Online" onItemsUpdate={fetchItems} branchId={user.branchId} />
+        </div>
     );
 }
