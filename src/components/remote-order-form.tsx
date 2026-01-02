@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import type { MenuItem, OrderItem, RemoteOrder, RestaurantSettings, Order } from '@/lib/definitions';
@@ -16,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { Invoice } from '@/components/ui/invoice';
 import { getSettings } from '@/lib/data';
 import { RemoteOrderCartSheet } from './remote-order-cart-sheet';
+import { Card, CardContent } from './ui/card';
 
 type CartItem = Omit<OrderItem, 'orderItemId' | 'category' | 'isReady' | 'status' | 'selectedAddons' | 'notes'>;
 type OrderType = 'Online' | 'Take-away' | 'Dine-in';
@@ -136,52 +136,53 @@ export function RemoteOrderForm({ menu: initialMenu, orderType, onItemsUpdate, c
       resetForm();
   }
 
-  const MenuList = ({ items, isUnavailable = false }: { items: MenuItem[], isUnavailable?: boolean }) => (
-    <div className="divide-y divide-border rounded-md border">
+  const MenuGrid = ({ items, isUnavailable = false }: { items: MenuItem[], isUnavailable?: boolean }) => (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {items.map((item) => {
             const image = placeholderImages.find(p => p.id === item.imageId);
             const quantity = getQuantity(item.id);
             const imageSrc = item.imageId?.startsWith('data:image') ? item.imageId : image?.imageUrl;
 
             return (
-                <div key={item.id} className={cn(
-                  "flex items-center gap-4 p-4 transition-colors",
-                  isUnavailable ? 'opacity-50' : 'hover:bg-accent'
+                <Card key={item.id} className={cn(
+                    "overflow-hidden transition-all duration-300 flex flex-col",
+                    isUnavailable ? 'opacity-50' : 'hover:shadow-lg hover:-translate-y-0.5'
                 )}>
-                    <div className="relative h-16 w-16 flex-shrink-0 rounded-md overflow-hidden bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                    <div className="aspect-square w-full bg-muted relative flex items-center justify-center">
                         {imageSrc ? (
                             <Image src={imageSrc} alt={item.name} data-ai-hint={image?.imageHint} fill className="object-cover" />
                         ) : (
-                            <span>No Image</span>
+                            <div className="text-xs text-muted-foreground p-2 text-center">No Image</div>
                         )}
                     </div>
-                    <div className="flex-grow">
-                        <h4 className="font-semibold">{item.name}</h4>
-                        <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
-                        <p className="text-sm font-mono mt-1">{currencySymbol}{item.price.toFixed(currencyDecimalPlaces)}</p>
-                    </div>
-                    <div className="flex-shrink-0">
-                        {quantity > 0 ? (
-                            <div className="flex w-24 items-center justify-between">
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => removeFromCart(item.id)}>
-                                    <MinusCircle className="h-4 w-4" />
+                    <CardContent className="p-3 flex flex-col flex-grow">
+                        <div className="flex-grow">
+                            <h4 className="font-semibold text-sm leading-tight line-clamp-2">{item.name}</h4>
+                            <p className="text-sm font-mono mt-1">{currencySymbol}{item.price.toFixed(currencyDecimalPlaces)}</p>
+                        </div>
+                        <div className="mt-2">
+                            {quantity > 0 ? (
+                                <div className="flex items-center justify-between">
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => removeFromCart(item.id)}>
+                                        <MinusCircle className="h-4 w-4" />
+                                    </Button>
+                                    <span className="font-bold">{quantity}</span>
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => addToCart(item)}>
+                                        <PlusCircle className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ) : (
+                                <Button className="w-full h-9" onClick={() => addToCart(item)} disabled={!item.isAvailable} variant="outline" size="sm">
+                                    {item.isAvailable ? 'Add' : 'Unavailable'}
                                 </Button>
-                                <span className="font-bold">{quantity}</span>
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => addToCart(item)}>
-                                    <PlusCircle className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        ) : (
-                            <Button className="w-24" onClick={() => addToCart(item)} disabled={!item.isAvailable} variant="outline" size="sm">
-                                {item.isAvailable ? 'Add' : 'Unavailable'}
-                            </Button>
-                        )}
-                    </div>
-                </div>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
             );
         })}
     </div>
-  )
+  );
 
   return (
     <div className="space-y-8">
@@ -222,12 +223,12 @@ export function RemoteOrderForm({ menu: initialMenu, orderType, onItemsUpdate, c
                     </Button>
                 ))}
             </div>
-            <MenuList items={availableMenu} />
+            <MenuGrid items={availableMenu} />
             {unavailableMenu.length > 0 && (
             <>
                 <Separator className="my-8" />
                 <h3 className="font-headline text-2xl font-bold mb-6 text-muted-foreground">Unavailable Items</h3>
-                <MenuList items={unavailableMenu} isUnavailable={true} />
+                <MenuGrid items={unavailableMenu} isUnavailable={true} />
             </>
             )}
         </div>
