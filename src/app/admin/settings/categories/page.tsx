@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,7 @@ import { Plus, Trash2, Tag } from 'lucide-react';
 
 export default function CategoriesPage() {
     const { user } = useAuth();
+    const searchParams = useSearchParams();
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [branchId, setBranchId] = useState<string | null>(null);
     const [newCategory, setNewCategory] = useState('');
@@ -21,11 +23,17 @@ export default function CategoriesPage() {
 
     useEffect(() => {
         async function fetchData() {
-            let activeBranchId = user?.branchId;
+            let activeBranchId: string | null = user?.branchId || null;
 
             if (!activeBranchId) {
-                const mainBranch = await getMainBranch();
-                activeBranchId = mainBranch?.id || null;
+                const urlBranchId = searchParams.get('branchId');
+
+                if (urlBranchId) {
+                    activeBranchId = urlBranchId;
+                } else {
+                    const mainBranch = await getMainBranch();
+                    activeBranchId = mainBranch?.id || null;
+                }
             }
 
             setBranchId(activeBranchId);
@@ -35,7 +43,7 @@ export default function CategoriesPage() {
             }
         }
         fetchData();
-    }, [user]);
+    }, [user, searchParams]);
 
     const handleAddCategory = async (e: React.FormEvent) => {
         e.preventDefault();
