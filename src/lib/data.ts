@@ -243,9 +243,12 @@ export async function getMainBranch(): Promise<Branch | null> {
     const q = query(branchesRef, where('isMain', '==', true));
     const snapshot = await getDocs(q);
     if (snapshot.empty) {
-        // This case is now handled by the seeding logic in the admin dashboard page.
-        // It will only be called if there are no branches at all.
-        return null;
+        const allBranchesSnap = await getDocs(query(branchesRef, orderBy('name')));
+        if(allBranchesSnap.empty) {
+             return null;
+        }
+        // If no main branch is set, return the first one alphabetically.
+        return docToObj<Branch>(allBranchesSnap.docs[0]);
     }
     return docToObj<Branch>(snapshot.docs[0]);
 }
