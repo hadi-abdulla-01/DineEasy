@@ -2,7 +2,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import type { Order, RemoteOrder, RestaurantSettings, Branch, MenuItem } from '@/lib/definitions';
-import { getOrders, getRemoteOrders, getSettings, getBranches, getMainBranch, getMenuItems } from '@/lib/data';
+import { getOrders, getRemoteOrders, getSettings, getBranches, getMainBranch, getMenuItems, createBranch, getKitchenUsers, createKitchenUser } from '@/lib/data';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
@@ -21,6 +21,46 @@ const chartConfig = {
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
+async function seedInitialData() {
+    console.log("Checking if initial data seeding is required...");
+    const branches = await getBranches();
+    if (branches.length === 0) {
+        console.log("No branches found. Seeding initial 'Main Branch'.");
+        const mainBranch = await createBranch('Main Branch', true);
+
+        const users = await getKitchenUsers();
+        if (users.length === 0) {
+            console.log("No users found. Seeding initial 'admin' user.");
+            await createKitchenUser({
+                username: 'admin',
+                password: 'admin123', // You can change this after logging in
+                categories: ['All'],
+                role: 'Admin',
+                branchId: mainBranch.id,
+                permissions: {
+                    dashboard: { view: true },
+                    tableOrder: { view: true },
+                    tables: { view: true, create: true, edit: true, delete: true },
+                    menu: { view: true, create: true, edit: true, delete: true },
+                    kitchen: { view: true },
+                    sales: { view: true },
+                    salesHistory: { view: true, edit: true, delete: true },
+                    onlineOrders: { view: true, create: true },
+                    takeAway: { view: true, create: true },
+                    userManagement: { view: true, create: true, edit: true, delete: true },
+                    settings: { view: true, edit: true },
+                }
+            });
+            console.log("Initial admin user created.");
+        }
+        console.log("Initial data seeding complete.");
+        return true; // Indicates data was seeded
+    }
+    console.log("Initial data already exists. No seeding required.");
+    return false; // Indicates no seeding was done
+}
+
+
 export default function AdminDashboardPage() {
     const { user } = useAuth();
     const [allOrders, setAllOrders] = useState<CombinedOrder[]>([]);
@@ -33,6 +73,16 @@ export default function AdminDashboardPage() {
 
         async function fetchData() {
             setIsLoading(true);
+
+            // Seed initial data if necessary, only for Admin users
+            if (user.role === 'Admin') {
+                const wasSeeded = await seedInitialData();
+                if (wasSeeded) {
+                    // If we just seeded, we need to refetch some data to get the new branch
+                    window.location.reload(); // Simple way to force a full refresh
+                    return;
+                }
+            }
             
             // 1. Determine which branch settings to load.
             let settingsBranchId = user.branchId;
@@ -212,4 +262,3 @@ export default function AdminDashboardPage() {
         </div>
     );
 }
-

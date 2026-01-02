@@ -1,7 +1,6 @@
 
-
 'use server';
-import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, KitchenUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, InvoiceSettings, AppliedTax, Tax, PrintSettings, Branch, UserPermissions, NavMenuKey, MealSession, ActivityLog } from './definitions';
+import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, KitchenUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, SelectedAddon, UserPermissions, NavMenuKey, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog } from './definitions';
 import { initializeFirebase } from '@/firebase/server';
 import {
     collection,
@@ -54,84 +53,6 @@ function docToObj<T>(d: any): T {
         }
     }
     return { ...data, id: d.id } as T;
-}
-
-async function seedInitialAdminUser() {
-    const adminUser = await getKitchenUserByUsername('admin');
-    if (!adminUser) {
-        console.log("No admin user found. Seeding initial admin user.");
-        const mainBranch = await getMainBranch();
-        if (mainBranch) {
-            await createKitchenUser({
-                username: 'admin',
-                password: 'admin123', // In a real app, this should be securely hashed
-                categories: ['All'],
-                role: 'Admin',
-                branchId: mainBranch.id, // Assign Admin to Main Branch by default
-                permissions: {
-                    dashboard: { view: true },
-                    tableOrder: { view: true },
-                    tables: { view: true, create: true, edit: true, delete: true },
-                    menu: { view: true, create: true, edit: true, delete: true },
-                    kitchen: { view: true },
-                    sales: { view: true },
-                    salesHistory: { view: true, edit: true, delete: true },
-                    onlineOrders: { view: true, create: true },
-                    takeAway: { view: true, create: true },
-                    userManagement: { view: true, create: true, edit: true, delete: true },
-                    settings: { view: true, edit: true },
-                }
-            });
-        } else {
-            console.error("Could not create admin user: No main branch found.");
-        }
-    }
-}
-
-async function seedInitialOrder() {
-    const orders = await getOrders();
-    if (orders.length === 0) {
-        console.log("No orders found. Seeding a sample order.");
-        const mainBranch = await getMainBranch();
-        const menuItems = await getMenuItems(mainBranch?.id);
-        let tables = await getTables(mainBranch?.id);
-
-        if (!mainBranch) {
-            console.error("Cannot seed order: Main branch not found.");
-            return;
-        }
-
-        if (tables.length === 0) {
-            console.log("No tables found for main branch. Seeding a sample table.");
-            await createTable(1, mainBranch.id);
-            tables = await getTables(mainBranch.id);
-        }
-
-        if (menuItems.length > 0 && tables.length > 0) {
-            const sampleItems: OrderItem[] = menuItems.slice(0, 2).map((item, index) => ({
-                orderItemId: `sample-item-${index}`,
-                menuItemId: item.id,
-                quantity: 1,
-                name: item.name,
-                price: item.price,
-                category: item.category,
-                isReady: false,
-                status: 'active',
-            }));
-
-            await createOrder({
-                tableId: tables[0].id,
-                branchId: mainBranch.id,
-                customerName: 'Sample Customer',
-                customerPhone: '555-0100',
-                items: sampleItems,
-                orderType: 'Dine-in',
-                notes: 'This is a sample order created automatically.'
-            });
-        } else {
-            console.error("Cannot seed order: No menu items or tables found for the main branch.");
-        }
-    }
 }
 
 
@@ -209,17 +130,6 @@ export async function getSettings(branchId?: string): Promise<RestaurantSettings
     return finalSettings;
 }
 
-
-async function seedInitialData() {
-    // This function will not auto-create a branch. It will only seed
-    // other data if a branch *already* exists.
-    const branches = await getBranches();
-    if (branches.length > 0) {
-        await seedInitialAdminUser();
-        await seedInitialOrder();
-    }
-}
-
 export async function updateSettings(branchId: string | undefined, newSettings: Partial<RestaurantSettings>): Promise<void> {
     const firestore = getFirestoreInstance();
 
@@ -247,67 +157,74 @@ const generateInvoiceNumberForType = async (orderType: Order['orderType'], branc
     const branchRef = doc(firestore, `restaurants/${RESTAURANT_ID}/branches`, branchId);
     let invoiceNumber = '';
 
-    await runTransaction(firestore, async (transaction) => {
-        const branchDoc = await transaction.get(branchRef);
-        if (!branchDoc.exists()) {
-            throw new Error('Branch document does not exist!');
-        }
-        const settings = branchDoc.data() as Branch;
-
-        const defaultInvoiceSettings: InvoiceSettings = {
-            useUnifiedNumbering: true,
-            unified: { prefix: 'INV-', nextNumber: 1 },
-            dineIn: { prefix: 'DI-', nextNumber: 1 },
-            online: { prefix: 'ON-', nextNumber: 1 },
-            takeAway: { prefix: 'TA-', nextNumber: 1 },
-        };
-
-        const invSettings: InvoiceSettings = {
-            ...defaultInvoiceSettings,
-            ...settings.invoiceSettings,
-            unified: { ...defaultInvoiceSettings.unified, ...settings.invoiceSettings?.unified },
-            dineIn: { ...defaultInvoiceSettings.dineIn, ...settings.invoiceSettings?.dineIn },
-            online: { ...defaultInvoiceSettings.online, ...settings.invoiceSettings?.online },
-            takeAway: { ...defaultInvoiceSettings.takeAway, ...settings.invoiceSettings?.takeAway },
-        };
-
-        let prefix: string;
-        let nextNumber: number;
-        let fieldToUpdate: string;
-
-        if (invSettings.useUnifiedNumbering) {
-            prefix = invSettings.unified.prefix;
-            nextNumber = invSettings.unified.nextNumber;
-            fieldToUpdate = 'invoiceSettings.unified.nextNumber';
-        } else {
-            switch (orderType) {
-                case 'Dine-in':
-                    prefix = invSettings.dineIn.prefix;
-                    nextNumber = invSettings.dineIn.nextNumber;
-                    fieldToUpdate = 'invoiceSettings.dineIn.nextNumber';
-                    break;
-                case 'Online':
-                    prefix = invSettings.online.prefix;
-                    nextNumber = invSettings.online.nextNumber;
-                    fieldToUpdate = 'invoiceSettings.online.nextNumber';
-                    break;
-                case 'Take-away':
-                    prefix = invSettings.takeAway.prefix;
-                    nextNumber = invSettings.takeAway.nextNumber;
-                    fieldToUpdate = 'invoiceSettings.takeAway.nextNumber';
-                    break;
-                default:
-                    prefix = invSettings.unified.prefix;
-                    nextNumber = invSettings.unified.nextNumber;
-                    fieldToUpdate = 'invoiceSettings.unified.nextNumber';
+    try {
+        await runTransaction(firestore, async (transaction) => {
+            const branchDoc = await transaction.get(branchRef);
+            if (!branchDoc.exists()) {
+                throw new Error('Branch document does not exist!');
             }
-        }
+            const settings = branchDoc.data() as Branch;
 
-        invoiceNumber = `${prefix}${nextNumber}`;
-        const newNextNumber = nextNumber + 1;
+            const defaultInvoiceSettings: Required<Branch['invoiceSettings']> = {
+                useUnifiedNumbering: true,
+                unified: { prefix: 'INV-', nextNumber: 1 },
+                dineIn: { prefix: 'DI-', nextNumber: 1 },
+                online: { prefix: 'ON-', nextNumber: 1 },
+                takeAway: { prefix: 'TA-', nextNumber: 1 },
+            };
 
-        transaction.update(branchRef, { [fieldToUpdate]: newNextNumber });
-    });
+            const invSettings: Required<Branch['invoiceSettings']> = {
+                ...defaultInvoiceSettings,
+                ...settings.invoiceSettings,
+                unified: { ...defaultInvoiceSettings.unified, ...settings.invoiceSettings?.unified },
+                dineIn: { ...defaultInvoiceSettings.dineIn, ...settings.invoiceSettings?.dineIn },
+                online: { ...defaultInvoiceSettings.online, ...settings.invoiceSettings?.online },
+                takeAway: { ...defaultInvoiceSettings.takeAway, ...settings.invoiceSettings?.takeAway },
+            };
+
+            let prefix: string;
+            let nextNumber: number;
+            let fieldToUpdate: string;
+
+            if (invSettings.useUnifiedNumbering) {
+                prefix = invSettings.unified.prefix;
+                nextNumber = invSettings.unified.nextNumber;
+                fieldToUpdate = 'invoiceSettings.unified.nextNumber';
+            } else {
+                switch (orderType) {
+                    case 'Dine-in':
+                        prefix = invSettings.dineIn.prefix;
+                        nextNumber = invSettings.dineIn.nextNumber;
+                        fieldToUpdate = 'invoiceSettings.dineIn.nextNumber';
+                        break;
+                    case 'Online':
+                        prefix = invSettings.online.prefix;
+                        nextNumber = invSettings.online.nextNumber;
+                        fieldToUpdate = 'invoiceSettings.online.nextNumber';
+                        break;
+                    case 'Take-away':
+                        prefix = invSettings.takeAway.prefix;
+                        nextNumber = invSettings.takeAway.nextNumber;
+                        fieldToUpdate = 'invoiceSettings.takeAway.nextNumber';
+                        break;
+                    default:
+                        prefix = invSettings.unified.prefix;
+                        nextNumber = invSettings.unified.nextNumber;
+                        fieldToUpdate = 'invoiceSettings.unified.nextNumber';
+                }
+            }
+
+            invoiceNumber = `${prefix}${nextNumber}`;
+            const newNextNumber = nextNumber + 1;
+
+            transaction.update(branchRef, { [fieldToUpdate]: newNextNumber });
+        });
+    } catch (e) {
+        console.error("Invoice number generation failed, falling back to random.", e);
+        // Fallback for when transaction fails (e.g. branch doesn't exist yet)
+        invoiceNumber = `ERR-${Date.now()}`;
+    }
+
 
     return { invoiceNumber };
 };
@@ -326,14 +243,9 @@ export async function getMainBranch(): Promise<Branch | null> {
     const q = query(branchesRef, where('isMain', '==', true));
     const snapshot = await getDocs(q);
     if (snapshot.empty) {
-        const allBranches = await getBranches();
-        if (allBranches.length > 0) {
-            await setMainBranch(allBranches[0].id);
-            return getBranchById(allBranches[0].id);
-        }
-        // If still no branches, create one
-        const newMainBranch = await createBranch('Main Branch', true);
-        return newMainBranch;
+        // This case is now handled by the seeding logic in the admin dashboard page.
+        // It will only be called if there are no branches at all.
+        return null;
     }
     return docToObj<Branch>(snapshot.docs[0]);
 }
@@ -419,7 +331,7 @@ export async function getTables(branchId?: string): Promise<Table[]> {
     const snapshot = await getDocs(q);
     const tables = snapshot.docs.map(d => docToObj<Table>(d));
     // Sort in application code to avoid needing a composite index
-    return tables.sort((a, b) => a.number - b.number);
+    return tables.sort((a, b) => (a.number as number) - (b.number as number));
 }
 export async function getTableById(id: string): Promise<Table | undefined> {
     if (!id) return undefined;
@@ -1043,7 +955,3 @@ export async function getActivityLogsByUser(userId: string): Promise<ActivityLog
     // Sort in code to avoid needing a composite index
     return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
-
-
-// Ensure initial data is seeded on startup
-seedInitialData();
