@@ -5,7 +5,6 @@ import './globals.css';
 
 import { Noto_Sans, Mulish, Outfit, Poppins } from 'next/font/google';
 import { cn } from '@/lib/utils';
-import { getSettings } from '@/lib/data';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { AuthProvider } from './admin/auth-provider';
 
@@ -14,13 +13,10 @@ const mulish = Mulish({ subsets: ['latin'], variable: '--font-mulish', weight: [
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit', weight: ['400', '500', '700'] });
 const poppins = Poppins({ subsets: ['latin'], variable: '--font-poppins', weight: ['400', '500', '700'] });
 
-export async function generateMetadata(): Promise<Metadata> {
-  const settings = await getSettings();
-  return {
-    title: settings.restaurantName || 'DineEZee',
-    description: 'Seamless QR code ordering for modern restaurants.',
-  };
-}
+export const metadata: Metadata = {
+  title: 'DineEasy',
+  description: 'Seamless QR code ordering for modern restaurants.',
+};
 
 export default function RootLayout({
   children,
