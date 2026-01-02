@@ -137,7 +137,7 @@ export function RemoteOrderForm({ menu: initialMenu, orderType, onItemsUpdate, c
   }
 
   const MenuGrid = ({ items, isUnavailable = false }: { items: MenuItem[], isUnavailable?: boolean }) => (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {items.map((item) => {
             const image = placeholderImages.find(p => p.id === item.imageId);
             const quantity = getQuantity(item.id);
@@ -155,24 +155,24 @@ export function RemoteOrderForm({ menu: initialMenu, orderType, onItemsUpdate, c
                             <div className="text-xs text-muted-foreground p-2 text-center">No Image</div>
                         )}
                     </div>
-                    <CardContent className="p-3 flex flex-col flex-grow">
+                    <CardContent className="p-2 flex flex-col flex-grow">
                         <div className="flex-grow">
-                            <h4 className="font-semibold text-sm leading-tight line-clamp-2">{item.name}</h4>
-                            <p className="text-sm font-mono mt-1">{currencySymbol}{item.price.toFixed(currencyDecimalPlaces)}</p>
+                            <h4 className="font-semibold text-xs leading-tight line-clamp-2">{item.name}</h4>
+                            <p className="text-xs font-mono mt-1">{currencySymbol}{item.price.toFixed(currencyDecimalPlaces)}</p>
                         </div>
                         <div className="mt-2">
                             {quantity > 0 ? (
                                 <div className="flex items-center justify-between">
-                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => removeFromCart(item.id)}>
+                                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => removeFromCart(item.id)}>
                                         <MinusCircle className="h-4 w-4" />
                                     </Button>
-                                    <span className="font-bold">{quantity}</span>
-                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => addToCart(item)}>
+                                    <span className="font-bold text-sm">{quantity}</span>
+                                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => addToCart(item)}>
                                         <PlusCircle className="h-4 w-4" />
                                     </Button>
                                 </div>
                             ) : (
-                                <Button className="w-full h-9" onClick={() => addToCart(item)} disabled={!item.isAvailable} variant="outline" size="sm">
+                                <Button className="w-full h-8" onClick={() => addToCart(item)} disabled={!item.isAvailable} variant="outline" size="sm">
                                     {item.isAvailable ? 'Add' : 'Unavailable'}
                                 </Button>
                             )}
