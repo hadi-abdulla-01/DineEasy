@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -6,7 +7,8 @@ import { motion } from "motion/react";
 import svgPaths from "@/imports/svg-6hzyqt81bp";
 import imgImage1 from "@/assets/admin-login-illustration.png";
 import Link from 'next/link';
-import { getKitchenUserByUsername } from '@/lib/data';
+import { getKitchenUserByUsername, seedInitialData } from '@/lib/data';
+import { useToast } from '@/hooks/use-toast';
 
 function Wrapper({ children }: React.PropsWithChildren<{}>) {
     return (
@@ -60,6 +62,8 @@ export default function AdminLoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const { login } = useAuth();
+    const { toast } = useToast();
+    const [isSeeding, setIsSeeding] = useState(false);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -67,15 +71,36 @@ export default function AdminLoginPage() {
 
         try {
             const user = await getKitchenUserByUsername(username);
-            if (user && user.password === password) {
-                if (user.role === 'Kitchen') {
-                    setError('Kitchen staff must log in through the kitchen portal.');
-                    return;
+
+            if (user) {
+                 if (user.password === password) {
+                    if (user.role === 'Kitchen') {
+                        setError('Kitchen staff must log in through the kitchen portal.');
+                        return;
+                    }
+                    login(user);
+                } else {
+                    setError('Invalid username or password.');
                 }
-                login(user);
             } else {
-                setError('Invalid username or password.');
+                // If no user is found, this might be the first run.
+                setIsSeeding(true);
+                const wasSeeded = await seedInitialData();
+                setIsSeeding(false);
+
+                if (wasSeeded) {
+                    toast({
+                        title: "Initial Setup Complete",
+                        description: "The database has been initialized. Please log in with admin / admin123.",
+                    });
+                    setUsername("admin");
+                    setPassword("admin123");
+                } else {
+                     // This happens if another user was created in the meantime or an error occurred.
+                    setError('Invalid username or password. If this is the first run, try admin/admin123.');
+                }
             }
+           
         } catch (err) {
             console.error("Login error:", err);
             setError('An error occurred during login.');
@@ -181,15 +206,16 @@ export default function AdminLoginPage() {
                             {/* Login Button */}
                             <motion.button
                                 type="submit"
-                                className="bg-[#cb1e1d] rounded-[8px] px-16 py-3 w-full transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                                className="bg-[#cb1e1d] rounded-[8px] px-16 py-3 w-full transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.5, delay: 0.8 }}
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
+                                disabled={isSeeding}
                             >
                                 <p className="font-['Poppins:SemiBold',sans-serif] leading-[normal] not-italic text-[15px] text-center text-white tracking-[0.1px]">
-                                    Log In
+                                    {isSeeding ? 'Initializing...' : 'Log In'}
                                 </p>
                             </motion.button>
                         </motion.div>
