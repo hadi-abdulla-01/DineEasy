@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { placeholderImages } from '@/lib/placeholder-images';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { LoaderCircle, MinusCircle, PlusCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
@@ -103,62 +103,62 @@ const MenuList = ({ items, isUnavailable = false, onSelect, getQuantity, onAdd, 
 );
 
 const AdminMenuGrid = ({ items, isUnavailable = false, onSelect, getQuantity, onAdd, onRemove, currencySymbol, currencyDecimalPlaces }: { items: MenuItem[], isUnavailable?: boolean, onSelect: (item: MenuItem) => void, getQuantity: (itemId: string) => number, onAdd: (item: MenuItem) => void, onRemove: (item: MenuItem) => void, currencySymbol: string, currencyDecimalPlaces: number }) => (
-  <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-    {items.map((item) => {
-      const image = placeholderImages.find(p => p.id === item.imageId);
-      const baseItemInCart = getQuantity(item.id) > 0 && !item.addonGroups?.length;
-      const totalQuantity = getQuantity(item.id);
-      const imageSrc = item.imageId?.startsWith('data:image') ? item.imageId : image?.imageUrl;
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        {items.map((item) => {
+            const image = placeholderImages.find(p => p.id === item.imageId);
+            const quantity = getQuantity(item.id);
+            const totalQuantity = getQuantity(item.id);
+            const baseItemInCart = totalQuantity > 0 && !item.addonGroups?.length;
+            const imageSrc = item.imageId?.startsWith('data:image') ? item.imageId : image?.imageUrl;
 
-      return (
-        <Card key={item.id} className={cn(
-          "overflow-hidden transition-all duration-300 flex flex-col",
-          isUnavailable ? 'opacity-50' : 'hover:shadow-lg hover:-translate-y-0.5'
-        )}>
-          <button
-            onClick={() => onSelect(item)}
-            className="aspect-square w-full bg-muted relative flex items-center justify-center"
-            disabled={isUnavailable}
-          >
-            {imageSrc ? (
-              <Image src={imageSrc} alt={item.name} data-ai-hint={image?.imageHint} fill className="object-cover" />
-            ) : (
-              <div className="text-xs text-muted-foreground p-2 text-center">No image</div>
-            )}
-          </button>
-          <div className="flex flex-col flex-grow p-3">
-            <div className="flex-grow">
-              <h3 className="font-headline font-semibold text-base leading-tight">{item.name}</h3>
-              <p className="text-xs text-muted-foreground mt-1 h-8 line-clamp-2">{item.description}</p>
-              <p className="text-base font-semibold mt-1">{currencySymbol}{item.price.toFixed(currencyDecimalPlaces)}</p>
-            </div>
-            <div className="mt-3">
-              {totalQuantity > 0 && !baseItemInCart ? (
-                <div className="flex w-full items-center justify-center text-sm gap-2">
-                  <span>In Cart:</span>
-                  <span className="font-bold">{totalQuantity}</span>
-                </div>
-              ) : getQuantity(item.id) > 0 && !item.addonGroups?.length ? (
-                <div className="flex items-center justify-between">
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => onRemove(item)}>
-                    <MinusCircle className="h-4 w-4" />
-                  </Button>
-                  <span className="font-bold text-lg">{getQuantity(item.id)}</span>
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => onAdd(item)}>
-                    <PlusCircle className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <Button className="w-full h-9" size="sm" onClick={() => onAdd(item)} disabled={!item.isAvailable}>
-                  {item.isAvailable ? 'Add' : 'Unavailable'}
-                </Button>
-              )}
-            </div>
-          </div>
-        </Card>
-      );
-    })}
-  </div>
+            return (
+                <Card key={item.id} className={cn(
+                    "overflow-hidden transition-all duration-300 flex flex-col",
+                    isUnavailable ? 'opacity-50' : 'hover:shadow-lg hover:-translate-y-0.5'
+                )}>
+                    <button
+                        onClick={() => onSelect(item)}
+                        className="aspect-square w-full bg-muted relative flex items-center justify-center"
+                        disabled={isUnavailable}
+                    >
+                        {imageSrc ? (
+                            <Image src={imageSrc} alt={item.name} data-ai-hint={image?.imageHint} fill className="object-cover" />
+                        ) : (
+                            <div className="text-xs text-muted-foreground p-2 text-center">No Image</div>
+                        )}
+                    </button>
+                    <CardContent className="p-2 flex flex-col flex-grow">
+                        <div className="flex-grow">
+                            <h4 className="font-semibold text-xs leading-tight line-clamp-2">{item.name}</h4>
+                            <p className="text-xs font-mono mt-1">{currencySymbol}{item.price.toFixed(currencyDecimalPlaces)}</p>
+                        </div>
+                        <div className="mt-2">
+                             {totalQuantity > 0 && !baseItemInCart ? (
+                                <div className="flex w-full items-center justify-center text-xs h-8 gap-2">
+                                    <span>In Cart:</span>
+                                    <span className="font-bold">{totalQuantity}</span>
+                                </div>
+                            ) : quantity > 0 && !item.addonGroups?.length ? (
+                                <div className="flex items-center justify-between">
+                                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onRemove(item)}>
+                                        <MinusCircle className="h-4 w-4" />
+                                    </Button>
+                                    <span className="font-bold text-sm">{quantity}</span>
+                                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onAdd(item)}>
+                                        <PlusCircle className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ) : (
+                                <Button className="w-full h-8" onClick={() => onAdd(item)} disabled={!item.isAvailable} variant="outline" size="sm">
+                                    {item.isAvailable ? 'Add' : 'Unavailable'}
+                                </Button>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+            );
+        })}
+    </div>
 )
 
 function MenuDisplay({ isCustomerFacing, menu, onSelectItem, getQuantity, onAddToCart, onRemoveFromCart, settings, currentSession }: { isCustomerFacing: boolean, menu: MenuItem[], onSelectItem: (item: MenuItem) => void, getQuantity: (itemId: string) => number, onAddToCart: (item: MenuItem) => void, onRemoveFromCart: (item: MenuItem) => void, settings: RestaurantSettings | null, currentSession?: MealSession | null }) {
