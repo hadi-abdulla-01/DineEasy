@@ -1,12 +1,13 @@
+
 'use client';
 
 import { useState } from 'react';
 import { useAuth } from '../auth-provider';
 import { motion } from "motion/react";
 import svgPaths from "@/imports/svg-6hzyqt81bp";
-import imgImage1 from "@/assets/admin-login-illustration.png";
 import Link from 'next/link';
-import { getKitchenUserByUsername } from '@/lib/data';
+import { getKitchenUserByUsername, seedInitialData } from '@/lib/data';
+import { useToast } from '@/hooks/use-toast';
 
 function Wrapper({ children }: React.PropsWithChildren<{}>) {
     return (
@@ -60,22 +61,54 @@ export default function AdminLoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const { login } = useAuth();
+    const { toast } = useToast();
+    const [isSeeding, setIsSeeding] = useState(false);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
 
         try {
-            const user = await getKitchenUserByUsername(username);
-            if (user && user.password === password) {
-                if (user.role === 'Kitchen') {
-                    setError('Kitchen staff must log in through the kitchen portal.');
-                    return;
+            let user = await getKitchenUserByUsername(username);
+
+            if (!user) {
+                setIsSeeding(true);
+                const wasSeeded = await seedInitialData();
+                setIsSeeding(false);
+
+                if (wasSeeded) {
+                    toast({
+                        title: "Initial Setup Complete",
+                        description: "The database has been initialized. Automatically logging you in...",
+                    });
+                    // Try to fetch the user again after seeding
+                    user = await getKitchenUserByUsername('admin');
+                    if (user && user.password === 'admin123') {
+                        if (user.role === 'Kitchen') {
+                            setError('Seed error: Default user is a kitchen user.');
+                            return;
+                        }
+                        login(user);
+                        return; // Exit after successful login
+                    }
                 }
-                login(user);
-            } else {
-                setError('Invalid username or password.');
             }
+            
+            // This part runs if the user existed initially, or after seeding is attempted.
+            if (user) {
+                 if (user.password === password) {
+                    if (user.role === 'Kitchen') {
+                        setError('Kitchen staff must log in through the kitchen portal.');
+                        return;
+                    }
+                    login(user);
+                } else {
+                    setError('Invalid username or password.');
+                }
+            } else {
+                setError('Invalid username or password. If this is the first time, try admin/admin123.');
+            }
+           
         } catch (err) {
             console.error("Login error:", err);
             setError('An error occurred during login.');
@@ -84,134 +117,108 @@ export default function AdminLoginPage() {
 
     return (
         <motion.div
-            className="bg-[#cb1e1d] relative size-full min-h-screen overflow-hidden"
+            className="bg-[#f1b715] relative size-full min-h-screen overflow-hidden flex flex-col items-center justify-center p-8"
             data-name="Admin login"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
         >
-            {/* Illustration Section - Hidden on mobile, RIGHT side on desktop */}
-            <motion.div
-                className="absolute lg:left-1/2 lg:right-0 lg:top-0 lg:bottom-0 hidden lg:flex items-center justify-center overflow-hidden"
-                initial={{ x: "100%", opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: "100%", opacity: 0 }}
-                transition={{ duration: 0.6, ease: "easeInOut" }}
-            >
-                <div className="w-full h-full flex items-center justify-center p-8 lg:p-16">
-                    <div className="relative w-full max-w-[500px] lg:max-w-[600px] aspect-[3/2]">
-                        <img
-                            alt="Admin illustration"
-                            className="w-full h-full object-contain transform rotate-180 scale-y-[-1]"
-                            src={imgImage1.src}
-                        />
-                    </div>
-                </div>
-            </motion.div>
+            <div className="w-full max-w-[400px] flex flex-col gap-10">
+                {/* Title */}
+                <motion.p
+                    className="font-['Poppins:SemiBold',sans-serif] leading-[normal] not-italic text-[#cb1e1d] text-[24px] lg:text-[30px] text-center tracking-[0.1px]"
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.3 }}
+                >
+                    Admin Login
+                </motion.p>
 
-            {/* Form Section - LEFT side on desktop, full screen on mobile */}
-            <motion.div
-                className="absolute lg:left-0 lg:right-1/2 lg:top-0 lg:bottom-0 left-0 right-0 top-0 bottom-0 bg-[#f1b715] flex flex-col items-center justify-center p-8 lg:p-16"
-                initial={{ x: "-100%", opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: "-100%", opacity: 0 }}
-                transition={{ duration: 0.6, ease: "easeInOut" }}
-            >
-                <div className="w-full max-w-[400px] flex flex-col gap-10">
-                    {/* Title */}
-                    <motion.p
-                        className="font-['Poppins:SemiBold',sans-serif] leading-[normal] not-italic text-[#cb1e1d] text-[24px] lg:text-[30px] text-center tracking-[0.1px]"
-                        initial={{ opacity: 0, y: -20 }}
+                {/* Form Content */}
+                <form onSubmit={handleLogin} className="w-full">
+                    <motion.div
+                        className="flex flex-col gap-10"
+                        initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.6, delay: 0.3 }}
+                        transition={{ duration: 0.6, delay: 0.5 }}
                     >
-                        Admin Login
-                    </motion.p>
+                        {/* Input Fields */}
+                        <div className="flex flex-col gap-6">
+                            {/* Username */}
+                            <motion.div
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.5, delay: 0.6 }}
+                            >
+                                <Wrapper>
+                                    <Group1 />
+                                    <input
+                                        type="text"
+                                        placeholder="Your Username"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        className="w-full outline-none text-[#969ab8] text-[14px] font-['Poppins:Medium',sans-serif] placeholder:text-[#969ab8] bg-transparent"
+                                    />
+                                </Wrapper>
+                            </motion.div>
 
-                    {/* Form Content */}
-                    <form onSubmit={handleLogin} className="w-full">
-                        <motion.div
-                            className="flex flex-col gap-10"
+                            {/* Password */}
+                            <motion.div
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.5, delay: 0.7 }}
+                            >
+                                <Wrapper>
+                                    <Group2 />
+                                    <input
+                                        type="password"
+                                        placeholder="Password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full outline-none text-[#969ab8] text-[14px] font-['Poppins:Medium',sans-serif] placeholder:text-[#969ab8] bg-transparent"
+                                    />
+                                </Wrapper>
+                            </motion.div>
+                        </div>
+
+                        {error && <p className="text-red-600 text-sm text-center font-bold bg-white/80 p-2 rounded">{error}</p>}
+
+                        {/* Login Button */}
+                        <motion.button
+                            type="submit"
+                            className="bg-[#cb1e1d] rounded-[8px] px-16 py-3 w-full transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.6, delay: 0.5 }}
+                            transition={{ duration: 0.5, delay: 0.8 }}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            disabled={isSeeding}
                         >
-                            {/* Input Fields */}
-                            <div className="flex flex-col gap-6">
-                                {/* Username */}
-                                <motion.div
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ duration: 0.5, delay: 0.6 }}
-                                >
-                                    <Wrapper>
-                                        <Group1 />
-                                        <input
-                                            type="text"
-                                            placeholder="Your Username"
-                                            value={username}
-                                            onChange={(e) => setUsername(e.target.value)}
-                                            className="w-full outline-none text-[#969ab8] text-[14px] font-['Poppins:Medium',sans-serif] placeholder:text-[#969ab8] bg-transparent"
-                                        />
-                                    </Wrapper>
-                                </motion.div>
-
-                                {/* Password */}
-                                <motion.div
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ duration: 0.5, delay: 0.7 }}
-                                >
-                                    <Wrapper>
-                                        <Group2 />
-                                        <input
-                                            type="password"
-                                            placeholder="Password"
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            className="w-full outline-none text-[#969ab8] text-[14px] font-['Poppins:Medium',sans-serif] placeholder:text-[#969ab8] bg-transparent"
-                                        />
-                                    </Wrapper>
-                                </motion.div>
-                            </div>
-
-                            {error && <p className="text-red-600 text-sm text-center font-bold bg-white/80 p-2 rounded">{error}</p>}
-
-                            {/* Login Button */}
-                            <motion.button
-                                type="submit"
-                                className="bg-[#cb1e1d] rounded-[8px] px-16 py-3 w-full transition-transform hover:scale-[1.02] active:scale-[0.98]"
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.5, delay: 0.8 }}
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                            >
-                                <p className="font-['Poppins:SemiBold',sans-serif] leading-[normal] not-italic text-[15px] text-center text-white tracking-[0.1px]">
-                                    Log In
-                                </p>
-                            </motion.button>
-                        </motion.div>
-                    </form>
-
-                    {/* Navigation Link */}
-                    <motion.div
-                        className="flex gap-2 items-center justify-center leading-[24px] not-italic text-[15px] text-center tracking-[0.1px] flex-wrap"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.5, delay: 0.9 }}
-                    >
-                        <p className="font-['Poppins:Regular',sans-serif] text-[rgba(203,30,29,0.45)]">Not an admin?</p>
-                        <Link
-                            href="/kitchen/login"
-                            className="font-['Poppins:SemiBold',sans-serif] text-[#cb1e1d] hover:underline transition-all"
-                        >
-                            Kitchen Login
-                        </Link>
+                            <p className="font-['Poppins:SemiBold',sans-serif] leading-[normal] not-italic text-[15px] text-center text-white tracking-[0.1px]">
+                                {isSeeding ? 'Initializing...' : 'Log In'}
+                            </p>
+                        </motion.button>
                     </motion.div>
-                </div>
-            </motion.div>
+                </form>
+
+                {/* Navigation Link */}
+                <motion.div
+                    className="flex gap-2 items-center justify-center leading-[24px] not-italic text-[15px] text-center tracking-[0.1px] flex-wrap"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.5, delay: 0.9 }}
+                >
+                    <p className="font-['Poppins:Regular',sans-serif] text-[rgba(203,30,29,0.45)]">Not an admin?</p>
+                    <Link
+                        href="/kitchen/login"
+                        className="font-['Poppins:SemiBold',sans-serif] text-[#cb1e1d] hover:underline transition-all"
+                    >
+                        Kitchen Login
+                    </Link>
+                </motion.div>
+            </div>
         </motion.div>
     );
 }
+
