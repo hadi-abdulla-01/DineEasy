@@ -18,24 +18,21 @@ export default function TakeAwayPage() {
     const correctionId = searchParams.get('correction_for');
     const correctionType = searchParams.get('order_type');
 
-    const fetchItems = useCallback(async () => {
-        if (!user?.branchId) return; // Guard clause
-
+    const fetchItems = useCallback(async (branchId: string) => {
+        setIsLoading(true);
         try {
             const [currentSession, allMenuItems] = await Promise.all([
-                getCurrentSession(user.branchId),
-                getMenuItems(user.branchId)
+                getCurrentSession(branchId),
+                getMenuItems(branchId)
             ]);
 
             setSession(currentSession);
 
             const availableMenuItems = allMenuItems.filter(item => {
                 if (!item.isAvailable) return false;
-                // If no sessions are configured for the item, or no session is active, it's available.
                 if (!currentSession || !item.availableSessions || item.availableSessions.length === 0) {
                     return true;
                 }
-                // Otherwise, check if the item is in the current session.
                 return item.availableSessions.includes(currentSession.id);
             });
             setMenuItems(availableMenuItems);
@@ -45,12 +42,11 @@ export default function TakeAwayPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [user?.branchId]);
+    }, []);
 
     useEffect(() => {
         if (user?.branchId) {
-            setIsLoading(true);
-            fetchItems();
+            fetchItems(user.branchId);
         } else {
             setIsLoading(false);
         }
@@ -100,7 +96,7 @@ export default function TakeAwayPage() {
                     </div>
                 </div>
             )}
-            <RemoteOrderForm menu={menuItems} orderType="Take-away" onItemsUpdate={fetchItems} correctionOrder={correctionOrder} branchId={user.branchId} />
+            <RemoteOrderForm menu={menuItems} orderType="Take-away" onItemsUpdate={() => fetchItems(user.branchId)} correctionOrder={correctionOrder} branchId={user.branchId} />
         </div>
     );
 }

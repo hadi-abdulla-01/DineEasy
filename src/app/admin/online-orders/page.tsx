@@ -14,17 +14,12 @@ export default function OnlineOrdersPage() {
     const [session, setSession] = useState<MealSession | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    const fetchItems = useCallback(async () => {
-        if (!user?.branchId) {
-            setIsLoading(false);
-            return;
-        }
-
+    const fetchItems = useCallback(async (branchId: string) => {
         setIsLoading(true);
         try {
             const [currentSession, allMenuItems] = await Promise.all([
-                getCurrentSession(user.branchId),
-                getMenuItems(user.branchId)
+                getCurrentSession(branchId),
+                getMenuItems(branchId)
             ]);
 
             setSession(currentSession);
@@ -43,11 +38,11 @@ export default function OnlineOrdersPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [user?.branchId]);
+    }, []);
 
     useEffect(() => {
         if (user?.branchId) {
-            fetchItems();
+            fetchItems(user.branchId);
         } else {
             setIsLoading(false);
         }
@@ -64,8 +59,12 @@ export default function OnlineOrdersPage() {
         );
     }
     
-    if (!user) {
-        return <div>Loading...</div>;
+    if (!user?.branchId) {
+        return (
+            <div className="flex h-[60vh] items-center justify-center">
+                 <p className="text-muted-foreground">Could not determine user's branch.</p>
+            </div>
+        );
     }
 
 
@@ -82,7 +81,7 @@ export default function OnlineOrdersPage() {
                     </div>
                 </div>
             )}
-            <RemoteOrderForm menu={menuItems} orderType="Online" onItemsUpdate={fetchItems} branchId={user.branchId} />
+            <RemoteOrderForm menu={menuItems} orderType="Online" onItemsUpdate={() => fetchItems(user.branchId)} branchId={user.branchId} />
         </div>
     );
 }
