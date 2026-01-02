@@ -2,7 +2,7 @@
 'use client';
 
 import type { MenuItem, OrderItem, RemoteOrder, RestaurantSettings, Order } from '@/lib/definitions';
-import React, from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { placeholderImages } from '@/lib/placeholder-images';
 import { Button } from '@/components/ui/button';
@@ -21,20 +21,24 @@ type CartItem = Omit<OrderItem, 'orderItemId' | 'category' | 'isReady' | 'status
 type OrderType = 'Online' | 'Take-away' | 'Dine-in';
 
 export function RemoteOrderForm({ menu: initialMenu, orderType, onItemsUpdate, correctionOrder, branchId }: { menu: MenuItem[]; orderType: OrderType, onItemsUpdate: () => void, correctionOrder?: Order | RemoteOrder | null, branchId: string }) {
-  const [menu, setMenu] = React.useState(initialMenu);
-  const [cart, setCart] = React.useState<CartItem[]>([]);
-  const [searchTerm, setSearchTerm] = React.useState('');
-  const [selectedCategory, setSelectedCategory] = React.useState("All");
-  const [showPrintDialog, setShowPrintDialog] = React.useState(false);
-  const [lastOrder, setLastOrder] = React.useState<RemoteOrder | null>(null);
-  const [settings, setSettings] = React.useState<RestaurantSettings | null>(null);
+  const [menu, setMenu] = useState(initialMenu);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [lastOrder, setLastOrder] = useState<RemoteOrder | null>(null);
+  const [settings, setSettings] = useState<RestaurantSettings | null>(null);
 
-  React.useEffect(() => {
-    getSettings().then(setSettings);
+  useEffect(() => {
+    if(branchId) {
+      getSettings(branchId).then(setSettings);
+    } else {
+      getSettings().then(setSettings);
+    }
     setMenu(initialMenu);
-  }, [initialMenu, onItemsUpdate]);
+  }, [initialMenu, onItemsUpdate, branchId]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (correctionOrder) {
       // Pre-fill the cart with items from the order being corrected
       const itemsFromCorrection = correctionOrder.items.map(item => ({
