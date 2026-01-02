@@ -1,4 +1,3 @@
-
 'use client';
 import { getMenuItems, getOrderById, getRemoteOrderById } from "@/lib/data";
 import { RemoteOrderForm } from "@/components/remote-order-form";
@@ -31,7 +30,7 @@ export default function TakeAwayPage() {
         }
     }, [fetchItems, correctionId, correctionType]);
 
-    if (!user) {
+    if (!user?.branchId) {
         return <div>Loading...</div>;
     }
 
