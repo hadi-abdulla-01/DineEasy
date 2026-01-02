@@ -784,6 +784,7 @@ export async function addRemoteOrder(orderData: Omit<RemoteOrder, 'id' | 'create
         totalTaxAmount,
         total,
         orderType: orderData.orderType,
+        notes: orderData.orderType === 'Take-away' && orderData.customerDetails.takeAwayTime ? `Pickup Time: ${orderData.customerDetails.takeAwayTime}` : undefined,
     };
     batch.set(newOrderRef, { ...orderPayload, createdAt: serverTimestamp() });
 

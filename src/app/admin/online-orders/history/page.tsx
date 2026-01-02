@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useEffect, useState } from "react";
 import type { RemoteOrder, RestaurantSettings } from "@/lib/definitions";
@@ -7,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { Printer, Eye } from "lucide-react";
+import { Printer, Eye, Clock } from "lucide-react";
 import { Invoice } from "@/components/ui/invoice";
 import { useAuth } from "../../auth-provider";
 
@@ -33,6 +34,12 @@ function OrderDetailsDialog({ order, isOpen, onOpenChange, settings }: { order: 
                                 <p className="text-sm text-muted-foreground">{order.customerDetails.address}</p>
                                 <p className="text-sm text-muted-foreground">Platform: {order.customerDetails.platform}</p>
                             </>
+                        )}
+                        {order.orderType === 'Take-away' && order.customerDetails.takeAwayTime && (
+                             <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                                <Clock className="h-4 w-4" />
+                                <span>Pickup at: {order.customerDetails.takeAwayTime}</span>
+                            </div>
                         )}
                     </div>
                     <Separator />

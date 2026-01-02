@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import type { OrderItem, RestaurantSettings, Order, RemoteOrder } from '@/lib/definitions';
+import type { OrderItem, RestaurantSettings, Order, RemoteOrder, CustomerDetails } from '@/lib/definitions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,13 +20,6 @@ import { useAuth } from '@/app/admin/auth-provider';
 
 type CartItem = Omit<OrderItem, 'orderItemId' | 'category' | 'isReady' | 'status' | 'selectedAddons' | 'notes'>;
 type OrderType = 'Online' | 'Take-away' | 'Dine-in';
-
-type CustomerDetails = {
-    name: string;
-    phone: string;
-    address: string;
-    platform: string;
-};
 
 function isRemoteOrder(order: Order | RemoteOrder): order is RemoteOrder {
     return 'customerDetails' in order;
@@ -54,7 +47,7 @@ type RemoteOrderCartSheetProps = {
 export function RemoteOrderCartSheet({ cart, orderType, onRemoveFromCart, onOrderPlaced, settings, correctionOrder }: RemoteOrderCartSheetProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [customerDetails, setCustomerDetails] = useState<CustomerDetails>({ name: '', phone: '', address: '', platform: '' });
+  const [customerDetails, setCustomerDetails] = useState<CustomerDetails>({ name: '', phone: '', address: '', platform: '', takeAwayTime: '' });
   const formRef = useRef<HTMLFormElement>(null);
   
   const platforms = settings?.onlineOrderPlatforms || [];
@@ -73,6 +66,7 @@ export function RemoteOrderCartSheet({ cart, orderType, onRemoveFromCart, onOrde
           phone: correctionOrder.customerDetails.phone,
           address: correctionOrder.customerDetails.address || '',
           platform: correctionOrder.customerDetails.platform || (platforms.length > 0 ? platforms[0] : ''),
+          takeAwayTime: correctionOrder.customerDetails.takeAwayTime || ''
         });
       } else {
         setCustomerDetails({
@@ -80,6 +74,7 @@ export function RemoteOrderCartSheet({ cart, orderType, onRemoveFromCart, onOrde
           phone: correctionOrder.customerPhone,
           address: '',
           platform: platforms.length > 0 ? platforms[0] : '',
+          takeAwayTime: ''
         });
       }
     }
@@ -117,7 +112,7 @@ export function RemoteOrderCartSheet({ cart, orderType, onRemoveFromCart, onOrde
     await onOrderPlaced(formData);
     setOpen(false);
     formRef.current?.reset();
-    setCustomerDetails({ name: '', phone: '', address: '', platform: platforms.length > 0 ? platforms[0] : '' });
+    setCustomerDetails({ name: '', phone: '', address: '', platform: platforms.length > 0 ? platforms[0] : '', takeAwayTime: '' });
   };
 
   const currentOrderType = correctionOrder ? correctionOrder.orderType : orderType;
@@ -202,6 +197,12 @@ export function RemoteOrderCartSheet({ cart, orderType, onRemoveFromCart, onOrde
                       <Label htmlFor="phone">Phone</Label>
                       <Input id="phone" name="phone" placeholder="555-123-4567" value={customerDetails.phone} onChange={handleCustomerDetailChange} required />
                     </div>
+                    {currentOrderType === 'Take-away' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="takeAwayTime">Pickup Time</Label>
+                            <Input id="takeAwayTime" name="takeAwayTime" type="time" value={customerDetails.takeAwayTime} onChange={handleCustomerDetailChange} />
+                        </div>
+                    )}
                     {currentOrderType === 'Online' && (
                       <>
                           <div className="space-y-2">

@@ -145,6 +145,7 @@ export type CustomerDetails = {
     phone: string;
     address: string;
     platform: string;
+    takeAwayTime?: string;
 };
 
 export type RemoteOrder = {
