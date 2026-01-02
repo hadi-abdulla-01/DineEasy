@@ -965,3 +965,42 @@ export async function getActivityLogsByUser(userId: string): Promise<ActivityLog
     // Sort in code to avoid needing a composite index
     return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
+
+export async function seedInitialData() {
+    console.log("Checking if initial data seeding is required...");
+    const branches = await getBranches();
+    if (branches.length === 0) {
+        console.log("No branches found. Seeding initial 'Main Branch'.");
+        const mainBranch = await createBranch('Main Branch', true);
+
+        const users = await getKitchenUsers();
+        if (users.length === 0) {
+            console.log("No users found. Seeding initial 'admin' user.");
+            await createKitchenUser({
+                username: 'admin',
+                password: 'admin123', // You can change this after logging in
+                categories: ['All'],
+                role: 'Admin',
+                branchId: mainBranch.id,
+                permissions: {
+                    dashboard: { view: true },
+                    tableOrder: { view: true },
+                    tables: { view: true, create: true, edit: true, delete: true },
+                    menu: { view: true, create: true, edit: true, delete: true },
+                    kitchen: { view: true },
+                    sales: { view: true },
+                    salesHistory: { view: true, edit: true, delete: true },
+                    onlineOrders: { view: true, create: true },
+                    takeAway: { view: true, create: true },
+                    userManagement: { view: true, create: true, edit: true, delete: true },
+                    settings: { view: true, edit: true },
+                }
+            });
+            console.log("Initial admin user created.");
+        }
+        console.log("Initial data seeding complete.");
+        return true; // Indicates data was seeded
+    }
+    console.log("Initial data already exists. No seeding required.");
+    return false; // Indicates no seeding was done
+}
