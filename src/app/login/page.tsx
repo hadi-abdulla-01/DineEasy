@@ -1,4 +1,3 @@
-
 "use client";
 
 import LoginSwitcher from "@/components/LoginSwitcher";

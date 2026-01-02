@@ -57,26 +57,30 @@ function docToObj<T>(d: any): T {
 
 
 // --- Settings ---
-let settingsCache: Record<string, RestaurantSettings> = {};
-
 export async function getSettings(branchId?: string): Promise<RestaurantSettings> {
     const firestore = getFirestoreInstance();
 
     // 1. Fetch global settings
     const globalSettingsRef = doc(firestore, 'restaurants', RESTAURANT_ID);
-    const globalSettingsSnap = await getDoc(globalSettingsRef);
-    const globalSettings = docToObj<Restaurant>(globalSettingsSnap) || {};
+    let globalSettings = {};
+    try {
+        const globalSettingsSnap = await getDoc(globalSettingsRef);
+        globalSettings = docToObj<Restaurant>(globalSettingsSnap) || {};
+    } catch(e) {
+        console.warn("Could not fetch global settings, using defaults. This is expected on first run.", e);
+    }
+    
 
     const defaultSettings: RestaurantSettings = {
-        restaurantName: globalSettings.name || 'DineEZee',
-        restaurantAddress: globalSettings.address || '123 Foodie Lane, Gourmet City',
+        restaurantName: (globalSettings as any).name || 'DineEZee',
+        restaurantAddress: (globalSettings as any).address || '123 Foodie Lane, Gourmet City',
         currencySymbol: '$',
         taxes: [],
         currencyDecimalPlaces: 2,
-        qrCodeColor: globalSettings.qrCodeColor,
-        qrCodeBackgroundColor: globalSettings.qrCodeBackgroundColor,
-        qrCodeLogo: globalSettings.qrCodeLogo,
-        onlineOrderPlatforms: globalSettings.onlineOrderPlatforms,
+        qrCodeColor: (globalSettings as any).qrCodeColor,
+        qrCodeBackgroundColor: (globalSettings as any).qrCodeBackgroundColor,
+        qrCodeLogo: (globalSettings as any).qrCodeLogo,
+        onlineOrderPlatforms: (globalSettings as any).onlineOrderPlatforms,
         menuCategories: ['Meals', 'Snacks', 'Beverages', 'Desserts'], // Default categories
     };
 
@@ -84,13 +88,16 @@ export async function getSettings(branchId?: string): Promise<RestaurantSettings
         return defaultSettings;
     }
 
-    // DISABLED CACHE - Always fetch fresh data to ensure immediate updates
-    // if (settingsCache[branchId]) return settingsCache[branchId];
-
     // 2. Fetch branch-specific settings
-    const branchRef = doc(firestore, `restaurants/${RESTAURANT_ID}/branches`, branchId);
-    const branchSnap = await getDoc(branchRef);
-    const branchData = docToObj<Branch>(branchSnap);
+    let branchData: Branch | null = null;
+    try {
+        const branchRef = doc(firestore, `restaurants/${RESTAURANT_ID}/branches`, branchId);
+        const branchSnap = await getDoc(branchRef);
+        branchData = docToObj<Branch>(branchSnap);
+    } catch(e) {
+        console.warn(`Could not fetch branch settings for ${branchId}. This might be expected on first run.`, e);
+    }
+
 
     if (!branchData) {
         // If branch not found, return global defaults
@@ -125,8 +132,6 @@ export async function getSettings(branchId?: string): Promise<RestaurantSettings
         menuCategories: branchData.menuCategories || defaultSettings.menuCategories,
     };
 
-    // Cache disabled for immediate updates
-    // settingsCache[branchId] = finalSettings;
     return finalSettings;
 }
 
@@ -141,13 +146,10 @@ export async function updateSettings(branchId: string | undefined, newSettings: 
             updatePayload.qrCodeLogo = deleteField();
         }
         await updateDoc(branchRef, updatePayload);
-        delete settingsCache[branchId]; // Invalidate cache
     } else {
         // Otherwise, it's a global restaurant setting update
         const restaurantRef = doc(firestore, 'restaurants', RESTAURANT_ID);
         await setDoc(restaurantRef, newSettings, { merge: true });
-        // Invalidate all caches as global settings affect all branches
-        settingsCache = {};
     }
 }
 
@@ -240,17 +242,22 @@ export async function getBranches(): Promise<Branch[]> {
 
 export async function getMainBranch(): Promise<Branch | null> {
     const branchesRef = getCollections().branches;
-    const q = query(branchesRef, where('isMain', '==', true));
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) {
-        const allBranchesSnap = await getDocs(query(branchesRef, orderBy('name')));
-        if(allBranchesSnap.empty) {
-             return null;
+    try {
+        const q = query(branchesRef, where('isMain', '==', true));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            const allBranchesSnap = await getDocs(query(branchesRef, orderBy('name')));
+            if(allBranchesSnap.empty) {
+                 return null;
+            }
+            // If no main branch is set, return the first one alphabetically.
+            return docToObj<Branch>(allBranchesSnap.docs[0]);
         }
-        // If no main branch is set, return the first one alphabetically.
-        return docToObj<Branch>(allBranchesSnap.docs[0]);
+        return docToObj<Branch>(snapshot.docs[0]);
+    } catch (e) {
+        console.error("Failed to get main branch, returning null.", e);
+        return null;
     }
-    return docToObj<Branch>(snapshot.docs[0]);
 }
 
 export async function getBranchById(id: string): Promise<Branch | null> {

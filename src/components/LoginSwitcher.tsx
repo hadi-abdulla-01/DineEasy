@@ -13,8 +13,6 @@ function LoginSwitcherContent() {
     const role = searchParams.get("role");
 
     // Initialize state based on query param, default to 'admin'
-    // We use a lazy initializer to avoid hydration mismatch if possible, 
-    // but with useSearchParams in Client Component it's better to interpret it
     const [currentPage, setCurrentPage] = useState<Page>(() => {
         return role === "kitchen" ? "kitchen" : "admin";
     });

@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import type { Order, RemoteOrder, RestaurantSettings, KitchenUser, Branch } from '@/lib/definitions';

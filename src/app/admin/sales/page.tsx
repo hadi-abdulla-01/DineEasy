@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Order, RemoteOrder, RestaurantSettings, Branch } from '@/lib/definitions';
@@ -365,4 +364,3 @@ export default function SalesReportPage() {
     </div>
   );
 }
-
