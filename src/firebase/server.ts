@@ -1,6 +1,7 @@
 
 import { initializeApp, getApps, getApp, FirebaseApp, type FirebaseOptions } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 // This file is intended for server-side use ONLY.
 
@@ -34,6 +35,7 @@ export function initializeFirebase() {
 
   return {
     firebaseApp,
-    firestore: getFirestore(firebaseApp)
+    firestore: getFirestore(firebaseApp),
+    auth: getAuth(firebaseApp)
   };
 }

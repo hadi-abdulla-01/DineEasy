@@ -181,7 +181,9 @@ export type UserPermissions = {
 export type KitchenUser = {
     id: string;
     username: string;
-    password: string; // In a real app, this should be hashed
+    email?: string; // Email for Firebase Authentication
+    firebaseUid?: string; // Firebase Auth UID
+    password: string; // In a real app, this should be hashed (kept for backward compatibility)
     categories: string[];
     role: UserRole;
     branchId: string;

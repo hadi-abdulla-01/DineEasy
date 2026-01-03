@@ -5,6 +5,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import { usePathname, useRouter } from 'next/navigation';
 import type { KitchenUser } from '@/lib/definitions';
 import { LoaderCircle } from 'lucide-react';
+import { isSuperAdmin } from '@/lib/auth-utils';
 
 type AuthContextType = {
   isAuthenticated: boolean;
@@ -16,7 +17,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const isProtectedRoute = (pathname: string) => {
-    return pathname.startsWith('/admin') || pathname.startsWith('/kitchen');
+  return pathname.startsWith('/admin') || pathname.startsWith('/kitchen');
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -36,22 +37,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Could not access session storage:", error);
     }
-    
+
     const isProtected = isProtectedRoute(pathname);
 
     if (isProtected) {
-        if (!currentUser) {
-            router.push('/login?role=admin');
-        } else {
-             // Handle role-based redirects for authenticated users on protected routes
-            if (currentUser.role === 'Kitchen' && pathname.startsWith('/admin')) {
-                router.replace('/kitchen');
-            } else if (currentUser.role !== 'Kitchen' && pathname.startsWith('/kitchen')) {
-                router.replace('/admin');
-            }
+      if (!currentUser) {
+        router.push('/login?role=admin');
+      } else {
+        // Handle role-based redirects for authenticated users on protected routes
+        if (currentUser.role === 'Kitchen' && pathname.startsWith('/admin')) {
+          router.replace('/kitchen');
+        } else if (currentUser.role !== 'Kitchen' && pathname.startsWith('/kitchen')) {
+          router.replace('/admin');
         }
+      }
     }
-    
+
     setIsLoading(false);
 
   }, [pathname, router]);
@@ -60,10 +61,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem('dineEasyUser', JSON.stringify(loggedInUser));
     setUser(loggedInUser);
 
-    if (loggedInUser.role === 'Kitchen') {
-        router.replace('/kitchen');
+    // Check if super admin
+    if (loggedInUser.email && isSuperAdmin(loggedInUser.email)) {
+      router.replace('/admin/superadmin');
+    } else if (loggedInUser.role === 'Kitchen') {
+      router.replace('/kitchen');
     } else {
-        router.replace('/admin');
+      router.replace('/admin');
     }
   };
 

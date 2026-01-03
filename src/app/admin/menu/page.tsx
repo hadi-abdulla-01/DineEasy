@@ -2,7 +2,6 @@
 
 'use client';
 import { MenuItem } from "@/lib/definitions";
-import { getMenuItems, getSettings, getMainBranch } from "@/lib/data";
 import { addMenuItemAction, toggleMenuItemAddonAction, toggleMenuItemAvailabilityAction } from "@/lib/actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,18 +18,19 @@ import Link from "next/link";
 import type { RestaurantSettings, Branch } from "@/lib/definitions";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "../auth-provider";
+import { useRestaurantData } from "@/lib/client-data";
 
-function MenuItemList({ items, onToggle, settings }: { items: MenuItem[], onToggle: () => void, settings: RestaurantSettings | null }) {
+function MenuItemList({ items, onToggle, settings, restaurantId }: { items: MenuItem[], onToggle: () => void, settings: RestaurantSettings | null, restaurantId: string }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
 
   const handleAvailabilityToggle = async (itemId: string, currentAvailability: boolean) => {
-    await toggleMenuItemAvailabilityAction(itemId, !currentAvailability);
+    await toggleMenuItemAvailabilityAction(itemId, !currentAvailability, restaurantId);
     onToggle();
   }
 
   const handleAddonToggle = async (itemId: string, currentAddonStatus: boolean) => {
-    await toggleMenuItemAddonAction(itemId, !!currentAddonStatus);
+    await toggleMenuItemAddonAction(itemId, !!currentAddonStatus, restaurantId);
     onToggle();
   }
 
@@ -147,6 +147,7 @@ function MenuItemList({ items, onToggle, settings }: { items: MenuItem[], onTogg
 
 export default function MenuManagementPage() {
   const { user } = useAuth();
+  const { getMenuItems, getSettings, getMainBranch, restaurantId } = useRestaurantData();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -154,6 +155,7 @@ export default function MenuManagementPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [categoryValue, setCategoryValue] = useState<string>("");
   const [branchId, setBranchId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchItems = () => {
     if (user?.branchId) {
@@ -186,43 +188,56 @@ export default function MenuManagementPage() {
       }
     }
 
-    loadData();
-    fetchItems();
-  }, [user]);
+    if (user) {
+      loadData();
+    }
+    // Fetch items regardless of branch load (will fallback to default if user not ready)
+    if (user) {
+      fetchItems();
+    }
+  }, [user, getMainBranch, getMenuItems, getSettings]);
 
   // Get categories from settings
   const categories = settings?.menuCategories || ['Meals', 'Snacks', 'Beverages', 'Desserts'];
 
   const handleAddMenuItem = async (formData: FormData) => {
-    if (previewImage) {
-      formData.append('image', previewImage);
-    }
-    if (branchId) {
-      formData.append('branchId', branchId);
-    }
+    setIsSubmitting(true);
+    try {
+      if (previewImage) {
+        formData.append('image', previewImage);
+      }
+      if (branchId) {
+        formData.append('branchId', branchId);
+      }
+      formData.append('restaurantId', restaurantId);
 
-    // Collect selected sessions
-    const selectedSessions: string[] = [];
-    if (settings?.mealSessions) {
-      settings.mealSessions.forEach(session => {
-        if (formData.get(`session-${session.id}`) === 'on') {
-          selectedSessions.push(session.id);
-        }
-      });
-    }
+      // Collect selected sessions
+      const selectedSessions: string[] = [];
+      if (settings?.mealSessions) {
+        settings.mealSessions.forEach(session => {
+          if (formData.get(`session-${session.id}`) === 'on') {
+            selectedSessions.push(session.id);
+          }
+        });
+      }
 
-    // Add sessions as JSON string
-    if (selectedSessions.length > 0) {
-      formData.append('availableSessions', JSON.stringify(selectedSessions));
-    }
+      // Add sessions as JSON string
+      if (selectedSessions.length > 0) {
+        formData.append('availableSessions', JSON.stringify(selectedSessions));
+      }
 
-    await addMenuItemAction(formData);
-    fetchItems();
-    formRef.current?.reset();
-    setCategoryValue("");
-    setPreviewImage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+      await addMenuItemAction(formData);
+      fetchItems();
+      formRef.current?.reset();
+      setCategoryValue("");
+      setPreviewImage(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (error) {
+      console.error("Failed to add menu item", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -275,8 +290,35 @@ export default function MenuManagementPage() {
                   const file = e.target.files?.[0];
                   if (file) {
                     const reader = new FileReader();
-                    reader.onloadend = () => {
-                      setPreviewImage(reader.result as string);
+                    reader.onload = (event) => {
+                      const img = document.createElement('img');
+                      img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        const MAX_WIDTH = 800;
+                        const MAX_HEIGHT = 800;
+
+                        if (width > height) {
+                          if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                          }
+                        } else {
+                          if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                          }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx?.drawImage(img, 0, 0, width, height);
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                        setPreviewImage(dataUrl);
+                      };
+                      img.src = event.target?.result as string;
                     };
                     reader.readAsDataURL(file);
                   }
@@ -372,7 +414,9 @@ export default function MenuManagementPage() {
               </div>
             ) : null}
 
-            <Button type="submit">Add Item</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Adding..." : "Add Item"}
+            </Button>
           </form>
         </CardContent>
       </Card>
@@ -383,7 +427,7 @@ export default function MenuManagementPage() {
           <CardDescription>Search for items and toggle their availability or add-on status.</CardDescription>
         </CardHeader>
         <CardContent>
-          <MenuItemList items={menuItems} onToggle={fetchItems} settings={settings} />
+          <MenuItemList items={menuItems} onToggle={fetchItems} settings={settings} restaurantId={restaurantId} />
         </CardContent>
       </Card>
     </div>

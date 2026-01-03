@@ -12,6 +12,7 @@ import { useFormStatus } from 'react-dom';
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Trash2, Star } from 'lucide-react';
 import Link from 'next/link';
+import { useRestaurantData } from '@/lib/client-data';
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -27,6 +28,7 @@ export default function BranchManagementPage() {
     const [branches, setBranches] = useState<Branch[]>([]);
     const { toast } = useToast();
     const formRef = useRef<HTMLFormElement>(null);
+    const { getBranches, restaurantId } = useRestaurantData();
 
     const fetchBranches = async () => {
         const branchData = await getBranches();
@@ -35,9 +37,10 @@ export default function BranchManagementPage() {
 
     useEffect(() => {
         fetchBranches();
-    }, []);
+    }, [getBranches]);
 
     const handleAddBranch = async (formData: FormData) => {
+        formData.append('restaurantId', restaurantId);
         await createBranchAction(formData);
         toast({ title: "Branch Created", description: "The new branch has been added." });
         formRef.current?.reset();
@@ -49,13 +52,13 @@ export default function BranchManagementPage() {
             toast({ variant: "destructive", title: "Cannot Delete Main Branch", description: "Please set another branch as main before deleting this one." });
             return;
         }
-        await deleteBranchAction(branchId);
+        await deleteBranchAction(branchId, restaurantId);
         toast({ title: "Branch Deleted" });
         fetchBranches();
     };
 
     const handleSetMainBranch = async (branchId: string) => {
-        await setMainBranchAction(branchId);
+        await setMainBranchAction(branchId, restaurantId);
         toast({ title: "Main Branch Updated" });
         fetchBranches();
     }
@@ -115,12 +118,12 @@ export default function BranchManagementPage() {
                                 </div>
                             </div>
                         ))}
-                         {branches.length === 0 && (
+                        {branches.length === 0 && (
                             <p className="text-muted-foreground text-center py-8">No branches created yet.</p>
                         )}
                     </div>
                 </CardContent>
-                 <CardFooter>
+                <CardFooter>
                     <Button variant="outline" asChild>
                         <Link href="/admin/settings">Back to Settings</Link>
                     </Button>

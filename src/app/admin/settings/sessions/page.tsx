@@ -16,6 +16,7 @@ import { Clock, Plus, Trash2, Edit2, Settings2 } from 'lucide-react';
 import { formatSessionTime, getCurrentActiveSession } from '@/lib/utils/session-utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useRestaurantData } from '@/lib/client-data';
 
 export default function SessionsPage() {
     const { user } = useAuth();
@@ -28,6 +29,7 @@ export default function SessionsPage() {
     const [manualOverrideEnabled, setManualOverrideEnabled] = useState(false);
     const [selectedSessionId, setSelectedSessionId] = useState<string>('');
     const [isActiveSwitch, setIsActiveSwitch] = useState(true); // Default to true for new sessions
+    const { getSettings, restaurantId } = useRestaurantData();
 
     useEffect(() => {
         if (branchId) {
@@ -37,12 +39,14 @@ export default function SessionsPage() {
                 setSelectedSessionId(s.manualSessionOverride?.sessionId || '');
             });
         }
-    }, [branchId]);
+    }, [branchId, getSettings]);
 
     const handleAddSession = async (formData: FormData) => {
-        if (!branchId) return;
+        if (!branchId || !restaurantId) return;
 
         formData.append('branchId', branchId);
+        formData.append('restaurantId', restaurantId);
+
         await addMealSessionAction(formData);
 
         // Refresh settings
@@ -53,9 +57,10 @@ export default function SessionsPage() {
     };
 
     const handleUpdateSession = async (formData: FormData) => {
-        if (!branchId || !editingSession) return;
+        if (!branchId || !editingSession || !restaurantId) return;
 
         formData.append('branchId', branchId);
+        formData.append('restaurantId', restaurantId);
         formData.append('sessionId', editingSession.id);
         await updateMealSessionAction(formData);
 
@@ -67,10 +72,10 @@ export default function SessionsPage() {
     };
 
     const handleDeleteSession = async (sessionId: string) => {
-        if (!branchId) return;
+        if (!branchId || !restaurantId) return;
         if (!confirm('Are you sure you want to delete this session?')) return;
 
-        await deleteMealSessionAction(branchId, sessionId);
+        await deleteMealSessionAction(branchId, sessionId, restaurantId);
 
         // Refresh settings
         const updatedSettings = await getSettings(branchId);
@@ -79,10 +84,11 @@ export default function SessionsPage() {
     };
 
     const handleManualOverrideUpdate = async () => {
-        if (!branchId) return;
+        if (!branchId || !restaurantId) return;
 
         const formData = new FormData();
         formData.append('branchId', branchId);
+        formData.append('restaurantId', restaurantId);
         formData.append('enabled', manualOverrideEnabled.toString());
         formData.append('sessionId', selectedSessionId);
 
@@ -96,7 +102,7 @@ export default function SessionsPage() {
 
     const sessions = settings?.mealSessions || [];
 
-    if (!user) return <div>Loading...</div>;
+    if (!user || !restaurantId) return <div>Loading...</div>;
 
     return (
         <div className="space-y-6">

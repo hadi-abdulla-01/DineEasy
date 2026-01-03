@@ -1,28 +1,30 @@
 'use client';
-
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { addMenuCategoryAction, removeMenuCategoryAction } from '@/lib/actions';
 import { useAuth } from '../../auth-provider';
-import { getSettings, getMainBranch } from '@/lib/data';
 import type { RestaurantSettings } from '@/lib/definitions';
 import { Plus, Trash2, Tag } from 'lucide-react';
+import { useRestaurantData } from '@/lib/client-data';
 
 export default function CategoriesPage() {
     const { user } = useAuth();
+    const router = useRouter();
     const searchParams = useSearchParams();
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [branchId, setBranchId] = useState<string | null>(null);
     const [newCategory, setNewCategory] = useState('');
     const [error, setError] = useState('');
+    const { getSettings, getMainBranch, restaurantId } = useRestaurantData();
 
     useEffect(() => {
         async function fetchData() {
+            if (!restaurantId) return;
+
             let activeBranchId: string | null = user?.branchId || null;
 
             if (!activeBranchId) {
@@ -43,16 +45,17 @@ export default function CategoriesPage() {
             }
         }
         fetchData();
-    }, [user, searchParams]);
+    }, [user, searchParams, restaurantId, getMainBranch, getSettings]);
 
     const handleAddCategory = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!branchId || !newCategory.trim()) return;
+        if (!branchId || !newCategory.trim() || !restaurantId) return;
 
         setError('');
         const formData = new FormData();
         formData.append('branchId', branchId);
         formData.append('categoryName', newCategory.trim());
+        formData.append('restaurantId', restaurantId);
 
         const result = await addMenuCategoryAction(formData);
 
@@ -63,15 +66,16 @@ export default function CategoriesPage() {
             const updatedSettings = await getSettings(branchId);
             setSettings(updatedSettings);
             setNewCategory('');
+            router.refresh();
         }
     };
 
     const handleDeleteCategory = async (categoryName: string) => {
-        if (!branchId) return;
+        if (!branchId || !restaurantId) return;
         if (!confirm(`Are you sure you want to delete the "${categoryName}" category?`)) return;
 
         setError('');
-        const result = await removeMenuCategoryAction(branchId, categoryName);
+        const result = await removeMenuCategoryAction(branchId, categoryName, restaurantId);
 
         if (result?.message) {
             setError(result.message);
@@ -79,12 +83,13 @@ export default function CategoriesPage() {
             // Refresh settings
             const updatedSettings = await getSettings(branchId);
             setSettings(updatedSettings);
+            router.refresh();
         }
     };
 
     const categories = settings?.menuCategories || [];
 
-    if (!user) return <div>Loading...</div>;
+    if (!user || !restaurantId) return <div>Loading...</div>;
 
     return (
         <div className="space-y-6">

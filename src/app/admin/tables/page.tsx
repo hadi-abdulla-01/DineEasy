@@ -1,7 +1,6 @@
 
 
 'use client';
-import { getTables, getSettings, getMainBranch, getBranches } from "@/lib/data";
 import { createTableAction } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState, useRef } from "react";
@@ -11,12 +10,14 @@ import { QRCode } from "@/components/qr-code";
 import { useAuth } from "../auth-provider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { deleteTableAction } from "@/lib/actions";
+import { useRestaurantData } from "@/lib/client-data";
 
 
-function TableList({ tables, settings }: { tables: Table[], settings: RestaurantSettings | null }) {
+// TableList now accepts restaurantId prop
+function TableList({ tables, settings, restaurantId }: { tables: Table[], settings: RestaurantSettings | null, restaurantId: string }) {
   const handleDelete = async (tableId: string) => {
     if (confirm('Are you sure you want to delete this table?')) {
-      await deleteTableAction(tableId);
+      await deleteTableAction(tableId, restaurantId);
     }
   };
 
@@ -129,6 +130,7 @@ function TableList({ tables, settings }: { tables: Table[], settings: Restaurant
 
 export default function TableManagementPage() {
   const { user } = useAuth();
+  const { getTables, getSettings, getMainBranch, getBranches, restaurantId } = useRestaurantData();
   const [allBranches, setAllBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | undefined>(user?.branchId);
   const [tables, setTables] = useState<Table[]>([]);
@@ -159,7 +161,7 @@ export default function TableManagementPage() {
     if (user) {
       fetchInitialData();
     }
-  }, [user, canManageAllBranches, selectedBranchId]);
+  }, [user, canManageAllBranches, selectedBranchId, getMainBranch, getBranches]);
 
   useEffect(() => {
     async function fetchBranchData() {
@@ -179,7 +181,7 @@ export default function TableManagementPage() {
     const interval = setInterval(fetchBranchData, 5000);
     return () => clearInterval(interval);
 
-  }, [selectedBranchId]);
+  }, [selectedBranchId, getTables, getSettings]);
 
   const handleAddTable = async (formData: FormData) => {
     if (!selectedBranchId) {
@@ -187,6 +189,7 @@ export default function TableManagementPage() {
       return;
     }
     formData.append('branchId', selectedBranchId);
+    formData.append('restaurantId', restaurantId);
 
     await createTableAction(formData);
     // Refetch tables after adding a new one
@@ -244,7 +247,7 @@ export default function TableManagementPage() {
         </form>
       </div>
 
-      <TableList tables={tables} settings={settings} />
+      <TableList tables={tables} settings={settings} restaurantId={restaurantId} />
     </div>
   );
 }

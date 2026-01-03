@@ -2,7 +2,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import type { Order, RemoteOrder, RestaurantSettings, Branch, MenuItem } from '@/lib/definitions';
-import { getOrders, getRemoteOrders, getSettings, getBranches, getMainBranch, getMenuItems } from '@/lib/data';
+import { useRestaurantData } from '@/lib/client-data';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
@@ -13,16 +13,17 @@ import { useAuth } from './auth-provider';
 type CombinedOrder = (Order | RemoteOrder) & { type: 'Dine-in' | 'Remote' };
 
 const chartConfig = {
-  revenue: {
-    label: 'Revenue',
-    color: 'hsl(var(--primary))',
-  },
+    revenue: {
+        label: 'Revenue',
+        color: 'hsl(var(--primary))',
+    },
 } satisfies ChartConfig;
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
 export default function AdminDashboardPage() {
     const { user } = useAuth();
+    const { getOrders, getRemoteOrders, getSettings, getMenuItems, getMainBranch, restaurantId } = useRestaurantData();
     const [allOrders, setAllOrders] = useState<CombinedOrder[]>([]);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -33,7 +34,7 @@ export default function AdminDashboardPage() {
 
         async function fetchData() {
             setIsLoading(true);
-            
+
             // 1. Determine which branch settings to load.
             let settingsBranchId = user.branchId;
             if (user.role === 'Admin' && !settingsBranchId) {
@@ -63,16 +64,16 @@ export default function AdminDashboardPage() {
             ]);
 
             setMenuItems(fetchedMenuItems);
-            
+
             const combined: CombinedOrder[] = [
                 ...dineInOrders.map(o => ({ ...o, type: 'Dine-in' as const })),
                 ...remoteOrders.map(o => ({ ...o, type: 'Remote' as const })),
             ];
-            
+
             setAllOrders(combined.filter(o => 'status' in o ? o.status === 'completed' : true));
             setIsLoading(false);
         }
-        
+
         fetchData();
     }, [user, user?.branchId]); // Depend on user and branchId for stability
 
@@ -88,7 +89,7 @@ export default function AdminDashboardPage() {
         allOrders.forEach(order => {
             if (order.items && Array.isArray(order.items)) {
                 order.items.forEach(item => {
-                    if(item.status !== 'cancelled') {
+                    if (item.status !== 'cancelled') {
                         if (itemCounts[item.menuItemId]) {
                             itemCounts[item.menuItemId].count += item.quantity;
                         } else {
@@ -116,13 +117,13 @@ export default function AdminDashboardPage() {
             </div>
         );
     }
-  
+
     const currencySymbol = settings.currencySymbol || '$';
     const currencyDecimalPlaces = settings.currencyDecimalPlaces ?? 2;
 
     return (
         <div className="space-y-8">
-             <Card>
+            <Card>
                 <CardHeader>
                     <CardTitle className="font-headline">Welcome, {user.username}!</CardTitle>
                     <CardDescription>Here's a quick overview of your restaurant's performance.</CardDescription>
@@ -140,7 +141,7 @@ export default function AdminDashboardPage() {
                         <p className="text-xs text-muted-foreground">from all completed orders</p>
                     </CardContent>
                 </Card>
-                 <Card>
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
                         <ShoppingCart className="h-4 w-4 text-muted-foreground" />
@@ -150,7 +151,7 @@ export default function AdminDashboardPage() {
                         <p className="text-xs text-muted-foreground">Completed orders</p>
                     </CardContent>
                 </Card>
-                 <Card>
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Average Order Value</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
@@ -196,7 +197,7 @@ export default function AdminDashboardPage() {
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                 <Tooltip
+                                <Tooltip
                                     cursor={{ fill: 'hsl(var(--accent))' }}
                                     content={<ChartTooltipContent
                                         formatter={(value, name) => `${value} units`}

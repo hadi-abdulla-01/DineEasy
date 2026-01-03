@@ -1,6 +1,5 @@
 
 'use client';
-import { getMenuItemById, getMenuItems, getSettings } from "@/lib/data";
 import { updateMenuItemAction } from "@/lib/actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,10 +16,14 @@ import Link from "next/link";
 import { PlusCircle, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { useRestaurantData } from "@/lib/client-data";
+import { useAuth } from "@/app/admin/auth-provider";
 
 export default function EditMenuPage() {
     const params = useParams();
     const router = useRouter();
+    const { user } = useAuth();
+    const { getMenuItemById, getMenuItems, getSettings, restaurantId } = useRestaurantData();
     const itemId = Array.isArray(params.id) ? params.id[0] : params.id;
     const [item, setItem] = useState<MenuItem | null>(null);
     const [allMenuItems, setAllMenuItems] = useState<MenuItem[]>([]);
@@ -30,6 +33,7 @@ export default function EditMenuPage() {
     const [addonGroups, setAddonGroups] = useState<AddonGroup[]>([]);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [selectedSessions, setSelectedSessions] = useState<string[]>([]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (!itemId) return;
@@ -55,39 +59,99 @@ export default function EditMenuPage() {
                 notFound();
             }
         });
-    }, [itemId]);
+    }, [itemId, getMenuItemById]);
 
     useEffect(() => {
         if (item?.branchId) {
             getSettings(item.branchId).then(setSettings);
         }
         getMenuItems().then(setAllMenuItems);
-    }, [item]);
+    }, [item, getSettings, getMenuItems]);
 
     const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setPreviewImage(reader.result as string);
+            reader.onload = (e) => {
+                const img = document.createElement('img');
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    const MAX_WIDTH = 800;
+                    const MAX_HEIGHT = 800;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx?.drawImage(img, 0, 0, width, height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    setPreviewImage(dataUrl);
+                };
+                img.src = e.target?.result as string;
             };
             reader.readAsDataURL(file);
         }
     };
 
     const handleFormSubmit = async (formData: FormData) => {
-        if (previewImage) {
-            formData.append('image', previewImage);
-        }
-        formData.append('addonGroups', JSON.stringify(addonGroups));
+        setIsSubmitting(true);
+        try {
+            if (previewImage) {
+                formData.append('image', previewImage);
+            }
+            formData.append('addonGroups', JSON.stringify(addonGroups));
+            formData.append('restaurantId', restaurantId);
 
-        // Add selected sessions
-        if (selectedSessions.length > 0) {
-            formData.append('availableSessions', JSON.stringify(selectedSessions));
-        }
+            // Add selected sessions
+            if (selectedSessions.length > 0) {
+                formData.append('availableSessions', JSON.stringify(selectedSessions));
+            } else {
+                // If no session is selected, we might want to send an empty array or handle "all available"
+                // The current backend logic expects an array if it's meant to be restricted.
+                // If the user uncheck all, it means it's available for all sessions? 
+                // Wait, logic in add page says: "Collect selected sessions ... if length > 0 append".
+                // If I uncheck all, length is 0. So backend won't get "availableSessions". 
+                // If backend updates partially, it might keep old sessions if key is missing.
+                // Re-checking updateMenuItemAction: it only updates availableSessions if `availableSessionsString` triggers parsing.
+                // So if we send nothing, it keeps old value?
+                // Logic in updateMenuItemAction: 
+                // if (availableSessionsString) { 
+                //    const sessions = JSON.parse(availableSessionsString);
+                //    if (Array.isArray(sessions)) updateData.availableSessions = sessions;
+                // }
+                // This means we CANNOT clear sessions by sending nothing. We must send specific signal or empty array.
+                // Let's send an empty array stringified if the user intends to clear it, 
+                // OR we have to decide if empty means "all sessions" or "no sessions".
+                // In Add page: "Leave unchecked to make it available at all times." -> implies empty = all.
+                // So if we send "[]", usage side needs to treat it as "all"? 
+                // Or does "availableSessions" being undefined mean "all"? 
+                // The Type says `availableSessions?: string[]`.
+                // Let's assume sending "[]" updates it to empty array.
+                formData.append('availableSessions', JSON.stringify(selectedSessions));
+            }
 
-        await updateMenuItemAction(itemId, formData);
-        router.push('/admin/menu');
+            if (!itemId) {
+                throw new Error("Invalid Item ID");
+            }
+            await updateMenuItemAction(itemId, formData);
+            router.push('/admin/menu');
+        } catch (error) {
+            console.error("Failed to update item", error);
+            setIsSubmitting(false);
+        }
     };
 
     // --- Add-on Group Handlers ---
@@ -116,11 +180,18 @@ export default function EditMenuPage() {
     };
     // --- End Add-on Group Handlers ---
 
+    if (!restaurantId) return <div>Loading...</div>; // Wait for context
     if (!item) {
         return <div>Loading...</div>; // Or a skeleton loader
     }
 
     const categories = Array.from(new Set(allMenuItems.map(item => item.category)));
+    // If we have settings, we should use categories from settings as well to offer consistency?
+    // The Add page uses settings.menuCategories. Here we see all existing categories. 
+    // Let's merge them to be safe or stick to existing logic + settings.
+    const settingsCategories = settings?.menuCategories || [];
+    const uniqueCategories = Array.from(new Set([...categories, ...settingsCategories]));
+
 
     return (
         <form action={handleFormSubmit} className="space-y-6">
@@ -151,7 +222,7 @@ export default function EditMenuPage() {
                                     <SelectValue placeholder="Select a category" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {categories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                                    {uniqueCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                                     <SelectItem value="new">...add a new category</SelectItem>
                                 </SelectContent>
                             </Select>
@@ -159,7 +230,7 @@ export default function EditMenuPage() {
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="prepTime">Preparation Time</Label>
-                            <Input id="prepTime" name="prepTime" type="number" defaultValue={item.prepTime} />
+                            <Input id="prepTime" name="prepTime" type="number" defaultValue={item.prepTime || ''} />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="image">Item Image</Label>
@@ -208,7 +279,7 @@ export default function EditMenuPage() {
                                 id="recommendationNote"
                                 name="recommendationNote"
                                 placeholder="e.g., Our Special, Chef's Choice, Customer Favorite"
-                                defaultValue={item.recommendationNote}
+                                defaultValue={item.recommendationNote || ''}
                             />
                             <p className="text-xs text-muted-foreground">
                                 This note will be displayed on recommended items in the customer view
@@ -332,7 +403,7 @@ export default function EditMenuPage() {
             </Card>
 
             <div className="flex gap-2">
-                <Button type="submit">Save Changes</Button>
+                <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Changes"}</Button>
                 <Button variant="outline" asChild>
                     <Link href="/admin/menu">Cancel</Link>
                 </Button>

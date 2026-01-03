@@ -1,6 +1,6 @@
 
 'use client';
-import { getActiveOrders, getSettings, getTableById, getBranches, getMainBranch } from "@/lib/data";
+'use client';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { OrderStatusBadge } from "@/components/order-status-badge";
 import { Separator } from "@/components/ui/separator";
@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useAuth } from "../auth-provider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRestaurantData } from "@/lib/client-data";
 
 type OrderWithTable = Order & { table?: Table };
 
@@ -51,14 +52,16 @@ function PrintInvoiceButton({ order, settings }: { order: OrderWithTable, settin
     )
 }
 
-function UpdateStatusButton({ order, currentStatus }: { order: Order; currentStatus: OrderStatus }) {
+function UpdateStatusButton({ order, currentStatus, restaurantId }: { order: Order; currentStatus: OrderStatus, restaurantId: string }) {
     const nextStatusMap: Partial<Record<OrderStatus, OrderStatus>> = {
         received: 'preparing',
         preparing: 'ready',
     };
 
     const nextStatus = nextStatusMap[currentStatus];
-    const updateStatus = updateOrderStatusAction.bind(null, order.id);
+    const updateStatus = async (formData: FormData) => {
+        await updateOrderStatusAction(order.id, formData);
+    };
 
     const allItemsReady = order.items.filter(i => i.status !== 'cancelled').every(item => item.isReady);
 
@@ -82,6 +85,7 @@ function UpdateStatusButton({ order, currentStatus }: { order: Order; currentSta
 
     return (
         <form action={updateStatus} className="flex flex-col gap-2 w-full">
+            <input type="hidden" name="restaurantId" value={restaurantId} />
             {nextStatus && (
                 <Button
                     type="submit"
@@ -111,8 +115,10 @@ function UpdateStatusButton({ order, currentStatus }: { order: Order; currentSta
     );
 }
 
-function CancelItemButton({ orderId, orderItemId }: { orderId: string; orderItemId: string }) {
-    const cancelItem = cancelOrderItemAction.bind(null, orderId, orderItemId);
+function CancelItemButton({ orderId, orderItemId, restaurantId }: { orderId: string; orderItemId: string, restaurantId: string }) {
+    const cancelItem = async () => {
+        await cancelOrderItemAction(orderId, orderItemId, restaurantId);
+    };
     return (
         <form action={cancelItem}>
             <Button type="submit" size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive">
@@ -126,6 +132,7 @@ function CancelItemButton({ orderId, orderItemId }: { orderId: string; orderItem
 
 export default function AdminKitchenPage() {
     const { user } = useAuth();
+    const { getActiveOrders, getSettings, getTableById, getBranches, getMainBranch, restaurantId } = useRestaurantData();
     const [orders, setOrders] = useState<OrderWithTable[]>([]);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [allBranches, setAllBranches] = useState<Branch[]>([]);
@@ -157,7 +164,7 @@ export default function AdminKitchenPage() {
         if (isInitialFetch) {
             setIsLoading(false);
         }
-    }, []);
+    }, [getActiveOrders, getTableById]);
 
     useEffect(() => {
         async function fetchInitialData() {
@@ -187,7 +194,7 @@ export default function AdminKitchenPage() {
             }
         }
         fetchInitialData();
-    }, [user, canManageAllBranches]);
+    }, [user, canManageAllBranches, getMainBranch, getBranches]);
 
     useEffect(() => {
         if (selectedBranchId) {
@@ -196,7 +203,7 @@ export default function AdminKitchenPage() {
             const interval = setInterval(() => fetchOrders(selectedBranchId, false), 5000); // Subsequent fetches without loading state
             return () => clearInterval(interval);
         }
-    }, [selectedBranchId, fetchOrders]);
+    }, [selectedBranchId, fetchOrders, getSettings]);
 
 
     const getOrderTitle = (order: OrderWithTable) => {
@@ -343,7 +350,7 @@ export default function AdminKitchenPage() {
                                                 ) : (
                                                     <>
                                                         <span className="font-mono text-right">{currencySymbol}{(item.quantity * item.price).toFixed(currencyDecimalPlaces)}</span>
-                                                        <CancelItemButton orderId={order.id} orderItemId={item.orderItemId} />
+                                                        <CancelItemButton orderId={order.id} orderItemId={item.orderItemId} restaurantId={restaurantId} />
                                                     </>
                                                 )}
                                             </div>
@@ -359,7 +366,7 @@ export default function AdminKitchenPage() {
                                 {order.status !== 'completed' && order.status !== 'cancelled' && (
                                     <PrintInvoiceButton order={order} settings={settings} />
                                 )}
-                                <UpdateStatusButton order={order} currentStatus={order.status} />
+                                <UpdateStatusButton order={order} currentStatus={order.status} restaurantId={restaurantId} />
                             </CardFooter>
                         </Card>
                     ))}
