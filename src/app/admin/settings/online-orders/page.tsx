@@ -1,19 +1,18 @@
 
-
 'use client';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { RestaurantSettings, Branch } from '@/lib/definitions';
-import { getBranchById } from '@/lib/data';
+import type { Branch } from '@/lib/definitions';
 import { updateSettingsAction } from '@/lib/actions';
 import { useFormStatus } from 'react-dom';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { Switch } from '@/components/ui/switch';
 import { useSearchParams } from 'next/navigation';
+import { useRestaurantData } from '@/lib/client-data';
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -27,6 +26,7 @@ function SubmitButton() {
 export default function OnlineOrderSettingsPage() {
     const searchParams = useSearchParams();
     const branchId = searchParams.get('branchId');
+    const { getBranchById, restaurantId } = useRestaurantData();
     const [branch, setBranch] = useState<Branch | null>(null);
     const { toast } = useToast();
 
@@ -39,6 +39,7 @@ export default function OnlineOrderSettingsPage() {
     const handleFormAction = async (formData: FormData) => {
         const onlineOrderingEnabled = formData.get('onlineOrderingEnabledSwitch') === 'on';
         formData.append('onlineOrderingEnabled', String(onlineOrderingEnabled));
+        formData.append('restaurantId', restaurantId);
 
         await updateSettingsAction(formData);
         toast({

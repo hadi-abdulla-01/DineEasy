@@ -1,7 +1,6 @@
 
 
 'use client';
-import { getTables, getActiveOrders } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { Users, XCircle } from "lucide-react";
 import { useEffect, useState, type CSSProperties } from "react";
@@ -12,6 +11,7 @@ import { DndContext, useDraggable, type DragEndEvent, type DragStartEvent } from
 import { restrictToWindowEdges } from '@dnd-kit/modifiers';
 import { updateTablePositionAction, updateTableStatusAction } from "@/lib/actions";
 import { Button } from "./ui/button";
+import { useRestaurantData } from '@/lib/client-data';
 
 type TableWithOrders = Table & {
   orders: Order[];
@@ -99,6 +99,7 @@ export default function DraggableTableLayout({ branchId }: { branchId?: string }
   const { toast } = useToast();
   const previousOrderIds = useState(new Set<string>())[0];
   const [isDragging, setIsDragging] = useState(false);
+  const { getTables, getActiveOrders, restaurantId } = useRestaurantData();
 
   const fetchData = async () => {
     if (!branchId) return;
@@ -148,7 +149,7 @@ export default function DraggableTableLayout({ branchId }: { branchId?: string }
     const interval = setInterval(fetchData, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId]);
+  }, [branchId, restaurantId]); // Add restaurantId dependency
   
   function handleDragStart(event: DragStartEvent) {
     setIsDragging(true);
@@ -176,13 +177,13 @@ export default function DraggableTableLayout({ branchId }: { branchId?: string }
             x: finalTable.pos.x + delta.x,
             y: finalTable.pos.y + delta.y
         }
-        updateTablePositionAction(tableIdToMove, newPos);
+        updateTablePositionAction(tableIdToMove, newPos, restaurantId);
     }
     setIsDragging(false);
   }
 
   const handleCancelOrder = async (tableId: string) => {
-    await updateTableStatusAction(tableId, 'available');
+    await updateTableStatusAction(tableId, 'available', restaurantId);
     toast({
         title: "Orders Cancelled",
         description: `All active orders for the table have been cancelled.`,

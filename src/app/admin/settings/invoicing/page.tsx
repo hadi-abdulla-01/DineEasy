@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -9,12 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import type { Branch, InvoiceSettings } from '@/lib/definitions';
-import { getBranchById } from '@/lib/data';
 import { updateSettingsAction } from '@/lib/actions';
 import { useFormStatus } from 'react-dom';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useRestaurantData } from '@/lib/client-data';
 
 const defaultInvoiceSettings: InvoiceSettings = {
     useUnifiedNumbering: true,
@@ -36,6 +35,7 @@ function SubmitButton() {
 export default function InvoiceSettingsPage() {
     const searchParams = useSearchParams();
     const branchId = searchParams.get('branchId');
+    const { getBranchById, restaurantId } = useRestaurantData();
     const [branch, setBranch] = useState<Branch | null>(null);
     const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings>(defaultInvoiceSettings);
     const [isLoading, setIsLoading] = useState(true);
@@ -64,6 +64,7 @@ export default function InvoiceSettingsPage() {
         const newFormData = new FormData();
         newFormData.append('invoiceSettings', JSON.stringify(invoiceSettings));
         newFormData.append('branchId', branchId!);
+        newFormData.append('restaurantId', restaurantId);
         
         await updateSettingsAction(newFormData);
         toast({

@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -8,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { RestaurantSettings, Tax, Branch } from '@/lib/definitions';
-import { getSettings, getBranchById } from '@/lib/data';
 import { updateSettingsAction } from '@/lib/actions';
 import { useFormStatus } from 'react-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { useSearchParams } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { COMMON_TIMEZONES } from '@/lib/format-date';
+import { useRestaurantData } from '@/lib/client-data';
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -31,6 +30,7 @@ function SubmitButton() {
 export default function GeneralSettingsPage() {
     const searchParams = useSearchParams();
     const branchId = searchParams.get('branchId');
+    const { getBranchById, restaurantId } = useRestaurantData();
     const [branch, setBranch] = useState<Branch | null>(null);
     const [taxes, setTaxes] = useState<Tax[]>([]);
     const { toast } = useToast();
@@ -50,6 +50,7 @@ export default function GeneralSettingsPage() {
             newFormData.append(key, value);
         }
         newFormData.append('taxes', JSON.stringify(taxes));
+        newFormData.append('restaurantId', restaurantId);
 
         await updateSettingsAction(newFormData);
         toast({

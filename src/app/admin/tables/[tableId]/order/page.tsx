@@ -1,12 +1,15 @@
 
-import { getMenuItems, getTableById, getActiveOrders } from "@/lib/data";
+'use client';
+
 import { OrderForm } from "@/components/order-form";
-import { notFound } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { OrderStatusBadge } from "@/components/order-status-badge";
-import { CheckCircle } from "lucide-react";
-import type { Order } from "@/lib/definitions";
+import { CheckCircle, LoaderCircle } from "lucide-react";
+import type { Order, Table, MenuItem } from "@/lib/definitions";
+import { useEffect, useState } from "react";
+import { useRestaurantData } from "@/lib/client-data";
 
 type AdminOrderPageProps = {
     params: {
@@ -49,16 +52,61 @@ function CurrentOrderDisplay({ orders }: { orders: Order[] }) {
     );
 }
 
-export default async function AdminOrderPage(props: AdminOrderPageProps) {
-    const params = await props.params;
+export default function AdminOrderPage() {
+    const params = useParams();
     const { tableId } = params;
-    const menuItems = await getMenuItems();
-    const table = await getTableById(tableId);
-    const activeOrders = await getActiveOrders();
-    const ordersForTable = activeOrders.filter(order => order.tableId === tableId);
+    const { getMenuItems, getTableById, getActiveOrders } = useRestaurantData();
+    const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+    const [table, setTable] = useState<Table | null>(null);
+    const [ordersForTable, setOrdersForTable] = useState<Order[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        async function loadData() {
+            if (typeof tableId !== 'string') {
+                setIsLoading(false);
+                return;
+            }
+
+            setIsLoading(true);
+
+            try {
+                const [fetchedTable, fetchedMenuItems, activeOrders] = await Promise.all([
+                    getTableById(tableId),
+                    getMenuItems(),
+                    getActiveOrders()
+                ]);
+
+                if (!fetchedTable) {
+                    notFound();
+                    return;
+                }
+
+                setTable(fetchedTable);
+                setMenuItems(fetchedMenuItems);
+                setOrdersForTable(activeOrders.filter(order => order.tableId === tableId));
+            } catch (error) {
+                console.error("Failed to load order page data:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+        loadData();
+    }, [tableId, getTableById, getMenuItems, getActiveOrders]);
+
+    if (isLoading) {
+        return (
+            <div className="flex h-[80vh] items-center justify-center">
+                <div className="flex flex-col items-center gap-2">
+                    <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
+                    <p className="text-muted-foreground">Loading order screen...</p>
+                </div>
+            </div>
+        );
+    }
 
     if (!table) {
-        notFound();
+        return notFound();
     }
 
     const pageTitle = ordersForTable.length > 0 ? `Add to Order for Table ${table.number}` : `Place New Order for Table ${table.number}`;
@@ -73,7 +121,7 @@ export default async function AdminOrderPage(props: AdminOrderPageProps) {
 
             <CurrentOrderDisplay orders={ordersForTable} />
 
-            <OrderForm menu={menuItems} tableId={tableId} isCustomerFacing={false} />
+            <OrderForm menu={menuItems} tableId={table.id} isCustomerFacing={false} />
         </div>
     )
 }

@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { z } from 'zod';
@@ -17,7 +18,7 @@ import {
     addRemoteOrder,
     getOrdersByTableId,
     cancelOrdersForTable,
-    createKitchenUser,
+    createKitchenUserInFirestore,
     updateKitchenUser,
     deleteKitchenUser,
     updateOrderItemStatus,
@@ -38,6 +39,7 @@ import {
     getTableById,
     logActivity,
     getKitchenUserById,
+    getBranchById,
 } from './data';
 
 
@@ -322,11 +324,13 @@ export async function addMenuItemAction(formData: FormData) {
             return;
         }
 
-        await addMenuItem(newItemData, restaurantId);
+        const newItem = await addMenuItem(newItemData, restaurantId);
         revalidatePath('/admin/menu');
         revalidatePath('/order', 'layout');
         revalidatePath('/admin/user-management');
+        return newItem;
     }
+    return undefined;
 }
 
 export async function updateMenuItemAction(itemId: string, formData: FormData) {
@@ -468,27 +472,29 @@ type CreateUserState = {
 } | undefined;
 
 
-export async function createKitchenUserAction(prevState: CreateUserState, formData: FormData): Promise<CreateUserState> {
+export async function createKitchenUserAction(restaurantId: string, formData: FormData): Promise<CreateUserState> {
     const username = formData.get('username') as string;
     const password = formData.get('password') as string;
     const role = formData.get('role') as UserRole;
     const branchId = formData.get('branchId') as string;
-    const restaurantId = formData.get('restaurantId') as string; // Need to pass this from the form
     let categories = formData.getAll('categories').map(String);
     const permissionsString = formData.get('permissions') as string | null;
     const createdBy = formData.get('createdBy') as string | null;
 
-
     if (!username || !password || !role || !branchId) {
         return { message: "Missing required fields." };
+    }
+
+    if (!restaurantId) {
+        return { message: "Could not determine restaurant for this action." };
     }
 
     if (password.length < 6) {
         return { message: "Password must be at least 6 characters." };
     }
 
-    // Check for unique username
-    const existingUser = await getKitchenUserByUsername(username);
+    // Check for unique username within the restaurant
+    const existingUser = await getKitchenUserByUsername(username, restaurantId);
     if (existingUser) {
         return { message: "Username already exists. Please choose a different one." };
     }
@@ -502,13 +508,9 @@ export async function createKitchenUserAction(prevState: CreateUserState, formDa
     const uniqueCategories = Array.from(new Set(categories));
 
     try {
-        // Import auth utilities
         const { createAuthUser } = await import('@/lib/auth');
         const { generateUserEmail } = await import('@/lib/auth-utils');
 
-        // Generate email based on username and restaurant ID
-        // For admin role, use admin@restaurantid.dineezee
-        // For other roles, use username@restaurantid.dineezee
         const email = generateUserEmail(username, restaurantId, role === 'Admin');
 
         // Create user in Firebase Auth and Firestore
@@ -519,7 +521,7 @@ export async function createKitchenUserAction(prevState: CreateUserState, formDa
             role,
             permissions,
             branchId
-        });
+        }, restaurantId); // Pass restaurantId to auth function
 
         if (!authResult.success) {
             return { message: authResult.error || "Failed to create user in Firebase Auth." };

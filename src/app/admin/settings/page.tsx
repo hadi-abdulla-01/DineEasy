@@ -1,14 +1,15 @@
+
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Settings, ChevronRight, QrCode, ShoppingBasket, Globe, FileText, Printer, GitBranch, Building, Clock, Tag } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from '@/app/admin/auth-provider';
-import { getBranches, getMainBranch } from '@/lib/data';
 import { useEffect, useState } from 'react';
 import type { Branch } from '@/lib/definitions';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { useRestaurantData } from "@/lib/client-data";
 
 const restaurantSettingsSections = [
     {
@@ -89,15 +90,20 @@ const branchSettingsSections = [
 
 export default function SettingsPage() {
     const { user } = useAuth();
+    const { getBranches, getMainBranch, restaurantId } = useRestaurantData();
     const [mainBranch, setMainBranch] = useState<Branch | null>(null);
     const [branches, setBranches] = useState<Branch[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<string | undefined>(undefined);
 
     useEffect(() => {
         async function fetchData() {
-            if (!user) return;
-            const fetchedBranches = await getBranches();
-            const fetchedMainBranch = await getMainBranch();
+            if (!user || !restaurantId) return;
+
+            const [fetchedBranches, fetchedMainBranch] = await Promise.all([
+                getBranches(),
+                getMainBranch()
+            ]);
+            
             setBranches(fetchedBranches);
             setMainBranch(fetchedMainBranch);
 
@@ -111,7 +117,7 @@ export default function SettingsPage() {
             }
         }
         fetchData();
-    }, [user]);
+    }, [user, restaurantId]);
 
     if (!user) return null;
 

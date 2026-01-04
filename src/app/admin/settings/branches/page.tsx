@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Branch } from '@/lib/definitions';
-import { getBranches } from '@/lib/data';
 import { createBranchAction, deleteBranchAction, setMainBranchAction } from '@/lib/actions';
 import { useFormStatus } from 'react-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -31,13 +30,15 @@ export default function BranchManagementPage() {
     const { getBranches, restaurantId } = useRestaurantData();
 
     const fetchBranches = async () => {
-        const branchData = await getBranches();
-        setBranches(branchData);
+        if(restaurantId) {
+            const branchData = await getBranches();
+            setBranches(branchData);
+        }
     };
 
     useEffect(() => {
         fetchBranches();
-    }, [getBranches]);
+    }, [restaurantId]);
 
     const handleAddBranch = async (formData: FormData) => {
         formData.append('restaurantId', restaurantId);
@@ -62,6 +63,8 @@ export default function BranchManagementPage() {
         toast({ title: "Main Branch Updated" });
         fetchBranches();
     }
+
+    if (!restaurantId) return <div>Loading...</div>;
 
     return (
         <div className="space-y-8">

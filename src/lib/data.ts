@@ -21,6 +21,7 @@ import {
     Timestamp,
     deleteField,
     runTransaction,
+    collectionGroup,
 } from 'firebase/firestore';
 
 // Removed hardcoded RESTAURANT_ID - now using dynamic restaurant ID from context
@@ -57,13 +58,13 @@ function docToObj<T>(d: any): T {
     return { ...data, id: d.id } as T;
 }
 
-async function seedInitialAdminUser() {
-    const adminUser = await getKitchenUserByUsername('admin');
+async function seedInitialAdminUser(restaurantId: string = 'dineeasee-restaurant') {
+    const adminUser = await getKitchenUserByUsername('admin', restaurantId);
     if (!adminUser) {
         console.log("No admin user found. Seeding initial admin user.");
-        const mainBranch = await getMainBranch();
+        const mainBranch = await getMainBranch(restaurantId);
         if (mainBranch) {
-            await createKitchenUser({
+            await createKitchenUserInFirestore({
                 username: 'admin',
                 password: 'admin123', // In a real app, this should be securely hashed
                 categories: ['All'],
@@ -82,20 +83,20 @@ async function seedInitialAdminUser() {
                     userManagement: { view: true, create: true, edit: true, delete: true },
                     settings: { view: true, edit: true },
                 }
-            });
+            }, restaurantId);
         } else {
             console.error("Could not create admin user: No main branch found.");
         }
     }
 }
 
-async function seedInitialOrder() {
-    const orders = await getOrders();
+async function seedInitialOrder(restaurantId: string = 'dineeasee-restaurant') {
+    const orders = await getOrders(undefined, restaurantId);
     if (orders.length === 0) {
         console.log("No orders found. Seeding a sample order.");
-        const mainBranch = await getMainBranch();
-        const menuItems = await getMenuItems(mainBranch?.id);
-        let tables = await getTables(mainBranch?.id);
+        const mainBranch = await getMainBranch(restaurantId);
+        const menuItems = await getMenuItems(mainBranch?.id, restaurantId);
+        let tables = await getTables(mainBranch?.id, restaurantId);
 
         if (!mainBranch) {
             console.error("Cannot seed order: Main branch not found.");
@@ -104,8 +105,8 @@ async function seedInitialOrder() {
 
         if (tables.length === 0) {
             console.log("No tables found for main branch. Seeding a sample table.");
-            await createTable(1, mainBranch.id);
-            tables = await getTables(mainBranch.id);
+            await createTable(1, mainBranch.id, restaurantId);
+            tables = await getTables(mainBranch.id, restaurantId);
         }
 
         if (menuItems.length > 0 && tables.length > 0) {
@@ -128,7 +129,7 @@ async function seedInitialOrder() {
                 items: sampleItems,
                 orderType: 'Dine-in',
                 notes: 'This is a sample order created automatically.'
-            });
+            }, restaurantId);
         } else {
             console.error("Cannot seed order: No menu items or tables found for the main branch.");
         }
@@ -179,7 +180,8 @@ export async function getSettings(branchId?: string, restaurantId: string = 'din
     }
 
     // Check cache first
-    if (settingsCache[branchId]) return settingsCache[branchId];
+    const cacheKey = `${restaurantId}-${branchId}`;
+    if (settingsCache[cacheKey]) return settingsCache[cacheKey];
 
     // 2. Fetch branch-specific settings
     const branchRef = doc(firestore, `restaurants/${restaurantId}/branches`, branchId);
@@ -215,18 +217,18 @@ export async function getSettings(branchId?: string, restaurantId: string = 'din
     };
 
     // Cache the result
-    settingsCache[branchId] = mergedSettings;
+    settingsCache[cacheKey] = mergedSettings;
     return mergedSettings;
 }
 
 
-async function seedInitialData() {
+async function seedInitialData(restaurantId: string = 'dineeasee-restaurant') {
     // This function will not auto-create a branch. It will only seed
     // other data if a branch *already* exists.
-    const branches = await getBranches();
+    const branches = await getBranches(restaurantId);
     if (branches.length > 0) {
-        await seedInitialAdminUser();
-        await seedInitialOrder();
+        await seedInitialAdminUser(restaurantId);
+        await seedInitialOrder(restaurantId);
     }
 }
 
@@ -241,7 +243,7 @@ export async function updateSettings(branchId: string | undefined, newSettings: 
             updatePayload.qrCodeLogo = deleteField();
         }
         await updateDoc(branchRef, updatePayload);
-        delete settingsCache[branchId]; // Invalidate cache
+        delete settingsCache[`${restaurantId}-${branchId}`]; // Invalidate cache
     } else {
         // Otherwise, it's a global restaurant setting update
         const restaurantRef = doc(firestore, 'restaurants', restaurantId);
@@ -429,14 +431,62 @@ export async function getTables(branchId?: string, restaurantId: string = 'dinee
     const snapshot = await getDocs(q);
     const tables = snapshot.docs.map(d => docToObj<Table>(d));
     // Sort in application code to avoid needing a composite index
-    return tables.sort((a, b) => a.number - b.number);
+    return tables.sort((a, b) => (a.number && b.number) ? a.number - b.number : -1);
 }
 export async function getTableById(id: string, restaurantId: string = 'dineeasee-restaurant'): Promise<Table | undefined> {
-    if (!id) return undefined;
-    const firestore = getFirestoreInstance();
-    const docRef = doc(firestore, `restaurants/${restaurantId}/tables`, id);
-    const docSnap = await getDoc(docRef);
-    return docToObj<Table>(docSnap);
+    try {
+        if (!id) return undefined;
+        const firestore = getFirestoreInstance();
+
+        // 1. Try default path first (optimization)
+        const docRef = doc(firestore, `restaurants/${restaurantId}/tables`, id);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const table = docToObj<Table>(docSnap);
+            if (!table.restaurantId) {
+                table.restaurantId = restaurantId;
+            }
+            return table;
+        }
+
+        console.log(`[getTableById] Table not found in default path, trying global iterative lookup for ID: ${id}`);
+
+        // 2. Global lookup via Iteration over Restaurants
+        // Queries all restaurants and checks for the table in each.
+        // Fallback for when collectionGroup queries are unreliable or restricted.
+
+        const restaurantsRef = collection(firestore, 'restaurants');
+        const restaurantsSnap = await getDocs(restaurantsRef);
+
+        // This is not efficient for scaling but robust for small number of tenants.
+        const checks = restaurantsSnap.docs.map(async (rDoc) => {
+            if (rDoc.id === restaurantId) return null; // Already checked
+
+            const tRef = doc(firestore, `restaurants/${rDoc.id}/tables`, id);
+            const tSnap = await getDoc(tRef);
+            if (tSnap.exists()) {
+                const t = docToObj<Table>(tSnap);
+                t.restaurantId = rDoc.id;
+                return t;
+            }
+            return null;
+        });
+
+        const results = await Promise.all(checks);
+        const found = results.find(r => r !== null);
+
+        if (found) {
+            console.log(`[getTableById] Found table via iterative lookup in restaurant: ${found.restaurantId}`);
+            return found;
+        }
+
+        console.error(`[getTableById] Table not found globally: ${id}`);
+        return undefined;
+    } catch (error) {
+        console.error("[getTableById] Critical error fetching table:", error);
+        throw error;
+    }
 }
 export async function createTable(tableNumber: number, branchId: string, restaurantId: string = 'dineeasee-restaurant'): Promise<Table> {
     const tablesRef = getCollections(restaurantId).tables;
@@ -747,7 +797,7 @@ export async function getRemoteOrderById(id: string, restaurantId: string = 'din
     return docToObj<RemoteOrder>(docSnap);
 }
 
-export async function addRemoteOrder(orderData: Omit<RemoteOrder, 'id' | 'createdAt' | 'paymentMethod' | 'items' | 'taxes' | 'totalTaxAmount' | 'total' | 'subtotal'> & { items: Omit<OrderItem, 'orderItemId' | 'category' | 'isReady' | 'status' | 'selectedAddons' | 'notes'>[] }, restaurantId: string = 'dineeasee-restaurant'): Promise<RemoteOrder> {
+export async function addRemoteOrder(orderData: Omit<RemoteOrder, 'id' | 'createdAt' | 'paymentMethod' | 'items' | 'taxes' | 'totalTaxAmount' | 'total' | 'subtotal'> & { items: Omit<OrderItem, 'orderItemId' | 'category' | 'isReady' | 'status' | 'selectedAddons' | 'notes'>[], takeAwayTime?: string }, restaurantId: string = 'dineeasee-restaurant'): Promise<RemoteOrder> {
     const firestore = getFirestoreInstance();
     const { invoiceNumber } = await generateInvoiceNumberForType(orderData.orderType, orderData.branchId, restaurantId);
     const settings = await getSettings(orderData.branchId, restaurantId);
@@ -764,9 +814,9 @@ export async function addRemoteOrder(orderData: Omit<RemoteOrder, 'id' | 'create
     const total = subtotal + totalTaxAmount;
 
     // 1. Create RemoteOrder
-    const remoteOrdersRef = getCollections().remoteOrders;
+    const remoteOrdersRef = getCollections(restaurantId).remoteOrders;
     const newRemoteOrderRef = doc(remoteOrdersRef);
-    const remoteOrderPayload = {
+    const remoteOrderPayload: any = {
         ...orderData,
         invoiceNumber,
         subtotal,
@@ -775,19 +825,25 @@ export async function addRemoteOrder(orderData: Omit<RemoteOrder, 'id' | 'create
         total,
         createdAt: serverTimestamp(),
     };
+
+    if (orderData.takeAwayTime) {
+        remoteOrderPayload.takeAwayTime = orderData.takeAwayTime;
+    }
+
+
     batch.set(newRemoteOrderRef, remoteOrderPayload);
 
     // 2. Create standard Order for kitchen view
-    const ordersRef = getCollections().orders;
+    const ordersRef = getCollections(restaurantId).orders;
     const newOrderRef = doc(ordersRef);
-    const orderPayload: Omit<Order, 'id'> = {
-        createdAt: new Date().toISOString(),
+    const orderPayload: Partial<Order> = {
         invoiceNumber,
         status: 'received',
         tableId: 'tbl-remote',
         customerName: orderData.customerDetails.name,
         customerPhone: orderData.customerDetails.phone,
         branchId: orderData.branchId,
+        createdByName: orderData.createdByName,
         items: orderData.items.map((item, index) => ({
             ...item,
             orderItemId: `${newOrderRef.id}-item-${index}`,
@@ -800,7 +856,13 @@ export async function addRemoteOrder(orderData: Omit<RemoteOrder, 'id' | 'create
         totalTaxAmount,
         total,
         orderType: orderData.orderType,
+        createdAt: new Date().toISOString(),
     };
+
+    if (orderData.takeAwayTime) {
+        orderPayload.takeAwayTime = orderData.takeAwayTime;
+    }
+
     batch.set(newOrderRef, { ...orderPayload, createdAt: serverTimestamp() });
 
     await batch.commit();
@@ -844,7 +906,7 @@ export async function getKitchenUserByEmail(email: string, restaurantId: string 
 }
 
 
-export async function createKitchenUser(userData: Omit<KitchenUser, 'id'>, restaurantId: string = 'dineeasee-restaurant'): Promise<KitchenUser> {
+export async function createKitchenUserInFirestore(userData: Omit<KitchenUser, 'id'>, restaurantId: string = 'dineeasee-restaurant'): Promise<KitchenUser> {
     const kitchenUsersRef = getCollections(restaurantId).kitchenUsers;
     const newUserPayload = {
         ...userData,
@@ -893,8 +955,8 @@ export async function updateOrderDetails(orderId: string, orderType: Order['orde
 /**
  * Get current active session based on time or manual override
  */
-export async function getCurrentSession(branchId: string): Promise<MealSession | null> {
-    const settings = await getSettings(branchId);
+export async function getCurrentSession(branchId: string, restaurantId: string = 'dineeasee-restaurant'): Promise<MealSession | null> {
+    const settings = await getSettings(branchId, restaurantId);
     if (!settings.mealSessions || settings.mealSessions.length === 0) {
         return null;
     }
@@ -914,7 +976,7 @@ export async function getCurrentSession(branchId: string): Promise<MealSession |
     const now = new Date();
 
     // Convert current time to the restaurant's timezone
-    const { toZonedTime } = require('date-fns-tz');
+    const { toZonedTime } = await import('date-fns-tz');
     const zonedNow = toZonedTime(now, timezone);
     const currentMinutes = zonedNow.getHours() * 60 + zonedNow.getMinutes();
 
@@ -944,8 +1006,8 @@ export async function getCurrentSession(branchId: string): Promise<MealSession |
  * Get menu items filtered by current session
  * Items with no assigned sessions are always available
  */
-export async function getAvailableMenuItemsForSession(branchId: string, sessionId?: string): Promise<MenuItem[]> {
-    const allItems = await getMenuItems(branchId);
+export async function getAvailableMenuItemsForSession(branchId: string, sessionId?: string, restaurantId: string = 'dineeasee-restaurant'): Promise<MenuItem[]> {
+    const allItems = await getMenuItems(branchId, restaurantId);
 
     // If no session specified, return all items
     if (!sessionId) {
@@ -1073,7 +1135,7 @@ export async function getActivityLogs(limitCount: number = 20, restaurantId: str
 
 export async function getActivityLogsByUser(userId: string, restaurantId: string = 'dineeasee-restaurant'): Promise<ActivityLog[]> {
     const activityLogsRef = getCollections(restaurantId).activityLogs;
-    const q = query(activityLogsRef, where('userId', '==', userId));
+    const q = query(activityLogsRef, where('userId', '==', userId), orderBy('timestamp', 'desc'));
     const snapshot = await getDocs(q);
     const logs = snapshot.docs.map(d => docToObj<ActivityLog>(d));
     // Sort in code to avoid needing a composite index
@@ -1083,3 +1145,4 @@ export async function getActivityLogsByUser(userId: string, restaurantId: string
 
 // Ensure initial data is seeded on startup
 seedInitialData();
+

@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -45,7 +46,7 @@ export default function CategoriesPage() {
             }
         }
         fetchData();
-    }, [user, searchParams, restaurantId, getMainBranch, getSettings]);
+    }, [user, searchParams, restaurantId]);
 
     const handleAddCategory = async (e: React.FormEvent) => {
         e.preventDefault();

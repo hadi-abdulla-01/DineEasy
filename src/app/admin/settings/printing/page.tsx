@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -8,13 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import type { Branch, PrintSettings, PrintSize } from '@/lib/definitions';
-import { getBranchById } from '@/lib/data';
 import { updateSettingsAction } from '@/lib/actions';
 import { useFormStatus } from 'react-dom';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { Separator } from '@/components/ui/separator';
 import { useSearchParams } from 'next/navigation';
+import { useRestaurantData } from '@/lib/client-data';
 
 const defaultPrintSettings: PrintSettings = {
     invoicePrintSize: 'a4',
@@ -35,6 +34,7 @@ function SubmitButton() {
 export default function PrintingSettingsPage() {
     const searchParams = useSearchParams();
     const branchId = searchParams.get('branchId');
+    const { getBranchById, restaurantId } = useRestaurantData();
     const [branch, setBranch] = useState<Branch | null>(null);
     const [printSettings, setPrintSettings] = useState<PrintSettings>(defaultPrintSettings);
     const [isLoading, setIsLoading] = useState(true);
@@ -59,6 +59,7 @@ export default function PrintingSettingsPage() {
         const newFormData = new FormData();
         newFormData.append('printSettings', JSON.stringify(printSettings));
         newFormData.append('branchId', branchId!);
+        newFormData.append('restaurantId', restaurantId);
         
         await updateSettingsAction(newFormData);
         toast({

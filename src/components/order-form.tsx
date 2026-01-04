@@ -292,9 +292,9 @@ function MenuDisplay({ isCustomerFacing, menu, onSelectItem, getQuantity, onAddT
 }
 
 
-export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existingOrder, currentSession, customerInfo }: { menu: MenuItem[]; tableId: string, isCustomerFacing: boolean, existingOrder?: Order, currentSession?: MealSession | null, customerInfo?: {name: string, phone: string} }) {
+export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existingOrder, currentSession, customerInfo, settings, restaurantId }: { menu: MenuItem[]; tableId: string, isCustomerFacing: boolean, existingOrder?: Order, currentSession?: MealSession | null, customerInfo?: { name: string, phone: string }, settings: RestaurantSettings | null, restaurantId?: string }) {
   const [cart, setCart] = useState<OrderItem[]>([]);
-  const [settings, setSettings] = useState<RestaurantSettings | null>(null);
+  // const [settings, setSettings] = useState<RestaurantSettings | null>(null); // Removed local state
   const [table, setTable] = useState<{ id: string, branchId: string } | null>(null);
   const [selectedItemForDetails, setSelectedItemForDetails] = useState<MenuItem | null>(null);
   const [selectedItemForAddons, setSelectedItemForAddons] = useState<MenuItem | null>(null);
@@ -304,25 +304,21 @@ export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existi
       const fetchedTable = await getTableById(tableId);
       if (fetchedTable) {
         setTable({ id: fetchedTable.id, branchId: fetchedTable.branchId });
-        const fetchedSettings = await getSettings(fetchedTable.branchId);
-        setSettings(fetchedSettings);
-      } else {
-        getSettings().then(setSettings);
       }
     }
     fetchData();
   }, [tableId]);
-  
+
 
   const getAddonCombinationId = (selectedAddons?: Record<string, AddonOption>): string => {
     if (!selectedAddons || Object.keys(selectedAddons).length === 0) {
-        return 'base';
+      return 'base';
     }
     // Create a stable ID from sorted addon group and option IDs
     return Object.keys(selectedAddons)
-        .sort()
-        .map(groupId => `${groupId}:${selectedAddons[groupId].id}`)
-        .join(';');
+      .sort()
+      .map(groupId => `${groupId}:${selectedAddons[groupId].id}`)
+      .join(';');
   };
 
   const handleAddToCart = (menuItem: MenuItem, selectedAddons?: Record<string, AddonOption>) => {
@@ -330,44 +326,44 @@ export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existi
     const orderItemId = `${menuItem.id}-${addonId}`;
 
     setCart((prevCart) => {
-        const existingItem = prevCart.find(item => item.orderItemId === orderItemId);
+      const existingItem = prevCart.find(item => item.orderItemId === orderItemId);
 
-        if (existingItem) {
-            // Item with same addons exists, just increment quantity
-            return prevCart.map(item =>
-                item.orderItemId === orderItemId
-                    ? { ...item, quantity: item.quantity + 1 }
-                    : item
-            );
-        } else {
-            // Item is new or has a new combination of addons
-            let notes = '';
-            let addonPrice = 0;
+      if (existingItem) {
+        // Item with same addons exists, just increment quantity
+        return prevCart.map(item =>
+          item.orderItemId === orderItemId
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      } else {
+        // Item is new or has a new combination of addons
+        let notes = '';
+        let addonPrice = 0;
 
-            if (selectedAddons && Object.keys(selectedAddons).length > 0) {
-                notes = Object.entries(selectedAddons).map(([groupId, option]) => {
-                    const group = menuItem.addonGroups?.find(g => g.id === groupId);
-                    return group ? `${group.title}: ${option.name}` : option.name;
-                }).join('; ');
-                addonPrice = Object.values(selectedAddons).reduce((sum, addon) => sum + addon.price, 0);
-            }
-
-            const newOrderItem: OrderItem = {
-                orderItemId: orderItemId,
-                menuItemId: menuItem.id,
-                name: menuItem.name,
-                price: menuItem.price + addonPrice,
-                quantity: 1,
-                category: menuItem.category,
-                isReady: false,
-                status: 'active',
-                notes: notes,
-            };
-
-            return [...prevCart, newOrderItem];
+        if (selectedAddons && Object.keys(selectedAddons).length > 0) {
+          notes = Object.entries(selectedAddons).map(([groupId, option]) => {
+            const group = menuItem.addonGroups?.find(g => g.id === groupId);
+            return group ? `${group.title}: ${option.name}` : option.name;
+          }).join('; ');
+          addonPrice = Object.values(selectedAddons).reduce((sum, addon) => sum + addon.price, 0);
         }
+
+        const newOrderItem: OrderItem = {
+          orderItemId: orderItemId,
+          menuItemId: menuItem.id,
+          name: menuItem.name,
+          price: menuItem.price + addonPrice,
+          quantity: 1,
+          category: menuItem.category,
+          isReady: false,
+          status: 'active',
+          notes: notes,
+        };
+
+        return [...prevCart, newOrderItem];
+      }
     });
-};
+  };
 
   const handleAddMultipleToCart = (menuItem: MenuItem, quantity: number) => {
     if (menuItem.addonGroups && menuItem.addonGroups.length > 0) {
@@ -469,6 +465,7 @@ export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existi
         branchId={table?.branchId}
         settings={settings}
         customerInfo={customerInfo}
+        restaurantId={restaurantId}
       />
 
       {selectedItemForDetails && (

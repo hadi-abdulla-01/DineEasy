@@ -38,10 +38,11 @@ type CartSheetProps = {
   existingOrderId?: string;
   branchId?: string;
   settings: RestaurantSettings | null;
-  customerInfo?: {name: string, phone: string};
+  customerInfo?: { name: string, phone: string };
+  restaurantId?: string;
 };
 
-export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, onNotesChange, onOrderPlaced, existingOrderId, branchId, settings, customerInfo }: CartSheetProps) {
+export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, onNotesChange, onOrderPlaced, existingOrderId, branchId, settings, customerInfo, restaurantId }: CartSheetProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,11 +53,11 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
 
   const handleFormSubmit = async (formData: FormData) => {
     setError(null);
-    
-    if(user?.id) {
-        formData.append('createdBy', user.id);
+
+    if (user?.id) {
+      formData.append('createdBy', user.id);
     }
-    
+
     const state = await placeOrder(null, formData);
 
     if (state?.success && state.orderId) {
@@ -71,7 +72,7 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
         router.push('/admin/table-order');
       }
     } else {
-       setError(state?.message || 'An unexpected error occurred.');
+      setError(state?.message || 'An unexpected error occurred.');
     }
   };
 
@@ -160,19 +161,20 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
           <input type="hidden" name="isCustomerFacing" value={String(isCustomerFacing)} />
           {existingOrderId && <input type="hidden" name="existingOrderId" value={existingOrderId} />}
           {branchId && <input type="hidden" name="branchId" value={branchId} />}
+          {restaurantId && <input type="hidden" name="restaurantId" value={restaurantId} />}
           {customerInfo?.name && <input type="hidden" name="customerName" value={customerInfo.name} />}
           {customerInfo?.phone && <input type="hidden" name="customerPhone" value={customerInfo.phone} />}
-          
+
           {!isCustomerFacing && !customerInfo && (
             <>
-                <div className="space-y-2">
-                    <Label htmlFor="customerName-sheet">Customer Name</Label>
-                    <Input id="customerName-sheet" name="customerName" placeholder="For dine-in" required/>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="customerPhone-sheet">Customer Phone</Label>
-                    <Input id="customerPhone-sheet" name="customerPhone" placeholder="For dine-in" required/>
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="customerName-sheet">Customer Name</Label>
+                <Input id="customerName-sheet" name="customerName" placeholder="For dine-in" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="customerPhone-sheet">Customer Phone</Label>
+                <Input id="customerPhone-sheet" name="customerPhone" placeholder="For dine-in" required />
+              </div>
             </>
           )}
 

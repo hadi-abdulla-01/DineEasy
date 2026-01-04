@@ -1,6 +1,8 @@
 
 'use client';
 import { getActiveOrders, getSettings, getTableById } from "@/lib/data";
+import { collection, query, where, onSnapshot, DocumentSnapshot } from "firebase/firestore";
+import { getClientFirebase } from "@/firebase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { OrderStatusBadge } from "@/components/order-status-badge";
 import { Separator } from "@/components/ui/separator";
@@ -39,6 +41,7 @@ function KitchenTicket({ order, settings, visibleItems }: { order: OrderWithTabl
                 </div>
             )}
         </div>
+
     );
 }
 
@@ -67,41 +70,54 @@ function PrintTicketButton({ order, settings, visibleItems }: { order: OrderWith
     )
 }
 
-function UpdateItemStatusButton({ orderId, orderItemId, isReady }: { orderId: string, orderItemId: string, isReady: boolean }) {
-    const toggleStatus = updateOrderItemStatusAction.bind(null, orderId, orderItemId, !isReady);
+function UpdateItemStatusButton({ orderId, orderItemId, isReady, restaurantId }: { orderId: string, orderItemId: string, isReady: boolean, restaurantId: string }) {
+    const handleToggle = async () => {
+        await updateOrderItemStatusAction(orderId, orderItemId, !isReady, restaurantId);
+    };
 
     return (
-        <form action={toggleStatus}>
-            <Button
-                type="submit"
-                size="sm"
-                variant={isReady ? "outline" : "default"}
-                className={cn("h-8 px-2", isReady && "text-muted-foreground")}
-            >
-                {isReady ? "Mark Unready" : "Mark Ready"}
-            </Button>
-        </form>
+        <Button
+            onClick={handleToggle}
+            size="sm"
+            variant={isReady ? "outline" : "default"}
+            className={cn("h-8 px-2", isReady && "text-muted-foreground")}
+        >
+            {isReady ? "Mark Unready" : "Mark Ready"}
+        </Button>
     );
 }
 
 
-function MarkOrderReadyButton({ order, visibleItems }: { order: Order, visibleItems: OrderItem[] }) {
+function MarkOrderReadyButton({ order, visibleItems, restaurantId }: { order: Order, visibleItems: OrderItem[], restaurantId: string }) {
     // Only verify readiness of VISIBLE items for this kitchen user
     const allVisibleReady = visibleItems.every(item => item.isReady);
-    const updateStatus = updateKitchenOrderStatusAction.bind(null, order.id);
+
+    // We can't easily use form action with data binding AND formData comfortably without hidden inputs or weird binds. 
+    // Direct call is easier.
+    // updateKitchenOrderStatusAction expects FormData. We should use updateOrderStatus or create a new action?
+    // Actually updateKitchenOrderStatusAction implementation:
+    // export async function updateKitchenOrderStatusAction(orderId: string, formData: FormData) {
+    //    const status = formData.get('status') as OrderStatus;
+    //    const restaurantId = formData.get('restaurantId') as string; ...
+    // So if I construct a FormData object client side I can call it.
+    // OR create a wrapper. 
+    // simpler: construct FormData.
+    const handleMarkReady = async () => {
+        const formData = new FormData();
+        formData.append('status', 'ready');
+        formData.append('restaurantId', restaurantId);
+        await updateKitchenOrderStatusAction(order.id, formData);
+    };
 
     return (
-        <form action={updateStatus} className="w-full">
-            <input type="hidden" name="status" value="ready" />
-            <Button
-                type="submit"
-                size="sm"
-                className="w-full"
-                disabled={!allVisibleReady || order.status === 'ready'}
-            >
-                Mark Order Ready
-            </Button>
-        </form>
+        <Button
+            onClick={handleMarkReady}
+            size="sm"
+            className="w-full"
+            disabled={!allVisibleReady || order.status === 'ready'}
+        >
+            Mark Order Ready
+        </Button>
     );
 }
 
@@ -110,28 +126,60 @@ export default function KitchenPage() {
     const [orders, setOrders] = useState<OrderWithTable[]>([]);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
 
-    const fetchOrders = useCallback(async () => {
-        if (!user?.branchId) return;
-        const activeOrders = await getActiveOrders(user.branchId);
-        // Filter out completed/cancelled orders just in case, though getActiveOrders handles it
-        const ordersWithTableData: OrderWithTable[] = await Promise.all(activeOrders.map(async (order) => {
-            let table;
-            if (order.orderType === 'Dine-in' && order.tableId) {
-                table = await getTableById(order.tableId);
-            }
-            return { ...order, table };
-        }));
-        setOrders(ordersWithTableData);
-    }, [user]);
+    // Helper to convert doc to object (client-side)
+    // Helper to convert doc to object (client-side)
+    function docToObj<T>(doc: DocumentSnapshot): T {
+        return {
+            id: doc.id,
+            ...doc.data(),
+        } as T;
+    }
 
     useEffect(() => {
-        if (user?.branchId) {
-            getSettings(user.branchId).then(setSettings);
-            fetchOrders();
-            const interval = setInterval(fetchOrders, 5000); // Polling every 5 sec
-            return () => clearInterval(interval);
-        }
-    }, [user, fetchOrders]);
+        if (!user?.branchId) return;
+
+        const restaurantId = user.restaurantId || 'dineeasee-restaurant';
+        console.log(`[KitchenPage] Using restaurantId: ${restaurantId}`);
+
+        getSettings(user.branchId, restaurantId).then(setSettings);
+
+        const { firestore } = getClientFirebase();
+        // Use restaurant-specific collection
+        const ordersRef = collection(firestore, `restaurants/${restaurantId}/orders`);
+        const q = query(ordersRef, where('status', 'in', ['received', 'preparing', 'ready']));
+
+        const unsubscribe = onSnapshot(q, async (snapshot) => {
+            const activeOrders = snapshot.docs.map(d => docToObj<Order>(d));
+            console.log(`[KitchenPage] Raw active orders fetched: ${activeOrders.length}`);
+            console.log(`[KitchenPage] User Branch ID: ${user.branchId}`);
+
+            // Client-side filtering for branch (TEMPORARILY DISABLED FOR DEBUGGING)
+            const branchOrders = activeOrders
+                // .filter(order => {
+                //     const match = order.branchId === user.branchId;
+                //     if (!match) console.log(`[KitchenPage] Filtering out order ${order.id} due to branch mismatch. Order Branch: ${order.branchId}, User Branch: ${user.branchId}`);
+                //     return match;
+                // })
+                .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+            console.log(`[KitchenPage] Orders (branch filter disabled): ${branchOrders.length}`);
+
+            const ordersWithTableData: OrderWithTable[] = await Promise.all(branchOrders.map(async (order) => {
+                let table;
+                // Pass restaurantId to getTableById
+                if (order.orderType === 'Dine-in' && order.tableId) {
+                    table = await getTableById(order.tableId, restaurantId);
+                }
+                return { ...order, table };
+            }));
+
+            setOrders(ordersWithTableData);
+        }, (error) => {
+            console.error("Error fetching kitchen orders:", error);
+        });
+
+        return () => unsubscribe();
+    }, [user]);
 
     const filteredOrders = useMemo(() => {
         if (!user) return [];
@@ -140,8 +188,10 @@ export default function KitchenPage() {
             // Filter items based on user categories
             const visibleItems = order.items.filter(item => {
                 if (item.status === 'cancelled') return false;
-                if (!user.categories || user.categories.includes('All')) return true;
-                return user.categories.includes(item.category);
+                // TEMPORARILY DISABLED CATEGORY FILTER
+                return true;
+                // if (!user.categories || user.categories.includes('All')) return true;
+                // return user.categories.includes(item.category);
             });
             return { ...order, visibleItems };
         }).filter(order => order.visibleItems.length > 0); // Only show orders with items relevant to this chef
@@ -189,81 +239,89 @@ export default function KitchenPage() {
     }
 
     return (
-        <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredOrders.map((order) => (
-                <Card key={order.id} className={cn("flex flex-col border-2", order.status === 'ready' ? "border-green-500/50 bg-green-500/5" : "border-transparent")}>
-                    <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                            <div>
-                                <CardTitle className="font-headline text-lg flex items-center">
-                                    {getOrderIcon(order)}
-                                    {getOrderTitle(order)}
-                                </CardTitle>
-                                <p className="text-xs text-muted-foreground">#{order.invoiceNumber || order.id.slice(-4)}</p>
-                            </div>
-                            <OrderStatusBadge status={order.status} />
-                        </div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-1 pt-1">
-                            <Clock className="h-3 w-3" />
-                            <span>{formatDistanceInTimezone(order.createdAt, settings.timezone)}</span>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="flex-1 pb-3">
-                        {(order.orderType === 'Online' || order.orderType === 'Take-away') && (
-                            <div className="mb-4 text-sm bg-muted/50 p-2 rounded-md">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <User className="h-4 w-4" /> {order.customerName}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Phone className="h-4 w-4" /> {order.customerPhone}
-                                </div>
-                            </div>
-                        )}
-                        {order.notes && (
-                            <div className="mb-4 text-sm bg-yellow-500/10 text-yellow-600 p-2 rounded-md border border-yellow-500/20">
-                                <div className="flex items-start gap-2">
-                                    <MessageSquare className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                                    <span className="italic font-medium">{order.notes}</span>
-                                </div>
-                            </div>
-                        )}
+        <>
+            {/* Debug Info Overlay */}
+            <div className="fixed bottom-0 left-0 bg-black/80 text-white p-2 text-xs z-50">
+                Debug: Branch={user?.branchId} | Restaurant={user?.restaurantId || 'dineeasee-restaurant'} | Connected={!!user}
+            </div>
 
-                        <Separator className="my-2" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
-                        <ul className="space-y-3">
-                            {order.visibleItems.map((item) => (
-                                <li key={item.orderItemId} className="flex justify-between items-start gap-2 text-sm">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            {item.isReady && <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />}
-                                            <span className={cn("font-medium text-base", item.isReady && "text-muted-foreground line-through")}>
-                                                {item.quantity}x {item.name}
-                                            </span>
-                                        </div>
-                                        {item.notes && (
-                                            <ul className="text-xs text-muted-foreground pl-6 mt-1">
-                                                {item.notes.split(';').map(note => note.trim()).filter(note => note).map((note, index) => {
-                                                    const [group, option] = note.split(':');
-                                                    return (
-                                                        <li key={index} className="list-disc list-outside">
-                                                            <span className="font-semibold italic">{group}:</span> {option}
-                                                        </li>
-                                                    )
-                                                })}
-                                            </ul>
-                                        )}
+                {filteredOrders.map((order) => (
+                    <Card key={order.id} className={cn("flex flex-col border-2", order.status === 'ready' ? "border-green-500/50 bg-green-500/5" : "border-transparent")}>
+                        <CardHeader className="pb-3">
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    <CardTitle className="font-headline text-lg flex items-center">
+                                        {getOrderIcon(order)}
+                                        {getOrderTitle(order)}
+                                    </CardTitle>
+                                    <p className="text-xs text-muted-foreground">#{order.invoiceNumber || order.id.slice(-4)}</p>
+                                </div>
+                                <OrderStatusBadge status={order.status} />
+                            </div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-1 pt-1">
+                                <Clock className="h-3 w-3" />
+                                <span>{formatDistanceInTimezone(order.createdAt, settings.timezone)}</span>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="flex-1 pb-3">
+                            {(order.orderType === 'Online' || order.orderType === 'Take-away') && (
+                                <div className="mb-4 text-sm bg-muted/50 p-2 rounded-md">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <User className="h-4 w-4" /> {order.customerName}
                                     </div>
-                                    <UpdateItemStatusButton orderId={order.id} orderItemId={item.orderItemId} isReady={!!item.isReady} />
-                                </li>
-                            ))}
-                        </ul>
-                    </CardContent>
-                    <CardFooter className="flex flex-col gap-2 pt-0">
-                        <PrintTicketButton order={order} settings={settings} visibleItems={order.visibleItems} />
-                        <MarkOrderReadyButton order={order} visibleItems={order.visibleItems} />
-                    </CardFooter>
-                </Card>
-            ))}
-        </div>
+                                    <div className="flex items-center gap-2">
+                                        <Phone className="h-4 w-4" /> {order.customerPhone}
+                                    </div>
+                                </div>
+                            )}
+                            {order.notes && (
+                                <div className="mb-4 text-sm bg-yellow-500/10 text-yellow-600 p-2 rounded-md border border-yellow-500/20">
+                                    <div className="flex items-start gap-2">
+                                        <MessageSquare className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                        <span className="italic font-medium">{order.notes}</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <Separator className="my-2" />
+
+                            <ul className="space-y-3">
+                                {order.visibleItems.map((item) => (
+                                    <li key={item.orderItemId} className="flex justify-between items-start gap-2 text-sm">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                {item.isReady && <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />}
+                                                <span className={cn("font-medium text-base", item.isReady && "text-muted-foreground line-through")}>
+                                                    {item.quantity}x {item.name}
+                                                </span>
+                                            </div>
+                                            {item.notes && (
+                                                <ul className="text-xs text-muted-foreground pl-6 mt-1">
+                                                    {item.notes.split(';').map(note => note.trim()).filter(note => note).map((note, index) => {
+                                                        const [group, option] = note.split(':');
+                                                        return (
+                                                            <li key={index} className="list-disc list-outside">
+                                                                <span className="font-semibold italic">{group}:</span> {option}
+                                                            </li>
+                                                        )
+                                                    })}
+                                                </ul>
+                                            )}
+                                        </div>
+                                        <UpdateItemStatusButton orderId={order.id} orderItemId={item.orderItemId} isReady={!!item.isReady} restaurantId={user.restaurantId || 'dineeasee-restaurant'} />
+                                    </li>
+                                ))}
+                            </ul>
+                        </CardContent>
+                        <CardFooter className="flex flex-col gap-2 pt-0">
+                            <PrintTicketButton order={order} settings={settings} visibleItems={order.visibleItems} />
+                            <MarkOrderReadyButton order={order} visibleItems={order.visibleItems} restaurantId={user.restaurantId || 'dineeasee-restaurant'} />
+                        </CardFooter>
+                    </Card>
+                ))}
+            </div>
+        </>
     );
 }

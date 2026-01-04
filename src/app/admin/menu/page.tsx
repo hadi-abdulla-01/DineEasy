@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import { placeholderImages } from "@/lib/placeholder-images";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -156,48 +156,49 @@ export default function MenuManagementPage() {
   const [categoryValue, setCategoryValue] = useState<string>("");
   const [branchId, setBranchId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchItems = () => {
-    if (user?.branchId) {
-      getMenuItems(user.branchId).then(items => {
-        setMenuItems(items.sort((a, b) => a.name.localeCompare(b.name)));
-      });
-    } else {
-      // Fallback: fetch all items if no branchId
-      getMenuItems().then(items => {
-        setMenuItems(items.sort((a, b) => a.name.localeCompare(b.name)));
-      });
-    }
-  }
+  const fetchItems = useCallback(() => {
+    if (!branchId) return;
+    setError(null);
+    getMenuItems(branchId).then(items => {
+      setMenuItems(items.sort((a, b) => a.name.localeCompare(b.name)));
+    }).catch(err => {
+      console.error("Failed to fetch menu items:", err);
+      setError("Failed to load menu items.");
+    });
+  }, [branchId, getMenuItems]);
 
   useEffect(() => {
     async function loadData() {
-      let activeBranchId = user?.branchId || null;
+      if (!user || !restaurantId) return;
+      try {
+        let activeBranchId = user.branchId || null; // Use explicit branch if user is branch-locked
 
-      // If no branchId, get main branch
-      if (!activeBranchId) {
-        const mainBranch = await getMainBranch();
-        activeBranchId = mainBranch?.id || null;
+        if (!activeBranchId) {
+          const mainBranch = await getMainBranch();
+          activeBranchId = mainBranch?.id || null;
+        }
+
+        setBranchId(activeBranchId);
+
+        if (activeBranchId) {
+          const s = await getSettings(activeBranchId);
+          setSettings(s);
+        }
+      } catch (err) {
+        console.error("Error loading initial data:", err);
+        setError("Failed to initialize menu management.");
       }
-
-      setBranchId(activeBranchId);
-
-      // Immediately start fetching settings without blocking
-      if (activeBranchId) {
-        getSettings(activeBranchId).then(setSettings);
-      }
     }
+    loadData();
+  }, [user, restaurantId, getMainBranch, getSettings]);
 
-    if (user) {
-      loadData();
-    }
-    // Fetch items regardless of branch load (will fallback to default if user not ready)
-    if (user) {
-      fetchItems();
-    }
-  }, [user, getMainBranch, getMenuItems, getSettings]);
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
 
-  // Get categories from settings
+
   const categories = settings?.menuCategories || ['Meals', 'Snacks', 'Beverages', 'Desserts'];
 
   const handleAddMenuItem = async (formData: FormData) => {
@@ -211,7 +212,6 @@ export default function MenuManagementPage() {
       }
       formData.append('restaurantId', restaurantId);
 
-      // Collect selected sessions
       const selectedSessions: string[] = [];
       if (settings?.mealSessions) {
         settings.mealSessions.forEach(session => {
@@ -221,21 +221,28 @@ export default function MenuManagementPage() {
         });
       }
 
-      // Add sessions as JSON string
       if (selectedSessions.length > 0) {
         formData.append('availableSessions', JSON.stringify(selectedSessions));
       }
 
-      await addMenuItemAction(formData);
-      fetchItems();
-      formRef.current?.reset();
-      setCategoryValue("");
-      setPreviewImage(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
+      const newItem = await addMenuItemAction(formData);
+
+      if (newItem) {
+        setMenuItems(prevItems => [...prevItems, newItem].sort((a, b) => a.name.localeCompare(b.name)));
+        formRef.current?.reset();
+        setCategoryValue("");
+        setPreviewImage(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      } else {
+        // Fallback if action didn't return item (e.g. validation failure on server)
+        fetchItems();
       }
+
     } catch (error) {
       console.error("Failed to add menu item", error);
+      setError("Failed to add item. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -245,6 +252,12 @@ export default function MenuManagementPage() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="bg-destructive/15 text-destructive px-4 py-3 rounded-md flex items-center justify-between">
+          <p>{error}</p>
+          <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      )}
       <Card className="bg-card">
         <CardHeader>
           <CardTitle className="font-headline">Add New Menu Item</CardTitle>

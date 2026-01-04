@@ -7,6 +7,7 @@
 'use client';
 
 import { useRestaurantId } from '@/contexts/restaurant-context';
+import { useMemo } from 'react';
 import * as serverData from './data';
 import type {
     Table,
@@ -27,7 +28,7 @@ import type {
 export function useRestaurantData() {
     const restaurantId = useRestaurantId();
 
-    return {
+    return useMemo(() => ({
         // Tables
         getTables: (branchId?: string) => serverData.getTables(branchId, restaurantId),
         getTableById: (id: string) => serverData.getTableById(id, restaurantId),
@@ -68,7 +69,7 @@ export function useRestaurantData() {
         getKitchenUserById: (id: string) => serverData.getKitchenUserById(id, restaurantId),
         getKitchenUserByUsername: (username: string) => serverData.getKitchenUserByUsername(username, restaurantId),
         getKitchenUserByEmail: (email: string) => serverData.getKitchenUserByEmail(email, restaurantId),
-        createKitchenUser: (user: Omit<KitchenUser, 'id'>) => serverData.createKitchenUser(user, restaurantId),
+        createKitchenUser: (user: Omit<KitchenUser, 'id'>) => serverData.createKitchenUserInFirestore(user, restaurantId),
         updateKitchenUser: (id: string, user: Partial<KitchenUser>) => serverData.updateKitchenUser(id, user, restaurantId),
         deleteKitchenUser: (id: string) => serverData.deleteKitchenUser(id, restaurantId),
 
@@ -92,5 +93,5 @@ export function useRestaurantData() {
 
         // Restaurant ID
         restaurantId,
-    };
+    }), [restaurantId]);
 }

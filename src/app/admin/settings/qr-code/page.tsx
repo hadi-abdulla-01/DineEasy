@@ -1,19 +1,18 @@
 
-
 'use client';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { Branch, RestaurantSettings } from '@/lib/definitions';
-import { getSettings, getBranchById } from '@/lib/data';
+import type { Branch } from '@/lib/definitions';
 import { updateSettingsAction } from '@/lib/actions';
 import { useFormStatus } from 'react-dom';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
+import { useRestaurantData } from '@/lib/client-data';
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -27,6 +26,7 @@ function SubmitButton() {
 export default function QRCodeSettingsPage() {
     const searchParams = useSearchParams();
     const branchId = searchParams.get('branchId');
+    const { getBranchById, restaurantId } = useRestaurantData();
     const [branch, setBranch] = useState<Branch | null>(null);
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
     const { toast } = useToast();
@@ -48,6 +48,8 @@ export default function QRCodeSettingsPage() {
         } else {
             formData.append('qrCodeLogo', 'null'); // Indicate removal
         }
+        formData.append('restaurantId', restaurantId);
+
         await updateSettingsAction(formData);
         toast({
             title: "Settings Saved",

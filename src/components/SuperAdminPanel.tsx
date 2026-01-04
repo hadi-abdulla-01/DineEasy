@@ -6,14 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import {
     Building2,
     Plus,
     Mail,
-    Key,
     Users,
-    Settings,
     Trash2,
     Eye,
     EyeOff,
@@ -83,7 +80,7 @@ export default function SuperAdminPanel() {
             // Create Firebase Auth user first
             const authResult = await createAuthUser(adminEmail, adminPassword, {
                 username: 'admin',
-                password: adminPassword,
+                password: adminPassword, // Stored for reference
                 role: 'Admin',
                 categories: ['All'],
                 branchId: '', // Will be set after restaurant creation

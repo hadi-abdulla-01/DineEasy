@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -8,11 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { RestaurantSettings } from '@/lib/definitions';
-import { getSettings } from '@/lib/data';
 import { updateSettingsAction } from '@/lib/actions';
 import { useFormStatus } from 'react-dom';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { useRestaurantData } from '@/lib/client-data';
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -24,15 +23,19 @@ function SubmitButton() {
 }
 
 export default function RestaurantSettingsPage() {
+    const { getSettings, restaurantId } = useRestaurantData();
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const { toast } = useToast();
 
     useEffect(() => {
-        getSettings().then(setSettings);
-    }, []);
+        if (restaurantId) {
+            getSettings().then(setSettings);
+        }
+    }, [restaurantId]);
 
     const handleFormAction = async (formData: FormData) => {
-        await updateSettingsAction(undefined, formData);
+        formData.append('restaurantId', restaurantId);
+        await updateSettingsAction(formData);
         toast({
             title: "Settings Saved",
             description: "Your restaurant settings have been updated.",

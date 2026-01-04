@@ -47,6 +47,7 @@ export type Table = {
     status: 'available' | 'occupied';
     position?: { x: number; y: number };
     branchId: string;
+    restaurantId?: string;
 };
 
 export type AddonOption = {
@@ -187,6 +188,7 @@ export type KitchenUser = {
     categories: string[];
     role: UserRole;
     branchId: string;
+    restaurantId?: string;
     accessibleMenus?: NavMenuKey[]; // Will be deprecated
     permissions?: UserPermissions;
 };

@@ -3,7 +3,6 @@
 'use client';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import type { KitchenUser, MenuItem, UserRole, NavMenuKey, UserPermissions, Branch } from '@/lib/definitions';
-import { getKitchenUsers, getMenuItems, getBranches, getMainBranch } from '@/lib/data';
 import { createKitchenUserAction, deleteKitchenUserAction } from '@/lib/actions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +31,7 @@ import { useAuth } from '@/app/admin/auth-provider';
 import { useToast } from '@/hooks/use-toast';
 import { ALL_PERMISSIONS_CONFIG } from '@/lib/permissions';
 import { useRestaurantData } from '@/lib/client-data';
+import { extractRestaurantId } from '@/lib/auth-utils';
 
 const USER_ROLES: UserRole[] = ['Admin', 'Manager', 'Server', 'Kitchen'];
 
@@ -57,32 +57,30 @@ export default function UserManagementPage() {
   const [branchFilter, setBranchFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
 
-  const fetchUsers = async () => {
-    const fetchedUsers = await getKitchenUsers();
-    setUsers(fetchedUsers);
-  };
-
-  const fetchMenuItemsAndBranches = async () => {
-    const items = await getMenuItems();
-    setMenuItems(items);
-    const fetchedBranches = await getBranches();
-    setBranches(fetchedBranches);
-    const fetchedMainBranch = await getMainBranch();
-    setMainBranch(fetchedMainBranch);
-    // Set default selected branch
-    if (currentUser?.role !== 'Admin' && currentUser?.branchId) {
-      setSelectedBranch(currentUser.branchId);
-    } else if (fetchedMainBranch) {
-      setSelectedBranch(fetchedMainBranch.id);
-    }
-  }
-
   useEffect(() => {
-    if (currentUser) {
-      fetchUsers();
-      fetchMenuItemsAndBranches();
-    }
-  }, [currentUser, getKitchenUsers, getMenuItems, getBranches, getMainBranch]);
+    if (!currentUser || !restaurantId) return;
+
+    const fetchData = async () => {
+      const [fetchedUsers, items, fetchedBranches, fetchedMainBranch] = await Promise.all([
+        getKitchenUsers(),
+        getMenuItems(),
+        getBranches(),
+        getMainBranch()
+      ]);
+      setUsers(fetchedUsers);
+      setMenuItems(items);
+      setBranches(fetchedBranches);
+      setMainBranch(fetchedMainBranch);
+
+      if (currentUser?.role !== 'Admin' && currentUser?.branchId) {
+        setSelectedBranch(currentUser.branchId);
+      } else if (fetchedMainBranch) {
+        setSelectedBranch(fetchedMainBranch.id);
+      }
+    };
+    fetchData();
+
+  }, [currentUser, restaurantId, getKitchenUsers, getMenuItems, getBranches, getMainBranch]);
 
   const canCreate = currentUser?.permissions?.userManagement?.create || currentUser?.role === 'Admin';
   const canEdit = currentUser?.permissions?.userManagement?.edit || currentUser?.role === 'Admin';
@@ -91,25 +89,27 @@ export default function UserManagementPage() {
   const canManageAllBranches = currentUser?.role === 'Admin' || isMainBranchManager;
 
   const handleAddUser = async (formData: FormData) => {
+    if (!restaurantId) {
+      toast({
+        title: "Error",
+        description: "Could not determine the restaurant. Please try again.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     formData.delete('categories');
     selectedCategories.forEach(category => {
       formData.append('categories', category);
     });
 
     formData.append('permissions', JSON.stringify(permissions));
-    formData.append('restaurantId', restaurantId);
-
-    // If user is a branch manager (not main), their branchId is implicitly used.
-    if (currentUser?.role === 'Manager' && !isMainBranchManager) {
-      formData.append('branchId', currentUser.branchId);
-    }
-
-    // Pass current user ID for activity logging
+    
     if (currentUser?.id) {
       formData.append('createdBy', currentUser.id);
     }
 
-    const result = await createKitchenUserAction(undefined, formData);
+    const result = await createKitchenUserAction(restaurantId, formData);
 
     if (result?.message) {
       toast({
@@ -120,7 +120,8 @@ export default function UserManagementPage() {
     }
 
     if (result?.message.includes("success")) {
-      fetchUsers();
+      const fetchedUsers = await getKitchenUsers();
+      setUsers(fetchedUsers);
       formRef.current?.reset();
       setSelectedCategories(['All']);
       setPermissions({});
@@ -135,7 +136,8 @@ export default function UserManagementPage() {
   const handleDeleteUser = async (userId: string) => {
     if (currentUser?.id) {
       await deleteKitchenUserAction(userId, currentUser.id, restaurantId);
-      fetchUsers();
+      const fetchedUsers = await getKitchenUsers();
+      setUsers(fetchedUsers);
     }
   }
 

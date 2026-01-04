@@ -7,6 +7,8 @@ import svgPaths from './svg-paths';
 import { Printer } from 'lucide-react';
 import Link from 'next/link';
 import { Invoice } from './ui/invoice';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { getClientFirebase } from '@/firebase/client';
 
 const statusSteps: { status: OrderStatus; label: string }[] = [
     { status: 'received', label: 'Order Taken' },
@@ -14,22 +16,28 @@ const statusSteps: { status: OrderStatus; label: string }[] = [
     { status: 'ready', label: 'Ready' },
 ];
 
-export function OrderStatusView({ initialOrder, settings, tableId }: { initialOrder: Order, settings: RestaurantSettings, tableId: string }) {
+export function OrderStatusView({ initialOrder, settings, tableId, restaurantId }: { initialOrder: Order, settings: RestaurantSettings, tableId: string, restaurantId: string }) {
     const [order, setOrder] = useState(initialOrder);
 
     useEffect(() => {
         if (order.status === 'completed' || order.status === 'cancelled') {
             return;
         }
-        const interval = setInterval(async () => {
-            const updatedOrder = await getOrderById(order.id);
-            if (updatedOrder) {
+
+        const { firestore } = getClientFirebase();
+        const orderRef = doc(firestore, `restaurants/${restaurantId}/orders`, order.id);
+
+        const unsubscribe = onSnapshot(orderRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const updatedOrder = { id: docSnap.id, ...docSnap.data() } as Order;
                 setOrder(updatedOrder);
             }
-        }, 5000);
+        }, (error) => {
+            console.error("Error watching order status:", error);
+        });
 
-        return () => clearInterval(interval);
-    }, [order.id, order.status]);
+        return () => unsubscribe();
+    }, [order.id, order.status, restaurantId]);
 
     const handlePrint = () => {
         const ReactDOMServer = require('react-dom/server');

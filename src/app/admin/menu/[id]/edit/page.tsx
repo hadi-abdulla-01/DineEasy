@@ -26,7 +26,7 @@ export default function EditMenuPage() {
     const { getMenuItemById, getMenuItems, getSettings, restaurantId } = useRestaurantData();
     const itemId = Array.isArray(params.id) ? params.id[0] : params.id;
     const [item, setItem] = useState<MenuItem | null>(null);
-    const [allMenuItems, setAllMenuItems] = useState<MenuItem[]>([]);
+    const [restaurantMenuItems, setRestaurantMenuItems] = useState<MenuItem[]>([]);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [categoryValue, setCategoryValue] = useState<string>("");
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -35,38 +35,51 @@ export default function EditMenuPage() {
     const [selectedSessions, setSelectedSessions] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    useEffect(() => {
-        if (!itemId) return;
-        getMenuItemById(itemId).then(menuItem => {
-            if (menuItem) {
-                setItem(menuItem);
-                setCategoryValue(menuItem.category);
-                setAddonGroups(menuItem.addonGroups || []);
-                setSelectedSessions(menuItem.availableSessions || []);
-                const imagePlaceholder = placeholderImages.find(p => p.id === menuItem.imageId);
-                let imageSrc = '';
-                if (menuItem.imageId) {
-                    if (menuItem.imageId.startsWith('data:image')) {
-                        imageSrc = menuItem.imageId;
-                    } else if (imagePlaceholder) {
-                        imageSrc = imagePlaceholder.imageUrl;
-                    }
-                }
-                if (imageSrc) {
-                    setPreviewImage(imageSrc);
-                }
-            } else {
-                notFound();
-            }
-        });
-    }, [itemId, getMenuItemById]);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (item?.branchId) {
-            getSettings(item.branchId).then(setSettings);
+        if (!itemId || !restaurantId) return;
+
+        const fetchItem = async () => {
+            try {
+                const menuItem = await getMenuItemById(itemId);
+                if (menuItem) {
+                    setItem(menuItem);
+                    setCategoryValue(menuItem.category);
+                    setAddonGroups(menuItem.addonGroups || []);
+                    setSelectedSessions(menuItem.availableSessions || []);
+                    const imagePlaceholder = placeholderImages.find(p => p.id === menuItem.imageId);
+                    let imageSrc = '';
+                    if (menuItem.imageId) {
+                        if (menuItem.imageId.startsWith('data:image')) {
+                            imageSrc = menuItem.imageId;
+                        } else if (imagePlaceholder) {
+                            imageSrc = imagePlaceholder.imageUrl;
+                        }
+                    }
+                    if (imageSrc) {
+                        setPreviewImage(imageSrc);
+                    }
+                } else {
+                    notFound();
+                }
+            } catch (err) {
+                console.error("Error fetching menu item:", err);
+                setError("Failed to load menu item details. Please try again.");
+            }
+        };
+
+        fetchItem();
+    }, [itemId, getMenuItemById, restaurantId]);
+
+    useEffect(() => {
+        if (item?.branchId && restaurantId) {
+            getSettings(item.branchId).then(setSettings).catch(err => console.error("Error fetching settings:", err));
+            // Fetch menu items only for the current restaurant content context
+            getMenuItems(item.branchId).then(setRestaurantMenuItems).catch(err => console.error("Error fetching menu items:", err));
         }
-        getMenuItems().then(setAllMenuItems);
-    }, [item, getSettings, getMenuItems]);
+    }, [item, restaurantId, getSettings, getMenuItems]);
+
 
     const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -119,28 +132,7 @@ export default function EditMenuPage() {
             if (selectedSessions.length > 0) {
                 formData.append('availableSessions', JSON.stringify(selectedSessions));
             } else {
-                // If no session is selected, we might want to send an empty array or handle "all available"
-                // The current backend logic expects an array if it's meant to be restricted.
-                // If the user uncheck all, it means it's available for all sessions? 
-                // Wait, logic in add page says: "Collect selected sessions ... if length > 0 append".
-                // If I uncheck all, length is 0. So backend won't get "availableSessions". 
-                // If backend updates partially, it might keep old sessions if key is missing.
-                // Re-checking updateMenuItemAction: it only updates availableSessions if `availableSessionsString` triggers parsing.
-                // So if we send nothing, it keeps old value?
-                // Logic in updateMenuItemAction: 
-                // if (availableSessionsString) { 
-                //    const sessions = JSON.parse(availableSessionsString);
-                //    if (Array.isArray(sessions)) updateData.availableSessions = sessions;
-                // }
-                // This means we CANNOT clear sessions by sending nothing. We must send specific signal or empty array.
-                // Let's send an empty array stringified if the user intends to clear it, 
-                // OR we have to decide if empty means "all sessions" or "no sessions".
-                // In Add page: "Leave unchecked to make it available at all times." -> implies empty = all.
-                // So if we send "[]", usage side needs to treat it as "all"? 
-                // Or does "availableSessions" being undefined mean "all"? 
-                // The Type says `availableSessions?: string[]`.
-                // Let's assume sending "[]" updates it to empty array.
-                formData.append('availableSessions', JSON.stringify(selectedSessions));
+                formData.append('availableSessions', JSON.stringify([]));
             }
 
             if (!itemId) {
@@ -180,17 +172,28 @@ export default function EditMenuPage() {
     };
     // --- End Add-on Group Handlers ---
 
-    if (!restaurantId) return <div>Loading...</div>; // Wait for context
-    if (!item) {
-        return <div>Loading...</div>; // Or a skeleton loader
+    if (error) {
+        return (
+            <div className="flex h-[50vh] items-center justify-center">
+                <div className="text-center space-y-4">
+                    <p className="text-destructive font-medium">{error}</p>
+                    <Button onClick={() => window.location.reload()} variant="outline">Retry</Button>
+                    <Button variant="ghost" asChild className="ml-2">
+                        <Link href="/admin/menu">Back to Menu</Link>
+                    </Button>
+                </div>
+            </div>
+        );
     }
 
-    const categories = Array.from(new Set(allMenuItems.map(item => item.category)));
-    // If we have settings, we should use categories from settings as well to offer consistency?
-    // The Add page uses settings.menuCategories. Here we see all existing categories. 
-    // Let's merge them to be safe or stick to existing logic + settings.
-    const settingsCategories = settings?.menuCategories || [];
-    const uniqueCategories = Array.from(new Set([...categories, ...settingsCategories]));
+    if (!restaurantId || !item) {
+        return <div>Loading...</div>; // Wait for context and item
+    }
+
+    // Correctly scope categories to the current restaurant's items and settings
+    const categoriesFromItems = Array.from(new Set(restaurantMenuItems.map(item => item.category)));
+    const categoriesFromSettings = settings?.menuCategories || [];
+    const uniqueCategories = Array.from(new Set([...categoriesFromItems, ...categoriesFromSettings]));
 
 
     return (

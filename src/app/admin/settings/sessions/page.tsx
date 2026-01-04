@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -9,7 +10,6 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { addMealSessionAction, updateMealSessionAction, deleteMealSessionAction, updateManualSessionOverrideAction } from '@/lib/actions';
 import { useAuth } from '../../auth-provider';
-import { getSettings } from '@/lib/data';
 import { useEffect } from 'react';
 import type { MealSession, RestaurantSettings } from '@/lib/definitions';
 import { Clock, Plus, Trash2, Edit2, Settings2 } from 'lucide-react';
@@ -22,72 +22,85 @@ export default function SessionsPage() {
     const { user } = useAuth();
     const searchParams = useSearchParams();
     const router = useRouter();
-    const branchId = searchParams.get('branchId');
+    const paramBranchId = searchParams.get('branchId');
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [editingSession, setEditingSession] = useState<MealSession | null>(null);
     const [isAdding, setIsAdding] = useState(false);
     const [manualOverrideEnabled, setManualOverrideEnabled] = useState(false);
     const [selectedSessionId, setSelectedSessionId] = useState<string>('');
     const [isActiveSwitch, setIsActiveSwitch] = useState(true); // Default to true for new sessions
-    const { getSettings, restaurantId } = useRestaurantData();
+    const { getSettings, restaurantId, getMainBranch } = useRestaurantData();
+    const [activeBranchId, setActiveBranchId] = useState<string | null>(paramBranchId);
 
     useEffect(() => {
-        if (branchId) {
-            getSettings(branchId).then(s => {
-                setSettings(s);
-                setManualOverrideEnabled(s.manualSessionOverride?.enabled || false);
-                setSelectedSessionId(s.manualSessionOverride?.sessionId || '');
-            });
+        async function loadData() {
+            let branchToUse = paramBranchId;
+            if (!branchToUse && restaurantId) {
+                const mainBranch = await getMainBranch();
+                if (mainBranch) branchToUse = mainBranch.id;
+            }
+
+            if (branchToUse) {
+                setActiveBranchId(branchToUse);
+                getSettings(branchToUse).then(s => {
+                    setSettings(s);
+                    setManualOverrideEnabled(s.manualSessionOverride?.enabled || false);
+                    setSelectedSessionId(s.manualSessionOverride?.sessionId || '');
+                });
+            }
         }
-    }, [branchId, getSettings]);
+        if (restaurantId) {
+            loadData();
+        }
+    }, [paramBranchId, restaurantId, getMainBranch, getSettings]);
 
     const handleAddSession = async (formData: FormData) => {
-        if (!branchId || !restaurantId) return;
+        if (!activeBranchId || !restaurantId) return;
 
-        formData.append('branchId', branchId);
+        formData.append('branchId', activeBranchId);
         formData.append('restaurantId', restaurantId);
 
         await addMealSessionAction(formData);
 
         // Refresh settings
-        const updatedSettings = await getSettings(branchId);
+        const updatedSettings = await getSettings(activeBranchId);
         setSettings(updatedSettings);
         setIsAdding(false);
-        router.refresh(); // Force Next.js to refetch data
+        router.refresh();
     };
 
     const handleUpdateSession = async (formData: FormData) => {
-        if (!branchId || !editingSession || !restaurantId) return;
+        if (!activeBranchId || !editingSession || !restaurantId) return;
 
-        formData.append('branchId', branchId);
+        formData.append('branchId', activeBranchId);
         formData.append('restaurantId', restaurantId);
         formData.append('sessionId', editingSession.id);
         await updateMealSessionAction(formData);
 
         // Refresh settings
-        const updatedSettings = await getSettings(branchId);
+        const updatedSettings = await getSettings(activeBranchId);
         setSettings(updatedSettings);
         setEditingSession(null);
-        router.refresh(); // Force Next.js to refetch data
+        router.refresh();
     };
 
     const handleDeleteSession = async (sessionId: string) => {
-        if (!branchId || !restaurantId) return;
+        if (!activeBranchId || !restaurantId) return;
         if (!confirm('Are you sure you want to delete this session?')) return;
 
-        await deleteMealSessionAction(branchId, sessionId, restaurantId);
+        await deleteMealSessionAction(activeBranchId, sessionId, restaurantId);
 
         // Refresh settings
-        const updatedSettings = await getSettings(branchId);
+        const updatedSettings = await getSettings(activeBranchId);
         setSettings(updatedSettings);
-        router.refresh(); // Force Next.js to refetch data
+        router.refresh();
     };
 
     const handleManualOverrideUpdate = async () => {
-        if (!branchId || !restaurantId) return;
+        if (!activeBranchId || !restaurantId) return;
 
         const formData = new FormData();
-        formData.append('branchId', branchId);
+        formData.append('branchId', activeBranchId);
         formData.append('restaurantId', restaurantId);
         formData.append('enabled', manualOverrideEnabled.toString());
         formData.append('sessionId', selectedSessionId);
@@ -95,9 +108,9 @@ export default function SessionsPage() {
         await updateManualSessionOverrideAction(formData);
 
         // Refresh settings
-        const updatedSettings = await getSettings(branchId);
+        const updatedSettings = await getSettings(activeBranchId);
         setSettings(updatedSettings);
-        router.refresh(); // Force Next.js to refetch data
+        router.refresh();
     };
 
     const sessions = settings?.mealSessions || [];

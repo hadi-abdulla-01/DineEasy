@@ -144,36 +144,34 @@ export default function TableManagementPage() {
 
   useEffect(() => {
     async function fetchInitialData() {
+      if (!user) return;
+
       const fetchedMainBranch = await getMainBranch();
       setMainBranch(fetchedMainBranch);
 
-      if (user?.role === 'Admin' && fetchedMainBranch && !selectedBranchId) {
+      if (user.role === 'Admin' && fetchedMainBranch && !selectedBranchId) {
         setSelectedBranchId(fetchedMainBranch.id);
-      } else if (user?.branchId) {
+      } else if (user.branchId) {
         setSelectedBranchId(user.branchId);
       }
 
       if (canManageAllBranches) {
-        getBranches().then(setAllBranches);
+        const branches = await getBranches();
+        setAllBranches(branches);
       }
     }
-
-    if (user) {
-      fetchInitialData();
-    }
-  }, [user, canManageAllBranches, selectedBranchId, getMainBranch, getBranches]);
+    fetchInitialData();
+  }, [user, canManageAllBranches]);
 
   useEffect(() => {
     async function fetchBranchData() {
       if (selectedBranchId) {
-        // Fetch both in parallel for better performance
-        Promise.all([
+        const [tables, settings] = await Promise.all([
           getTables(selectedBranchId),
           getSettings(selectedBranchId)
-        ]).then(([tables, settings]) => {
-          setTables(tables);
-          setSettings(settings);
-        });
+        ]);
+        setTables(tables);
+        setSettings(settings);
       }
     }
     fetchBranchData();
@@ -181,7 +179,7 @@ export default function TableManagementPage() {
     const interval = setInterval(fetchBranchData, 5000);
     return () => clearInterval(interval);
 
-  }, [selectedBranchId, getTables, getSettings]);
+  }, [selectedBranchId]);
 
   const handleAddTable = async (formData: FormData) => {
     if (!selectedBranchId) {

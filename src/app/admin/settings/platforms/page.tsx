@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -7,13 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Branch } from '@/lib/definitions';
-import { getBranchById } from '@/lib/data';
 import { updateSettingsAction } from '@/lib/actions';
 import { useFormStatus } from 'react-dom';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { PlusCircle, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
+import { useRestaurantData } from '@/lib/client-data';
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -27,6 +26,7 @@ function SubmitButton() {
 export default function PlatformSettingsPage() {
     const searchParams = useSearchParams();
     const branchId = searchParams.get('branchId');
+    const { getBranchById, restaurantId } = useRestaurantData();
     const [branch, setBranch] = useState<Branch | null>(null);
     const [platforms, setPlatforms] = useState<string[]>([]);
     const [newPlatform, setNewPlatform] = useState('');
@@ -48,6 +48,7 @@ export default function PlatformSettingsPage() {
         const newFormData = new FormData();
         newFormData.append('onlineOrderPlatforms', platformsString);
         newFormData.append('branchId', branchId!);
+        newFormData.append('restaurantId', restaurantId);
 
         await updateSettingsAction(newFormData);
         toast({
