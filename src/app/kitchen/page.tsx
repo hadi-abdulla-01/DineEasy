@@ -1,6 +1,5 @@
 
 'use client';
-import { getActiveOrders, getSettings, getTableById } from "@/lib/data";
 import { collection, query, where, onSnapshot, DocumentSnapshot } from "firebase/firestore";
 import { getClientFirebase } from "@/firebase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -12,8 +11,10 @@ import { updateKitchenOrderStatusAction, updateOrderItemStatusAction } from "@/l
 import { Clock, User, Phone, ShoppingBasket, Utensils, CheckCircle, MessageSquare, Printer } from "lucide-react";
 import { formatDistanceInTimezone } from "@/lib/format-date";
 import { cn } from "@/lib/utils";
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/app/admin/auth-provider";
+import { getSettings, getTableById } from "@/lib/data";
+import { extractRestaurantId } from "@/lib/auth-utils";
 
 type OrderWithTable = Order & { table?: Table };
 
@@ -72,7 +73,13 @@ function PrintTicketButton({ order, settings, visibleItems }: { order: OrderWith
 
 function UpdateItemStatusButton({ orderId, orderItemId, isReady, restaurantId }: { orderId: string, orderItemId: string, isReady: boolean, restaurantId: string }) {
     const handleToggle = async () => {
-        await updateOrderItemStatusAction(orderId, orderItemId, !isReady, restaurantId);
+        try {
+            console.log('[UpdateItemStatus] Toggling item:', orderItemId, 'to', !isReady);
+            await updateOrderItemStatusAction(orderId, orderItemId, !isReady, restaurantId);
+            console.log('[UpdateItemStatus] Successfully toggled item status');
+        } catch (error) {
+            console.error('[UpdateItemStatus] Error:', error);
+        }
     };
 
     return (
@@ -103,10 +110,16 @@ function MarkOrderReadyButton({ order, visibleItems, restaurantId }: { order: Or
     // OR create a wrapper. 
     // simpler: construct FormData.
     const handleMarkReady = async () => {
-        const formData = new FormData();
-        formData.append('status', 'ready');
-        formData.append('restaurantId', restaurantId);
-        await updateKitchenOrderStatusAction(order.id, formData);
+        try {
+            const formData = new FormData();
+            formData.append('status', 'ready');
+            formData.append('restaurantId', restaurantId);
+            console.log('[MarkOrderReady] Marking order as ready:', order.id);
+            await updateKitchenOrderStatusAction(order.id, formData);
+            console.log('[MarkOrderReady] Successfully marked order as ready');
+        } catch (error) {
+            console.error('[MarkOrderReady] Error:', error);
+        }
     };
 
     return (
@@ -126,20 +139,32 @@ export default function KitchenPage() {
     const [orders, setOrders] = useState<OrderWithTable[]>([]);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
 
+    // Extract restaurantId from user email
+    const restaurantId = user?.email ? extractRestaurantId(user.email) : null;
+
     // Helper to convert doc to object (client-side)
     // Helper to convert doc to object (client-side)
     function docToObj<T>(doc: DocumentSnapshot): T {
+        const data = doc.data();
+        if (data) {
+            // Convert Firestore Timestamps to ISO strings
+            for (const key in data) {
+                if (data[key]?.toDate && typeof data[key].toDate === 'function') {
+                    data[key] = data[key].toDate().toISOString();
+                }
+            }
+        }
         return {
             id: doc.id,
-            ...doc.data(),
+            ...data,
         } as T;
     }
 
     useEffect(() => {
-        if (!user?.branchId) return;
+        if (!user?.branchId || !restaurantId) return;
 
-        const restaurantId = user.restaurantId || 'dineeasee-restaurant';
         console.log(`[KitchenPage] Using restaurantId: ${restaurantId}`);
+        console.log(`[KitchenPage] User email: ${user.email}`);
 
         getSettings(user.branchId, restaurantId).then(setSettings);
 
@@ -240,11 +265,6 @@ export default function KitchenPage() {
 
     return (
         <>
-            {/* Debug Info Overlay */}
-            <div className="fixed bottom-0 left-0 bg-black/80 text-white p-2 text-xs z-50">
-                Debug: Branch={user?.branchId} | Restaurant={user?.restaurantId || 'dineeasee-restaurant'} | Connected={!!user}
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
                 {filteredOrders.map((order) => (
@@ -310,14 +330,14 @@ export default function KitchenPage() {
                                                 </ul>
                                             )}
                                         </div>
-                                        <UpdateItemStatusButton orderId={order.id} orderItemId={item.orderItemId} isReady={!!item.isReady} restaurantId={user.restaurantId || 'dineeasee-restaurant'} />
+                                        <UpdateItemStatusButton orderId={order.id} orderItemId={item.orderItemId} isReady={!!item.isReady} restaurantId={restaurantId || 'dineeasee-restaurant'} />
                                     </li>
                                 ))}
                             </ul>
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2 pt-0">
                             <PrintTicketButton order={order} settings={settings} visibleItems={order.visibleItems} />
-                            <MarkOrderReadyButton order={order} visibleItems={order.visibleItems} restaurantId={user.restaurantId || 'dineeasee-restaurant'} />
+                            <MarkOrderReadyButton order={order} visibleItems={order.visibleItems} restaurantId={restaurantId || 'dineeasee-restaurant'} />
                         </CardFooter>
                     </Card>
                 ))}

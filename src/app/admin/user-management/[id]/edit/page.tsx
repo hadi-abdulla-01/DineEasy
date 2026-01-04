@@ -1,7 +1,6 @@
 
 'use client';
 import { useEffect, useState } from 'react';
-import { getKitchenUserById, getMenuItems, getBranches, getMainBranch } from '@/lib/data';
 import { updateKitchenUserAction } from '@/lib/actions';
 import type { KitchenUser, MenuItem, UserRole, NavMenuKey, UserPermissions, Branch } from '@/lib/definitions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -18,11 +17,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/app/admin/auth-provider';
 import { ALL_PERMISSIONS_CONFIG } from '@/lib/permissions';
+import { useRestaurantData } from '@/lib/client-data';
 
 const USER_ROLES: UserRole[] = ['Admin', 'Manager', 'Server', 'Kitchen'];
 
 export default function EditUserPage() {
     const { user: currentUser } = useAuth();
+    const { getKitchenUserById, getMenuItems, getBranches, getMainBranch, restaurantId } = useRestaurantData();
     const [user, setUser] = useState<KitchenUser | null>(null);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [branches, setBranches] = useState<Branch[]>([]);
@@ -55,7 +56,7 @@ export default function EditUserPage() {
             getBranches().then(setBranches);
             getMainBranch().then(setMainBranch);
         }
-    }, [userId]);
+    }, [userId, getKitchenUserById, getMenuItems, getBranches, getMainBranch]);
 
     const handleSubmit = async (formData: FormData) => {
         formData.delete('categories');
@@ -64,6 +65,7 @@ export default function EditUserPage() {
         });
 
         formData.append('permissions', JSON.stringify(permissions));
+        formData.append('restaurantId', restaurantId);
 
         await updateKitchenUserAction(userId, formData);
         router.push('/admin/user-management');
@@ -76,10 +78,10 @@ export default function EditUserPage() {
             </div>
         );
     }
-    
+
     const allCategories = ['All', ...Array.from(new Set(menuItems.map(item => item.category)))];
 
-    const filteredCategories = allCategories.filter(cat => 
+    const filteredCategories = allCategories.filter(cat =>
         cat.toLowerCase().includes(categorySearchTerm.toLowerCase())
     );
 
@@ -94,33 +96,33 @@ export default function EditUserPage() {
                 : [...newSelection, category];
         });
     };
-    
+
     const handlePermissionChange = (menu: NavMenuKey, right: 'view' | 'create' | 'edit' | 'delete', value: boolean) => {
-      setPermissions(prev => {
-          const newPermissions = { ...prev };
-          if (!newPermissions[menu]) {
-              newPermissions[menu] = {};
-          }
-          const menuPermissions = newPermissions[menu]!;
-          (menuPermissions as any)[right] = value;
+        setPermissions(prev => {
+            const newPermissions = { ...prev };
+            if (!newPermissions[menu]) {
+                newPermissions[menu] = {};
+            }
+            const menuPermissions = newPermissions[menu]!;
+            (menuPermissions as any)[right] = value;
 
-          if (right === 'view' && !value) {
-              Object.keys(menuPermissions).forEach(key => {
-                  (menuPermissions as any)[key] = false;
-              });
-          }
-          if (right !== 'view' && value) {
-              menuPermissions.view = true;
-          }
+            if (right === 'view' && !value) {
+                Object.keys(menuPermissions).forEach(key => {
+                    (menuPermissions as any)[key] = false;
+                });
+            }
+            if (right !== 'view' && value) {
+                menuPermissions.view = true;
+            }
 
-          return newPermissions;
-      });
+            return newPermissions;
+        });
     };
-    
+
     const handleSelectAllPermissionsChange = (checked: boolean) => {
         setSelectAllPermissions(checked);
         const newPermissions: UserPermissions = {};
-        if(checked) {
+        if (checked) {
             ALL_PERMISSIONS_CONFIG.forEach(menu => {
                 newPermissions[menu.key] = {};
                 menu.rights.forEach(right => {
@@ -134,7 +136,7 @@ export default function EditUserPage() {
     const selectedCategoriesText = selectedCategories.length > 0
         ? selectedCategories.join(', ')
         : 'Select categories';
-        
+
     const showCategorySelector = selectedRole === 'Kitchen';
 
     const isMainBranchManager = currentUser?.role === 'Manager' && currentUser?.branchId === mainBranch?.id;
@@ -149,7 +151,7 @@ export default function EditUserPage() {
             </CardHeader>
             <CardContent>
                 <form action={handleSubmit} className="space-y-4 max-w-2xl">
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="username">Username</Label>
                             <div className="relative">
@@ -168,16 +170,16 @@ export default function EditUserPage() {
                                 </SelectContent>
                             </Select>
                         </div>
-                   </div>
+                    </div>
                     <div className="space-y-2">
                         <Label htmlFor="password">New Password</Label>
                         <div className="relative">
                             <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input id="password" name="password" type="password" placeholder="Leave blank to keep current password" className="pl-9" />
                         </div>
-                         <p className="text-xs text-muted-foreground">Leave the password field blank if you do not wish to change it.</p>
+                        <p className="text-xs text-muted-foreground">Leave the password field blank if you do not wish to change it.</p>
                     </div>
-                     {canManageAllBranches && (
+                    {canManageAllBranches && (
                         <div className="space-y-2">
                             <Label htmlFor="branchId">Branch</Label>
                             <Select name="branchId" required value={selectedBranch} onValueChange={setSelectedBranch}>
@@ -189,7 +191,7 @@ export default function EditUserPage() {
                                 </SelectContent>
                             </Select>
                         </div>
-                     )}
+                    )}
 
 
                     <Separator />
@@ -211,30 +213,30 @@ export default function EditUserPage() {
                         </div>
 
                         <div className="rounded-md border p-4 space-y-4">
-                          {ALL_PERMISSIONS_CONFIG.map(menu => (
-                              <div key={menu.key} className="flex flex-col sm:flex-row sm:items-center sm:justify-between rounded-lg border p-3">
-                                <Label htmlFor={`perm-view-${menu.key}`} className="font-semibold">{menu.label}</Label>
-                                <div className="flex items-center gap-x-4 gap-y-2 pt-2 sm:pt-0">
-                                    {menu.rights.map(right => (
-                                        <div key={right} className="flex items-center space-x-2">
-                                            <Checkbox 
-                                                  id={`perm-${right}-${menu.key}`}
-                                                  checked={permissions[menu.key]?.[right] || false}
-                                                  onCheckedChange={(checked) => handlePermissionChange(menu.key, right, !!checked)}
-                                            />
-                                            <label htmlFor={`perm-${right}-${menu.key}`} className="text-sm font-medium capitalize">
-                                                  {right}
-                                              </label>
-                                        </div>
-                                    ))}
+                            {ALL_PERMISSIONS_CONFIG.map(menu => (
+                                <div key={menu.key} className="flex flex-col sm:flex-row sm:items-center sm:justify-between rounded-lg border p-3">
+                                    <Label htmlFor={`perm-view-${menu.key}`} className="font-semibold">{menu.label}</Label>
+                                    <div className="flex items-center gap-x-4 gap-y-2 pt-2 sm:pt-0">
+                                        {menu.rights.map(right => (
+                                            <div key={right} className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id={`perm-${right}-${menu.key}`}
+                                                    checked={permissions[menu.key]?.[right] || false}
+                                                    onCheckedChange={(checked) => handlePermissionChange(menu.key, right, !!checked)}
+                                                />
+                                                <label htmlFor={`perm-${right}-${menu.key}`} className="text-sm font-medium capitalize">
+                                                    {right}
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                              </div>
-                          ))}
+                            ))}
                         </div>
                     </div>
 
                     {showCategorySelector && (
-                         <div className="space-y-2">
+                        <div className="space-y-2">
                             <Label>Accessible Kitchen Categories</Label>
                             <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
                                 <PopoverTrigger asChild>
@@ -250,12 +252,12 @@ export default function EditUserPage() {
                                 </PopoverTrigger>
                                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                                     <div className="p-2">
-                                         <Input 
+                                        <Input
                                             placeholder="Search categories..."
                                             value={categorySearchTerm}
                                             onChange={(e) => setCategorySearchTerm(e.target.value)}
                                             className="w-full"
-                                         />
+                                        />
                                     </div>
                                     <ScrollArea className="h-48">
                                         <div className="p-4 pt-0 space-y-2">
@@ -277,7 +279,7 @@ export default function EditUserPage() {
                                     </ScrollArea>
                                 </PopoverContent>
                             </Popover>
-                             <p className="text-xs text-muted-foreground pt-1">Select 'All' to grant access to all categories, or select individual ones.</p>
+                            <p className="text-xs text-muted-foreground pt-1">Select 'All' to grant access to all categories, or select individual ones.</p>
                         </div>
                     )}
                     <div className="flex gap-2">

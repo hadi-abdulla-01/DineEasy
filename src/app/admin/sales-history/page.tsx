@@ -3,8 +3,6 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import type { Order, RemoteOrder, RestaurantSettings, KitchenUser, Branch } from '@/lib/definitions';
-import { getOrders, getRemoteOrders, getSettings, getMainBranch } from '@/lib/data';
-import { deleteOrderAction } from '@/lib/actions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
@@ -25,12 +23,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from '@/app/admin/auth-provider';
+import { useRestaurantData } from '@/lib/client-data';
 
 
 type CombinedOrder = (Order | RemoteOrder) & { type: 'Dine-in' | 'Remote' };
 
 export default function SalesHistoryPage() {
   const { user } = useAuth();
+  const { getOrders, getRemoteOrders, getSettings, getMainBranch, deleteOrder } = useRestaurantData();
   const [allOrders, setAllOrders] = useState<CombinedOrder[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
@@ -51,24 +51,24 @@ export default function SalesHistoryPage() {
 
   useEffect(() => {
     async function fetchInitialData() {
-        if (!user) return;
-        setIsLoading(true);
+      if (!user) return;
+      setIsLoading(true);
 
-        let branchIdForSettings = user.branchId;
-        if (user.role === 'Admin') {
-            const mainBranch = await getMainBranch();
-            if (mainBranch) {
-                branchIdForSettings = mainBranch.id;
-            }
+      let branchIdForSettings = user.branchId;
+      if (user.role === 'Admin') {
+        const mainBranch = await getMainBranch();
+        if (mainBranch) {
+          branchIdForSettings = mainBranch.id;
         }
-        
-        const [fetchedSettings] = await Promise.all([
-            getSettings(branchIdForSettings),
-            fetchOrders()
-        ]);
-        
-        setSettings(fetchedSettings);
-        setIsLoading(false);
+      }
+
+      const [fetchedSettings] = await Promise.all([
+        getSettings(branchIdForSettings),
+        fetchOrders()
+      ]);
+
+      setSettings(fetchedSettings);
+      setIsLoading(false);
     }
     fetchInitialData();
   }, [user]);
@@ -102,18 +102,18 @@ export default function SalesHistoryPage() {
       printWindow.document.body.innerHTML = invoiceElement.innerHTML;
       printWindow.document.write('</body></html>');
       printWindow.document.close();
-       setTimeout(() => {
+      setTimeout(() => {
         printWindow.print();
         window.close();
-    }, 250);
+      }, 250);
     }
   };
-  
+
   const handleDeleteOrder = async (orderId: string, orderType: 'Dine-in' | 'Remote') => {
-      await deleteOrderAction(orderId, orderType);
-      fetchOrders(); // Refetch orders to update the list
+    await deleteOrder(orderId, orderType);
+    fetchOrders(); // Refetch orders to update the list
   }
-  
+
   const canDelete = user?.permissions?.salesHistory?.delete || user?.role === 'Admin';
   const canEdit = user?.permissions?.salesHistory?.edit || user?.role === 'Admin';
 
@@ -129,15 +129,15 @@ export default function SalesHistoryPage() {
       return 'Invalid Date';
     }
   };
-  
+
   if (isLoading || !settings) {
     return (
-        <div className="flex h-[80vh] items-center justify-center">
-            <div className="flex flex-col items-center gap-2">
-                <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                <p className="text-muted-foreground">Loading sales history...</p>
-            </div>
+      <div className="flex h-[80vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="text-muted-foreground">Loading sales history...</p>
         </div>
+      </div>
     );
   }
 
@@ -183,7 +183,7 @@ export default function SalesHistoryPage() {
               </TableHeader>
               <TableBody>
                 {filteredOrders.length > 0 ? (
-                  filteredOrders.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(order => (
+                  filteredOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(order => (
                     <TableRow key={order.id}>
                       <TableCell className="font-medium">{order.invoiceNumber || 'N/A'}</TableCell>
                       <TableCell>{safeFormatDate(order.createdAt)}</TableCell>
@@ -193,41 +193,41 @@ export default function SalesHistoryPage() {
                       <TableCell className="text-right font-mono">{currencySymbol}{(order.total || 0).toFixed(currencyDecimalPlaces)}</TableCell>
                       <TableCell className="print-hide text-right flex gap-2 justify-end">
                         <Button variant="outline" size="sm" onClick={() => handlePrintInvoice(order)}>
-                            <Printer className="mr-2 h-4 w-4" />
-                            Print
+                          <Printer className="mr-2 h-4 w-4" />
+                          Print
                         </Button>
                         {canEdit && (
                           <Button variant="outline" size="sm" asChild>
                             <Link href={`/admin/sales-history/${order.id}/edit?type=${order.type}`}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit
                             </Link>
                           </Button>
                         )}
                         {canDelete && (
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="destructive" size="sm">
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                      Delete
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      This action cannot be undone. This will permanently delete the order
-                                      (Invoice: {order.invoiceNumber || order.id}). This will affect your sales reports.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleDeleteOrder(order.id, order.type)}>
-                                      Yes, delete order
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone. This will permanently delete the order
+                                  (Invoice: {order.invoiceNumber || order.id}). This will affect your sales reports.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteOrder(order.id, order.type)}>
+                                  Yes, delete order
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         )}
                       </TableCell>
                     </TableRow>

@@ -185,16 +185,21 @@ export async function updateOrderStatusAction(orderId: string, formData: FormDat
     const paymentMethod = formData.get('paymentMethod') as Order['paymentMethod'];
     const restaurantId = formData.get('restaurantId') as string;
 
+    console.log('[updateOrderStatusAction] Called with:', { orderId, status, paymentMethod, restaurantId });
+
     if (!status) {
         return { message: 'Status is required.' };
     }
     try {
         const order = await getOrderById(orderId, restaurantId);
         if (!order) {
+            console.log('[updateOrderStatusAction] Order not found:', orderId);
             return { message: 'Order not found.' };
         }
 
+        console.log('[updateOrderStatusAction] Updating order status to:', status);
         const updatedOrder = await updateOrderStatus(orderId, status, paymentMethod, restaurantId);
+        console.log('[updateOrderStatusAction] Order updated:', updatedOrder?.status);
 
         if (updatedOrder && (status === 'completed' || status === 'cancelled')) {
             if (updatedOrder.orderType === 'Dine-in') {
@@ -214,10 +219,16 @@ export async function updateOrderStatusAction(orderId: string, formData: FormDat
         revalidatePath('/admin/sales-history');
 
         if (status === 'completed') {
+            console.log('[updateOrderStatusAction] Redirecting to /admin/kitchen');
             redirect('/admin/kitchen');
         }
 
-    } catch (error) {
+    } catch (error: any) {
+        // Re-throw redirect errors so Next.js can handle them
+        if (error.message === 'NEXT_REDIRECT' || error.digest?.startsWith('NEXT_REDIRECT')) {
+            throw error;
+        }
+        console.error('[updateOrderStatusAction] Error:', error);
         return { message: 'Database Error: Failed to Update Order Status.' };
     }
 }

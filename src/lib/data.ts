@@ -1135,7 +1135,8 @@ export async function getActivityLogs(limitCount: number = 20, restaurantId: str
 
 export async function getActivityLogsByUser(userId: string, restaurantId: string = 'dineeasee-restaurant'): Promise<ActivityLog[]> {
     const activityLogsRef = getCollections(restaurantId).activityLogs;
-    const q = query(activityLogsRef, where('userId', '==', userId), orderBy('timestamp', 'desc'));
+    // Removed orderBy to avoid needing a composite index
+    const q = query(activityLogsRef, where('userId', '==', userId));
     const snapshot = await getDocs(q);
     const logs = snapshot.docs.map(d => docToObj<ActivityLog>(d));
     // Sort in code to avoid needing a composite index

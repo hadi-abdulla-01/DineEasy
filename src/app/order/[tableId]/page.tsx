@@ -138,7 +138,7 @@ export default function OrderPage() {
                 setMenuItems(availableMenuItems);
 
                 if (addItems && orderId) {
-                    const orderToModify = await getOrderById(orderId);
+                    const orderToModify = await getOrderById(orderId, targetRestaurantId);
                     setActiveOrderForCustomer(orderToModify);
                 } else {
                     setActiveOrderForCustomer(undefined);

@@ -1,6 +1,5 @@
 
 'use client';
-import { getOrderById, getTableById, getSettings } from "@/lib/data";
 import { updateOrderStatusAction } from "@/lib/actions";
 import { useEffect, useState } from "react";
 import { notFound, useParams } from "next/navigation";
@@ -13,13 +12,14 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { DollarSign, CreditCard, LoaderCircle } from "lucide-react";
 import { useFormStatus } from "react-dom";
+import { useRestaurantData } from "@/lib/client-data";
 
 type OrderWithTable = Order & { table?: Table };
 type PaymentMode = 'cash' | 'card';
 
 function CompleteButton({ order }: { order: Order }) {
     const { pending } = useFormStatus();
-    
+
     if (order.status === 'completed' || order.status === 'cancelled') {
         return (
             <Button className="w-full" disabled>
@@ -36,15 +36,17 @@ function CompleteButton({ order }: { order: Order }) {
 }
 
 export default function PaymentPage() {
+    const { getOrderById, getTableById, getSettings, restaurantId } = useRestaurantData();
     const [order, setOrder] = useState<OrderWithTable | null>(null);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
     const [cashReceived, setCashReceived] = useState<number | string>('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const params = useParams();
     const orderId = params.orderId as string;
 
     useEffect(() => {
-        if(orderId) {
+        if (orderId) {
             getOrderById(orderId).then(async (fetchedOrder) => {
                 if (!fetchedOrder) {
                     notFound();
@@ -55,9 +57,9 @@ export default function PaymentPage() {
                     const fetchedSettings = await getSettings(fetchedOrder.branchId);
                     setSettings(fetchedSettings);
                 }
-                
+
                 let table;
-                if(fetchedOrder.tableId) {
+                if (fetchedOrder.tableId) {
                     table = await getTableById(fetchedOrder.tableId);
                 }
 
@@ -65,7 +67,7 @@ export default function PaymentPage() {
                 setCashReceived(fetchedOrder.total);
             });
         }
-    }, [orderId]);
+    }, [orderId, getOrderById, getSettings, getTableById]);
 
     if (!order || !settings) {
         return (
@@ -77,15 +79,44 @@ export default function PaymentPage() {
             </div>
         );
     }
-    
+
     const currencyDecimalPlaces = settings.currencyDecimalPlaces ?? 2;
-    
-    const changeDue = (typeof cashReceived === 'number' && cashReceived >= order.total) 
-        ? cashReceived - order.total 
+
+    const changeDue = (typeof cashReceived === 'number' && cashReceived >= order.total)
+        ? cashReceived - order.total
         : 0;
 
-    const handleFinalizeOrder = updateOrderStatusAction.bind(null, order.id);
     const currencySymbol = settings.currencySymbol || '$';
+
+    const handleCompleteOrder = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+
+        const formData = new FormData(e.currentTarget);
+
+        // Add required fields
+        formData.append('status', 'completed');
+        formData.append('restaurantId', restaurantId);
+
+        console.log('[PaymentPage] Completing order:', order.id, 'with restaurantId:', restaurantId);
+
+        try {
+            const result = await updateOrderStatusAction(order.id, formData);
+            console.log('[PaymentPage] Order completed successfully', result);
+            // If we get here, the redirect didn't happen, so do it manually
+            if (!result || result.message) {
+                console.log('[PaymentPage] Manual redirect');
+                window.location.href = '/admin/kitchen';
+            }
+        } catch (error: any) {
+            // Next.js redirect() throws a special error - don't catch it
+            if (error?.digest?.startsWith('NEXT_REDIRECT')) {
+                throw error;
+            }
+            console.error('[PaymentPage] Error completing order:', error);
+            setIsSubmitting(false);
+        }
+    };
 
     return (
         <div className="grid gap-8 md:grid-cols-2">
@@ -105,20 +136,20 @@ export default function PaymentPage() {
                             </li>
                         ))}
                     </ul>
-                    <Separator className="my-4"/>
-                     <div className="space-y-2 text-sm">
+                    <Separator className="my-4" />
+                    <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                             <span>Subtotal</span>
                             <span className="font-mono">{currencySymbol}{order.subtotal.toFixed(currencyDecimalPlaces)}</span>
                         </div>
-                         {order.taxes.map((tax, index) => (
+                        {order.taxes.map((tax, index) => (
                             <div key={index} className="flex justify-between text-muted-foreground">
                                 <span>{tax.name} ({tax.rate}%)</span>
                                 <span className="font-mono">{currencySymbol}{tax.amount.toFixed(currencyDecimalPlaces)}</span>
                             </div>
-                         ))}
+                        ))}
                     </div>
-                    <Separator className="my-4"/>
+                    <Separator className="my-4" />
                     <div className="flex justify-between text-lg font-bold">
                         <span>Total</span>
                         <span className="font-mono">{currencySymbol}{order.total.toFixed(currencyDecimalPlaces)}</span>
@@ -127,7 +158,7 @@ export default function PaymentPage() {
             </Card>
 
             <Card>
-                <form action={handleFinalizeOrder}>
+                <form onSubmit={handleCompleteOrder}>
                     <CardHeader>
                         <CardTitle className="font-headline">Process Payment</CardTitle>
                         <CardDescription>Select a payment method and finalize the order.</CardDescription>
@@ -179,7 +210,11 @@ export default function PaymentPage() {
                         )}
                     </CardContent>
                     <CardFooter>
-                       <CompleteButton order={order} />
+                        <Button type="submit" className="w-full" disabled={order.status === 'completed' || order.status === 'cancelled' || isSubmitting}>
+                            {isSubmitting ? 'Processing...' : (order.status === 'completed' || order.status === 'cancelled'
+                                ? `Order Already ${order.status}`
+                                : 'Finalize & Complete Order')}
+                        </Button>
                     </CardFooter>
                 </form>
             </Card>
@@ -187,4 +222,3 @@ export default function PaymentPage() {
     );
 }
 
-    

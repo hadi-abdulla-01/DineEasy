@@ -3,7 +3,6 @@
 'use client';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Order, RemoteOrder, RestaurantSettings, Branch } from '@/lib/definitions';
-import { getOrders, getRemoteOrders, getSettings, getBranches, getMainBranch } from '@/lib/data';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -18,6 +17,7 @@ import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import type { ChartConfig } from '@/components/ui/chart';
 import { useAuth } from '../auth-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useRestaurantData } from '@/lib/client-data';
 
 
 type CombinedOrder = (Order | RemoteOrder) & { type: 'Dine-in' | 'Remote' };
@@ -31,6 +31,7 @@ const chartConfig = {
 
 export default function SalesReportPage() {
   const { user } = useAuth();
+  const { getOrders, getRemoteOrders, getSettings, getBranches, getMainBranch } = useRestaurantData();
   const [allOrders, setAllOrders] = useState<CombinedOrder[]>([]);
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -42,70 +43,70 @@ export default function SalesReportPage() {
 
   useEffect(() => {
     async function fetchInitialSettings() {
-        if (!user) return;
-        setIsLoading(true);
-        const fetchedMainBranch = await getMainBranch();
-        setMainBranch(fetchedMainBranch);
+      if (!user) return;
+      setIsLoading(true);
+      const fetchedMainBranch = await getMainBranch();
+      setMainBranch(fetchedMainBranch);
 
-        let branchIdForSettings = user.branchId;
-        if (user.role === 'Admin' && fetchedMainBranch) {
-            branchIdForSettings = fetchedMainBranch.id;
-        }
+      let branchIdForSettings = user.branchId;
+      if (user.role === 'Admin' && fetchedMainBranch) {
+        branchIdForSettings = fetchedMainBranch.id;
+      }
 
-        if (branchIdForSettings) {
-            const fetchedSettings = await getSettings(branchIdForSettings);
-            setSettings(fetchedSettings);
-        } else {
-             // Fallback for user without branch or if main branch doesn't exist
-            const globalSettings = await getSettings();
-            setSettings(globalSettings);
-        }
+      if (branchIdForSettings) {
+        const fetchedSettings = await getSettings(branchIdForSettings);
+        setSettings(fetchedSettings);
+      } else {
+        // Fallback for user without branch or if main branch doesn't exist
+        const globalSettings = await getSettings();
+        setSettings(globalSettings);
+      }
 
-        const fetchedBranches = await getBranches();
-        setBranches(fetchedBranches);
+      const fetchedBranches = await getBranches();
+      setBranches(fetchedBranches);
 
-        setDate({
-            from: startOfDay(new Date(new Date().setDate(new Date().getDate() - 7))),
-            to: endOfDay(new Date()),
-        });
-        
-        setIsLoading(false);
+      setDate({
+        from: startOfDay(new Date(new Date().setDate(new Date().getDate() - 7))),
+        to: endOfDay(new Date()),
+      });
+
+      setIsLoading(false);
     }
     fetchInitialSettings();
   }, [user]);
 
   useEffect(() => {
     if (user && mainBranch) {
-        const isMainBranchManager = user.role === 'Manager' && user.branchId === mainBranch.id;
-        const canManageAllBranches = user.role === 'Admin' || isMainBranchManager;
-        
-        if (canManageAllBranches && mainBranch) {
-            // Default Admin/Main Manager to 'all' branches view
-            setBranchFilter('all');
-        } else {
-            setBranchFilter(user.branchId);
-        }
-    } else if (user) {
+      const isMainBranchManager = user.role === 'Manager' && user.branchId === mainBranch.id;
+      const canManageAllBranches = user.role === 'Admin' || isMainBranchManager;
+
+      if (canManageAllBranches && mainBranch) {
+        // Default Admin/Main Manager to 'all' branches view
+        setBranchFilter('all');
+      } else {
         setBranchFilter(user.branchId);
+      }
+    } else if (user) {
+      setBranchFilter(user.branchId);
     }
   }, [user, mainBranch]);
 
   useEffect(() => {
     async function fetchOrders() {
-        if(!user) return;
-        
-        const dineInOrders = await getOrders();
-        const remoteOrders = await getRemoteOrders();
-        
-        const combined: CombinedOrder[] = [
-            ...dineInOrders.map(o => ({ ...o, type: 'Dine-in' as const })),
-            ...remoteOrders.map(o => ({ ...o, type: 'Remote' as const })),
-        ];
-        
-        setAllOrders(combined.filter(o => 'status' in o ? o.status === 'completed' : true));
+      if (!user) return;
+
+      const dineInOrders = await getOrders();
+      const remoteOrders = await getRemoteOrders();
+
+      const combined: CombinedOrder[] = [
+        ...dineInOrders.map(o => ({ ...o, type: 'Dine-in' as const })),
+        ...remoteOrders.map(o => ({ ...o, type: 'Remote' as const })),
+      ];
+
+      setAllOrders(combined.filter(o => 'status' in o ? o.status === 'completed' : true));
     }
-    if(user) {
-        fetchOrders();
+    if (user) {
+      fetchOrders();
     }
   }, [user]);
 
@@ -181,15 +182,15 @@ export default function SalesReportPage() {
 
   if (isLoading || !settings || !user) {
     return (
-        <div className="flex h-[80vh] items-center justify-center">
-            <div className="flex flex-col items-center gap-2">
-                <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                <p className="text-muted-foreground">Loading sales report...</p>
-            </div>
+      <div className="flex h-[80vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="text-muted-foreground">Loading sales report...</p>
         </div>
+      </div>
     );
   }
-  
+
   const isMainBranchManager = mainBranch && user.branchId === mainBranch.id;
   const canManageAllBranches = user.role === 'Admin' || isMainBranchManager;
   const currencySymbol = settings.currencySymbol || '$';
@@ -204,19 +205,19 @@ export default function SalesReportPage() {
             <CardDescription>View sales analytics for your restaurant.</CardDescription>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-             {canManageAllBranches && (
-                <Select value={branchFilter} onValueChange={setBranchFilter}>
-                    <SelectTrigger className="w-full sm:w-[180px]">
-                        <SelectValue placeholder="Filter by branch" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Branches</SelectItem>
-                        {branches.map(branch => (
-                            <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-              )}
+            {canManageAllBranches && (
+              <Select value={branchFilter} onValueChange={setBranchFilter}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Filter by branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Branches</SelectItem>
+                  {branches.map(branch => (
+                    <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Popover>
               <PopoverTrigger asChild>
                 <Button

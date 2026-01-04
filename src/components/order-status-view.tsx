@@ -29,7 +29,19 @@ export function OrderStatusView({ initialOrder, settings, tableId, restaurantId 
 
         const unsubscribe = onSnapshot(orderRef, (docSnap) => {
             if (docSnap.exists()) {
-                const updatedOrder = { id: docSnap.id, ...docSnap.data() } as Order;
+                const data = docSnap.data();
+
+                // Convert Firestore Timestamps to ISO strings
+                if (data) {
+                    for (const key in data) {
+                        if (data[key]?.toDate && typeof data[key].toDate === 'function') {
+                            data[key] = data[key].toDate().toISOString();
+                        }
+                    }
+                }
+
+                const updatedOrder = { id: docSnap.id, ...data } as Order;
+                console.log('[OrderStatusView] Order updated:', updatedOrder.status);
                 setOrder(updatedOrder);
             }
         }, (error) => {
@@ -37,7 +49,7 @@ export function OrderStatusView({ initialOrder, settings, tableId, restaurantId 
         });
 
         return () => unsubscribe();
-    }, [order.id, order.status, restaurantId]);
+    }, [order.id, restaurantId]);
 
     const handlePrint = () => {
         const ReactDOMServer = require('react-dom/server');
