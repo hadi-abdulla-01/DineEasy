@@ -72,10 +72,10 @@ export default function UserManagementPage() {
       setBranches(fetchedBranches);
       setMainBranch(fetchedMainBranch);
 
-      if (currentUser?.role !== 'Admin' && currentUser?.branchId) {
+      if (isGlobalAdmin) {
+        if (fetchedMainBranch) setSelectedBranch(fetchedMainBranch.id);
+      } else if (currentUser?.branchId) {
         setSelectedBranch(currentUser.branchId);
-      } else if (fetchedMainBranch) {
-        setSelectedBranch(fetchedMainBranch.id);
       }
     };
     fetchData();
@@ -85,8 +85,8 @@ export default function UserManagementPage() {
   const canCreate = currentUser?.permissions?.userManagement?.create || currentUser?.role === 'Admin';
   const canEdit = currentUser?.permissions?.userManagement?.edit || currentUser?.role === 'Admin';
   const canDelete = currentUser?.permissions?.userManagement?.delete || currentUser?.role === 'Admin';
-  const isMainBranchManager = currentUser?.role === 'Manager' && currentUser?.branchId === mainBranch?.id;
-  const canManageAllBranches = currentUser?.role === 'Admin' || isMainBranchManager;
+
+  const isGlobalAdmin = (currentUser?.role === 'Admin' && !currentUser?.branchId) || currentUser?.username?.toLowerCase() === 'admin';
 
   const handleAddUser = async (formData: FormData) => {
     if (!restaurantId) {
@@ -97,14 +97,19 @@ export default function UserManagementPage() {
       });
       return;
     }
-    
+
+
+    if (!formData.get('branchId') && selectedBranch) {
+      formData.append('branchId', selectedBranch);
+    }
+
     formData.delete('categories');
     selectedCategories.forEach(category => {
       formData.append('categories', category);
     });
 
     formData.append('permissions', JSON.stringify(permissions));
-    
+
     if (currentUser?.id) {
       formData.append('createdBy', currentUser.id);
     }
@@ -119,7 +124,7 @@ export default function UserManagementPage() {
       });
     }
 
-    if (result?.message.includes("success")) {
+    if (result?.message && result.message.includes("success")) {
       const fetchedUsers = await getKitchenUsers();
       setUsers(fetchedUsers);
       formRef.current?.reset();
@@ -127,7 +132,7 @@ export default function UserManagementPage() {
       setPermissions({});
       setSelectAllPermissions(false);
       setSelectedRole('Kitchen');
-      if (canManageAllBranches && mainBranch) {
+      if (isGlobalAdmin && mainBranch) {
         setSelectedBranch(mainBranch.id);
       }
     }
@@ -211,11 +216,11 @@ export default function UserManagementPage() {
       const branchMatch = branchFilter !== 'all' ? user.branchId === branchFilter : true;
       const roleMatch = roleFilter !== 'all' ? user.role === roleFilter : true;
 
-      const isVisibleForManager = canManageAllBranches || user.branchId === currentUser?.branchId;
+      const isVisibleForManager = isGlobalAdmin || user.branchId === currentUser?.branchId;
 
       return nameMatch && branchMatch && roleMatch && isVisibleForManager;
     });
-  }, [users, nameFilter, branchFilter, roleFilter, canManageAllBranches, currentUser?.branchId]);
+  }, [users, nameFilter, branchFilter, roleFilter, isGlobalAdmin, currentUser?.branchId]);
 
   return (
     <div className="space-y-8">
@@ -242,7 +247,7 @@ export default function UserManagementPage() {
                       <SelectValue placeholder="Select a role" />
                     </SelectTrigger>
                     <SelectContent>
-                      {USER_ROLES.filter(r => (currentUser?.role === 'Admin' || isMainBranchManager) ? true : r !== 'Admin').map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
+                      {USER_ROLES.filter(r => (currentUser?.role === 'Admin') ? true : r !== 'Admin').map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -254,7 +259,7 @@ export default function UserManagementPage() {
                   <Input id="password" name="password" type="password" placeholder="Enter a secure password" required className="pl-9" />
                 </div>
               </div>
-              {canManageAllBranches && (
+              {isGlobalAdmin && (
                 <div className="space-y-2">
                   <Label htmlFor="branchId">Branch</Label>
                   <Select name="branchId" required value={selectedBranch} onValueChange={setSelectedBranch}>
@@ -375,7 +380,7 @@ export default function UserManagementPage() {
               onChange={(e) => setNameFilter(e.target.value)}
               className="max-w-sm"
             />
-            {canManageAllBranches && (
+            {isGlobalAdmin && (
               <Select value={branchFilter} onValueChange={setBranchFilter}>
                 <SelectTrigger className="w-full md:w-[180px]">
                   <SelectValue placeholder="Filter by branch" />

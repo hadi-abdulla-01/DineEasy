@@ -1,4 +1,5 @@
 
+
 'use client';
 import { updateMenuItemAction } from "@/lib/actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -226,10 +227,8 @@ export default function EditMenuPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {uniqueCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-                                    <SelectItem value="new">...add a new category</SelectItem>
                                 </SelectContent>
                             </Select>
-                            {categoryValue === 'new' && <Input name="newCategory" placeholder="Enter new category name" required className="mt-2" />}
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="prepTime">Preparation Time</Label>

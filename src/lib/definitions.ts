@@ -137,6 +137,7 @@ export type Order = {
     orderType: OrderType;
     notes?: string;
     paymentMethod?: 'cash' | 'card';
+    takeAwayTime?: string;
     branchId: string;
     createdByName?: string;
 };

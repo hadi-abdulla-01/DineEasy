@@ -157,17 +157,24 @@ export default function MenuManagementPage() {
   const [branchId, setBranchId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refetchToggle, setRefetchToggle] = useState(false);
 
-  const fetchItems = useCallback(() => {
-    if (!branchId) return;
+  const fetchItemsAndSettings = useCallback(async () => {
+    if (!branchId || !restaurantId) return;
     setError(null);
-    getMenuItems(branchId).then(items => {
+    try {
+      const [items, s] = await Promise.all([
+        getMenuItems(branchId),
+        getSettings(branchId),
+      ]);
       setMenuItems(items.sort((a, b) => a.name.localeCompare(b.name)));
-    }).catch(err => {
-      console.error("Failed to fetch menu items:", err);
-      setError("Failed to load menu items.");
-    });
-  }, [branchId, getMenuItems]);
+      setSettings(s);
+    } catch (err) {
+      console.error("Failed to fetch menu items and settings:", err);
+      setError("Failed to load menu data.");
+    }
+  }, [branchId, restaurantId, getMenuItems, getSettings]);
+
 
   useEffect(() => {
     async function loadData() {
@@ -181,25 +188,22 @@ export default function MenuManagementPage() {
         }
 
         setBranchId(activeBranchId);
-
-        if (activeBranchId) {
-          const s = await getSettings(activeBranchId);
-          setSettings(s);
-        }
       } catch (err) {
         console.error("Error loading initial data:", err);
         setError("Failed to initialize menu management.");
       }
     }
     loadData();
-  }, [user, restaurantId, getMainBranch, getSettings]);
+  }, [user, restaurantId, getMainBranch]);
 
   useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
+    if (branchId) {
+      fetchItemsAndSettings();
+    }
+  }, [branchId, fetchItemsAndSettings, refetchToggle]);
 
 
-  const categories = settings?.menuCategories || ['Meals', 'Snacks', 'Beverages', 'Desserts'];
+  const categories = settings?.menuCategories || [];
 
   const handleAddMenuItem = async (formData: FormData) => {
     setIsSubmitting(true);
@@ -228,7 +232,7 @@ export default function MenuManagementPage() {
       const newItem = await addMenuItemAction(formData);
 
       if (newItem) {
-        setMenuItems(prevItems => [...prevItems, newItem].sort((a, b) => a.name.localeCompare(b.name)));
+        setRefetchToggle(prev => !prev);
         formRef.current?.reset();
         setCategoryValue("");
         setPreviewImage(null);
@@ -236,8 +240,7 @@ export default function MenuManagementPage() {
           fileInputRef.current.value = "";
         }
       } else {
-        // Fallback if action didn't return item (e.g. validation failure on server)
-        fetchItems();
+        setRefetchToggle(prev => !prev);
       }
 
     } catch (error) {
@@ -288,10 +291,8 @@ export default function MenuManagementPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-                    <SelectItem value="new">...add a new category</SelectItem>
                   </SelectContent>
                 </Select>
-                {categoryValue === 'new' && <Input name="newCategory" placeholder="Enter new category name" required className="mt-2" />}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="prepTime">Preparation Time</Label>
@@ -440,7 +441,7 @@ export default function MenuManagementPage() {
           <CardDescription>Search for items and toggle their availability or add-on status.</CardDescription>
         </CardHeader>
         <CardContent>
-          <MenuItemList items={menuItems} onToggle={fetchItems} settings={settings} restaurantId={restaurantId} />
+          <MenuItemList items={menuItems} onToggle={() => setRefetchToggle(prev => !prev)} settings={settings} restaurantId={restaurantId} />
         </CardContent>
       </Card>
     </div>

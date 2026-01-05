@@ -93,46 +93,44 @@ export default function SettingsPage() {
     const { getBranches, getMainBranch, restaurantId } = useRestaurantData();
     const [mainBranch, setMainBranch] = useState<Branch | null>(null);
     const [branches, setBranches] = useState<Branch[]>([]);
+
+    // Centralized Global Admin Check
+    const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
+
     const [selectedBranchId, setSelectedBranchId] = useState<string | undefined>(undefined);
 
     useEffect(() => {
         async function fetchData() {
             if (!user || !restaurantId) return;
 
-            const [fetchedBranches, fetchedMainBranch] = await Promise.all([
-                getBranches(),
-                getMainBranch()
-            ]);
-            
-            setBranches(fetchedBranches);
-            setMainBranch(fetchedMainBranch);
+            if (isGlobalAdmin) {
+                const [fetchedBranches, fetchedMainBranch] = await Promise.all([
+                    getBranches(),
+                    getMainBranch()
+                ]);
 
-            const isMainManager = user.role === 'Manager' && user.branchId === fetchedMainBranch?.id;
-            const canSelectAll = user.role === 'Admin' || isMainManager;
+                setBranches(fetchedBranches);
+                setMainBranch(fetchedMainBranch);
 
-            if (canSelectAll && fetchedMainBranch) {
-                setSelectedBranchId(fetchedMainBranch.id);
+                setSelectedBranchId(prev => prev || fetchedMainBranch?.id);
             } else {
                 setSelectedBranchId(user.branchId);
             }
         }
         fetchData();
-    }, [user, restaurantId]);
+    }, [user, restaurantId, isGlobalAdmin, getBranches, getMainBranch]);
 
     if (!user) return null;
 
-    const isMainBranchManager = user.role === 'Manager' && user.branchId === mainBranch?.id;
-    const canManageAllBranches = user.role === 'Admin' || isMainBranchManager;
-
     const getHref = (baseHref: string) => {
         if (!branchSettingsSections.some(s => s.href === baseHref)) return baseHref;
-        const branchIdToUse = canManageAllBranches ? selectedBranchId : user.branchId;
+        const branchIdToUse = isGlobalAdmin ? selectedBranchId : user.branchId;
         return `${baseHref}?branchId=${branchIdToUse}`;
     };
 
     return (
         <div className="space-y-8">
-            {user.role === 'Admin' && (
+            {isGlobalAdmin && (
                 <Card>
                     <CardHeader>
                         <CardTitle className="font-headline">Global Restaurant Settings</CardTitle>
@@ -170,7 +168,7 @@ export default function SettingsPage() {
                             <CardTitle className="font-headline">Branch-Specific Settings</CardTitle>
                             <CardDescription>These settings can be configured individually for each branch.</CardDescription>
                         </div>
-                        {canManageAllBranches && (
+                        {isGlobalAdmin && (
                             <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
                                 <SelectTrigger className="w-full sm:w-[220px]">
                                     <SelectValue placeholder="Select a branch to configure" />

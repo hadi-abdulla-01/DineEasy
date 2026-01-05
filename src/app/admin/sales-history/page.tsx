@@ -36,9 +36,12 @@ export default function SalesHistoryPage() {
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
+
   const fetchOrders = async () => {
     if (!user) return;
-    const branchId = user.role === 'Admin' ? undefined : user.branchId;
+    // If Global Admin: View All (undefined). If Branch Admin: View Specific Branch.
+    const branchId = isGlobalAdmin ? undefined : user.branchId;
 
     const dineInOrders = await getOrders(branchId);
     const remoteOrders = await getRemoteOrders(branchId);
@@ -55,7 +58,7 @@ export default function SalesHistoryPage() {
       setIsLoading(true);
 
       let branchIdForSettings = user.branchId;
-      if (user.role === 'Admin') {
+      if (isGlobalAdmin) {
         const mainBranch = await getMainBranch();
         if (mainBranch) {
           branchIdForSettings = mainBranch.id;
@@ -71,7 +74,8 @@ export default function SalesHistoryPage() {
       setIsLoading(false);
     }
     fetchInitialData();
-  }, [user]);
+    fetchInitialData();
+  }, [user, isGlobalAdmin, getMainBranch, getSettings]);
 
   const filteredOrders = useMemo(() => {
     if (!searchTerm) {

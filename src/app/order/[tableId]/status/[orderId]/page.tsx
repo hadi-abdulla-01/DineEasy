@@ -1,10 +1,9 @@
-
 'use client';
 
 import { getOrderById, getSettings, getTableById } from "@/lib/data";
 import { notFound, useParams, useRouter } from "next/navigation";
 import { OrderStatusView } from "@/components/order-status-view";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { Order, RestaurantSettings } from "@/lib/definitions";
 import { LoaderCircle } from "lucide-react";
 
@@ -16,71 +15,96 @@ export default function OrderStatusPage() {
 
   const [order, setOrder] = useState<Order | null>(null);
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
+  const [restaurantId, setRestaurantId] = useState<string>('dineeasee-restaurant');
   const [isLoading, setIsLoading] = useState(true);
 
+  // Track which branch's settings we have loaded to avoid re-fetching unnecessarily
+  const loadedBranchIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    async function fetchData() {
+    const unsubs: (() => void)[] = [];
+
+    async function initialize() {
       if (!orderId || !tableId) return;
 
-      // First, check if customer info is in session. If not, redirect to welcome.
       const storedCustomerInfo = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
       let customerPhone: string | null = null;
-
       if (storedCustomerInfo) {
         try {
           const info = JSON.parse(storedCustomerInfo);
           customerPhone = info.phone;
-        } catch {
-          // Invalid JSON, force re-authentication
-        }
+        } catch { }
       }
 
       if (!customerPhone) {
-        // No phone number found, user must identify themselves.
-        // We pass the current URL as 'next' so they can be redirected back here.
         router.replace(`/order/${tableId}/welcome?next=/order/${tableId}/status/${orderId}`);
         return;
       }
 
       try {
-        // 1. Resolve Table & Restaurant ID
         const fetchedTable = await getTableById(tableId);
         if (!fetchedTable) {
-          console.error("Table not found for status page");
-          notFound(); // Or handle error
-          return;
-        }
-
-        const restaurantId = fetchedTable.restaurantId || 'dineeasee-restaurant';
-
-        // 2. Fetch Order with Restaurant ID
-        const fetchedOrder = await getOrderById(orderId, restaurantId);
-
-        if (!fetchedOrder) {
           notFound();
           return;
         }
 
-        // Validate that the customer phone number matches the order.
-        if (customerPhone !== fetchedOrder.customerPhone) {
-          router.replace(`/order/${tableId}/welcome`);
-          return;
-        }
+        const restaurantId = fetchedTable.restaurantId || 'dineeasee-restaurant';
+        setRestaurantId(restaurantId);
 
-        // 3. Fetch Settings with Restaurant ID
-        const fetchedSettings = await getSettings(fetchedOrder.branchId, restaurantId);
+        const { firestore } = await import("@/firebase/client").then(mod => mod.getClientFirebase());
+        const { doc, onSnapshot } = await import("firebase/firestore");
 
-        setOrder(fetchedOrder);
-        setSettings(fetchedSettings);
+        const orderRef = doc(firestore, `restaurants/${restaurantId}/orders`, orderId);
+
+        const unsub = onSnapshot(orderRef, async (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            // Convert timestamps
+            const orderData = {
+              ...data,
+              id: docSnap.id,
+              createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
+            } as Order;
+
+            if (customerPhone !== orderData.customerPhone) {
+              router.replace(`/order/${tableId}/welcome`);
+              return;
+            }
+
+            setOrder(orderData);
+
+            // Check if we need to fetch settings (first load or branch changed)
+            if (loadedBranchIdRef.current !== orderData.branchId) {
+              try {
+                const newSettings = await getSettings(orderData.branchId, restaurantId);
+                setSettings(newSettings);
+                loadedBranchIdRef.current = orderData.branchId;
+              } catch (err) {
+                console.error("Error fetching settings:", err);
+              }
+            }
+
+            setIsLoading(false);
+          } else {
+            notFound();
+          }
+        }, (error) => {
+          console.error("Snapshot error:", error);
+        });
+
+        unsubs.push(unsub);
+
       } catch (error) {
-        console.error("Failed to fetch initial data", error);
-        // You might want to show a more user-friendly error state here
-      } finally {
+        console.error("Failed to initialize order stream", error);
         setIsLoading(false);
       }
     }
 
-    fetchData();
+    initialize();
+
+    return () => {
+      unsubs.forEach(u => u());
+    };
   }, [orderId, tableId, router]);
 
   if (isLoading || !order || !settings) {
@@ -96,7 +120,7 @@ export default function OrderStatusPage() {
 
   return (
     <div className="min-h-screen bg-[var(--order-status-bg)] flex items-center justify-center">
-      <OrderStatusView initialOrder={order} settings={settings} tableId={tableId} restaurantId={order.restaurantId || 'dineeasee-restaurant'} />
+      <OrderStatusView initialOrder={order} settings={settings} tableId={tableId} restaurantId={restaurantId} />
     </div>
   );
 }

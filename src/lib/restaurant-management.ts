@@ -34,7 +34,7 @@ export async function createRestaurant(
             currencySymbol: '$',
             currencyDecimalPlaces: 2,
             taxes: [],
-            menuCategories: ['Meals', 'Snacks', 'Beverages', 'Desserts'],
+            menuCategories: [],
             onlineOrderingEnabled: true,
             deliveryFee: 0,
             minimumOrderValue: 0,
@@ -58,6 +58,7 @@ export async function createRestaurant(
             restaurantAddress: '',
             currencySymbol: '$',
             currencyDecimalPlaces: 2,
+            menuCategories: ['Meals', 'Snacks', 'Beverages', 'Desserts'],
             taxes: [],
         });
 
@@ -121,19 +122,44 @@ export async function deleteRestaurant(restaurantId: string): Promise<{ success:
         const firestore = initializeFirebase().firestore;
         const { deleteDoc, getDocs, collection: firestoreCollection } = await import('firebase/firestore');
 
-        // Delete all subcollections
+        // 1. Delete all users from Firebase Authentication
+        try {
+            const { getAdminAuth } = await import('@/firebase/admin');
+            const adminAuth = getAdminAuth();
+            if (adminAuth) {
+                const usersRef = firestoreCollection(firestore, `restaurants/${restaurantId}/kitchenUsers`);
+                const usersSnapshot = await getDocs(usersRef);
+
+                const authDeletePromises = usersSnapshot.docs.map(async (doc) => {
+                    const userData = doc.data();
+                    if (userData.firebaseUid) {
+                        try {
+                            await adminAuth.deleteUser(userData.firebaseUid);
+                            console.log(`Deleted Auth User for restaurant ${restaurantId}: ${userData.firebaseUid}`);
+                        } catch (e) {
+                            console.warn(`Failed to delete auth user ${userData.firebaseUid}:`, e);
+                        }
+                    }
+                });
+                await Promise.all(authDeletePromises);
+            }
+        } catch (authError) {
+            console.error('Error dealing with Firebase Auth deletion:', authError);
+            // Continue to delete Firestore data even if Auth deletion fails partially
+        }
+
+        // 2. Delete all subcollections
         const subcollections = ['branches', 'kitchenUsers', 'menuItems', 'orders', 'remoteOrders', 'tables', 'activityLogs'];
 
         for (const subcollection of subcollections) {
             const subcollectionRef = firestoreCollection(firestore, `restaurants/${restaurantId}/${subcollection}`);
             const snapshot = await getDocs(subcollectionRef);
 
-            for (const document of snapshot.docs) {
-                await deleteDoc(document.ref);
-            }
+            const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+            await Promise.all(deletePromises);
         }
 
-        // Delete restaurant document
+        // 3. Delete restaurant document
         const restaurantRef = doc(firestore, 'restaurants', restaurantId);
         await deleteDoc(restaurantRef);
 

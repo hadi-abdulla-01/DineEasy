@@ -140,8 +140,7 @@ export default function AdminKitchenPage() {
     const [selectedBranchId, setSelectedBranchId] = useState<string | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
 
-    const isMainBranchManager = user?.role === 'Manager' && user?.branchId === mainBranch?.id;
-    const canManageAllBranches = user?.role === 'Admin' || isMainBranchManager;
+    const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
 
     const handleBranchChange = (branchId: string) => {
         sessionStorage.setItem('kitchenViewBranchId', branchId);
@@ -176,25 +175,23 @@ export default function AdminKitchenPage() {
 
             let initialBranchId: string | undefined;
 
-            if (savedBranchId) {
-                initialBranchId = savedBranchId;
-            } else if (canManageAllBranches && fetchedMainBranch) {
-                initialBranchId = fetchedMainBranch.id;
+            if (isGlobalAdmin) {
+                // Global Admin: Respect saved preference or default to Main Branch
+                initialBranchId = savedBranchId || fetchedMainBranch?.id;
+
+                const branches = await getBranches();
+                setAllBranches(branches);
             } else {
+                // Branch Admin: Enforce specific branch, ignoring any stale session storage
                 initialBranchId = user.branchId;
             }
 
             if (initialBranchId) {
                 setSelectedBranchId(initialBranchId);
             }
-
-            if (canManageAllBranches) {
-                const branches = await getBranches();
-                setAllBranches(branches);
-            }
         }
         fetchInitialData();
-    }, [user, canManageAllBranches, getMainBranch, getBranches]);
+    }, [user, isGlobalAdmin, getMainBranch, getBranches]);
 
     useEffect(() => {
         if (selectedBranchId) {
@@ -258,7 +255,7 @@ export default function AdminKitchenPage() {
         <>
             <div className="flex justify-between items-center mb-4">
                 <h2 className="font-headline text-2xl font-semibold">Kitchen View</h2>
-                {canManageAllBranches && (
+                {isGlobalAdmin && (
                     <Select value={selectedBranchId} onValueChange={handleBranchChange}>
                         <SelectTrigger className="w-full sm:w-[220px]">
                             <SelectValue placeholder="Select a branch" />

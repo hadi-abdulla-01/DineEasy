@@ -41,6 +41,8 @@ export default function SalesReportPage() {
   const reportRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
+
   useEffect(() => {
     async function fetchInitialSettings() {
       if (!user) return;
@@ -49,7 +51,7 @@ export default function SalesReportPage() {
       setMainBranch(fetchedMainBranch);
 
       let branchIdForSettings = user.branchId;
-      if (user.role === 'Admin' && fetchedMainBranch) {
+      if (isGlobalAdmin && fetchedMainBranch) {
         branchIdForSettings = fetchedMainBranch.id;
       }
 
@@ -62,8 +64,10 @@ export default function SalesReportPage() {
         setSettings(globalSettings);
       }
 
-      const fetchedBranches = await getBranches();
-      setBranches(fetchedBranches);
+      if (isGlobalAdmin) {
+        const fetchedBranches = await getBranches();
+        setBranches(fetchedBranches);
+      }
 
       setDate({
         from: startOfDay(new Date(new Date().setDate(new Date().getDate() - 7))),
@@ -73,23 +77,17 @@ export default function SalesReportPage() {
       setIsLoading(false);
     }
     fetchInitialSettings();
-  }, [user]);
+  }, [user, isGlobalAdmin, getMainBranch, getSettings, getBranches]);
 
   useEffect(() => {
-    if (user && mainBranch) {
-      const isMainBranchManager = user.role === 'Manager' && user.branchId === mainBranch.id;
-      const canManageAllBranches = user.role === 'Admin' || isMainBranchManager;
-
-      if (canManageAllBranches && mainBranch) {
-        // Default Admin/Main Manager to 'all' branches view
+    if (user) {
+      if (isGlobalAdmin) {
         setBranchFilter('all');
       } else {
         setBranchFilter(user.branchId);
       }
-    } else if (user) {
-      setBranchFilter(user.branchId);
     }
-  }, [user, mainBranch]);
+  }, [user, isGlobalAdmin]);
 
   useEffect(() => {
     async function fetchOrders() {
@@ -191,8 +189,7 @@ export default function SalesReportPage() {
     );
   }
 
-  const isMainBranchManager = mainBranch && user.branchId === mainBranch.id;
-  const canManageAllBranches = user.role === 'Admin' || isMainBranchManager;
+
   const currencySymbol = settings.currencySymbol || '$';
   const currencyDecimalPlaces = settings.currencyDecimalPlaces ?? 2;
 
@@ -205,7 +202,7 @@ export default function SalesReportPage() {
             <CardDescription>View sales analytics for your restaurant.</CardDescription>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-            {canManageAllBranches && (
+            {isGlobalAdmin && (
               <Select value={branchFilter} onValueChange={setBranchFilter}>
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="Filter by branch" />

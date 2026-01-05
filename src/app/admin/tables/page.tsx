@@ -139,8 +139,7 @@ export default function TableManagementPage() {
   const [tableNumber, setTableNumber] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
 
-  const isMainBranchManager = user?.role === 'Manager' && user?.branchId === mainBranch?.id;
-  const canManageAllBranches = user?.role === 'Admin' || isMainBranchManager;
+  const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
 
   useEffect(() => {
     async function fetchInitialData() {
@@ -149,19 +148,20 @@ export default function TableManagementPage() {
       const fetchedMainBranch = await getMainBranch();
       setMainBranch(fetchedMainBranch);
 
-      if (user.role === 'Admin' && fetchedMainBranch && !selectedBranchId) {
-        setSelectedBranchId(fetchedMainBranch.id);
-      } else if (user.branchId) {
-        setSelectedBranchId(user.branchId);
-      }
-
-      if (canManageAllBranches) {
+      if (isGlobalAdmin) {
+        if (!selectedBranchId && fetchedMainBranch) {
+          setSelectedBranchId(fetchedMainBranch.id);
+        }
         const branches = await getBranches();
         setAllBranches(branches);
+      } else {
+        if (selectedBranchId !== user.branchId) {
+          setSelectedBranchId(user.branchId);
+        }
       }
     }
     fetchInitialData();
-  }, [user, canManageAllBranches]);
+  }, [user, isGlobalAdmin, selectedBranchId, getMainBranch, getBranches]);
 
   useEffect(() => {
     async function fetchBranchData() {
@@ -210,7 +210,7 @@ export default function TableManagementPage() {
             <h2 className="text-2xl font-bold dark:text-gray-100">Table Management</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">Add or manage tables for a branch.</p>
           </div>
-          {canManageAllBranches && (
+          {isGlobalAdmin && (
             <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
               <SelectTrigger className="w-full sm:w-[220px]">
                 <SelectValue placeholder="Select a branch" />

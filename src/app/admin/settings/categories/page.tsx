@@ -1,7 +1,7 @@
 
 'use client';
-import { useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,80 +11,133 @@ import { useAuth } from '../../auth-provider';
 import type { RestaurantSettings } from '@/lib/definitions';
 import { Plus, Trash2, Tag } from 'lucide-react';
 import { useRestaurantData } from '@/lib/client-data';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useToast } from '@/hooks/use-toast';
+
 
 export default function CategoriesPage() {
     const { user } = useAuth();
-    const router = useRouter();
     const searchParams = useSearchParams();
+    const { toast } = useToast();
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
-    const [branchId, setBranchId] = useState<string | null>(null);
     const [newCategory, setNewCategory] = useState('');
     const [error, setError] = useState('');
     const { getSettings, getMainBranch, restaurantId } = useRestaurantData();
+    const [refetchToggle, setRefetchToggle] = useState(false);
+    const [branchId, setBranchId] = useState<string | null>(null);
 
-    useEffect(() => {
-        async function fetchData() {
-            if (!restaurantId) return;
+    const fetchData = useCallback(async () => {
+        if (!restaurantId || !user) return;
 
-            let activeBranchId: string | null = user?.branchId || null;
+        let activeBranchId: string | null = user?.branchId || null;
 
-            if (!activeBranchId) {
-                const urlBranchId = searchParams.get('branchId');
-
-                if (urlBranchId) {
-                    activeBranchId = urlBranchId;
-                } else {
-                    const mainBranch = await getMainBranch();
-                    activeBranchId = mainBranch?.id || null;
-                }
-            }
-
-            setBranchId(activeBranchId);
-
-            if (activeBranchId) {
-                getSettings(activeBranchId).then(setSettings);
+        if (!activeBranchId) {
+            const urlBranchId = searchParams.get('branchId');
+            if (urlBranchId) {
+                activeBranchId = urlBranchId;
+            } else {
+                const mainBranch = await getMainBranch();
+                activeBranchId = mainBranch?.id || null;
             }
         }
+
+        setBranchId(activeBranchId);
+
+        if (activeBranchId) {
+            const freshSettings = await getSettings(activeBranchId);
+            setSettings(freshSettings);
+        }
+    }, [user, searchParams, restaurantId, getMainBranch, getSettings]);
+
+    useEffect(() => {
         fetchData();
-    }, [user, searchParams, restaurantId]);
+    }, [fetchData, refetchToggle]);
 
     const handleAddCategory = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!branchId || !newCategory.trim() || !restaurantId) return;
+        if (!branchId || !newCategory.trim() || !restaurantId || !settings) return;
 
+        const categoryToAdd = newCategory.trim();
         setError('');
+
+        // Optimistic Update: Add to UI immediately
+        const prevCategories = settings.menuCategories || [];
+        setSettings({
+            ...settings,
+            menuCategories: [...prevCategories, categoryToAdd]
+        });
+        setNewCategory(''); // Clear input immediately
+
         const formData = new FormData();
         formData.append('branchId', branchId);
-        formData.append('categoryName', newCategory.trim());
+        formData.append('categoryName', categoryToAdd);
         formData.append('restaurantId', restaurantId);
 
         const result = await addMenuCategoryAction(formData);
 
         if (result?.message) {
             setError(result.message);
+            // Revert on error
+            setSettings({
+                ...settings,
+                menuCategories: prevCategories
+            });
         } else {
-            // Refresh settings
-            const updatedSettings = await getSettings(branchId);
-            setSettings(updatedSettings);
-            setNewCategory('');
-            router.refresh();
+            toast({
+                title: "Category Added",
+                description: `The category "${categoryToAdd}" has been successfully created.`,
+            });
+            setRefetchToggle(prev => !prev);
         }
     };
 
     const handleDeleteCategory = async (categoryName: string) => {
-        if (!branchId || !restaurantId) return;
-        if (!confirm(`Are you sure you want to delete the "${categoryName}" category?`)) return;
+        if (!branchId || !restaurantId || !settings) return;
 
         setError('');
-        const result = await removeMenuCategoryAction(branchId, categoryName, restaurantId);
+
+        // Optimistic Update: Remove from UI immediately
+        const prevCategories = settings.menuCategories || [];
+        setSettings({
+            ...settings,
+            menuCategories: prevCategories.filter(c => c !== categoryName)
+        });
+
+        const formData = new FormData();
+        formData.append('branchId', branchId);
+        formData.append('categoryName', categoryName);
+        formData.append('restaurantId', restaurantId);
+
+        const result = await removeMenuCategoryAction(formData);
 
         if (result?.message) {
             setError(result.message);
+            // Revert on error
+            setSettings({
+                ...settings,
+                menuCategories: prevCategories
+            });
+            toast({
+                variant: "destructive",
+                title: "Error Deleting Category",
+                description: result.message,
+            });
         } else {
-            // Refresh settings
-            const updatedSettings = await getSettings(branchId);
-            setSettings(updatedSettings);
-            router.refresh();
+            toast({
+                title: "Category Deleted",
+                description: `The category "${categoryName}" has been removed.`,
+            });
+            setRefetchToggle(prev => !prev);
         }
     };
 
@@ -157,13 +210,34 @@ export default function CategoriesPage() {
                                             </div>
                                             <h3 className="font-semibold">{category}</h3>
                                         </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => handleDeleteCategory(category)}
-                                        >
-                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                >
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        This action cannot be undone. This will permanently delete the <strong>{category}</strong> category.
+                                                        If any menu items are using this category, you will not be able to delete it.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction
+                                                        onClick={() => handleDeleteCategory(category)}
+                                                        className="bg-destructive hover:bg-destructive/90"
+                                                    >
+                                                        Yes, delete
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
                                     </div>
                                 </CardContent>
                             </Card>

@@ -178,13 +178,9 @@ export default function KitchenPage() {
             console.log(`[KitchenPage] Raw active orders fetched: ${activeOrders.length}`);
             console.log(`[KitchenPage] User Branch ID: ${user.branchId}`);
 
-            // Client-side filtering for branch (TEMPORARILY DISABLED FOR DEBUGGING)
+            // Client-side filtering for branch
             const branchOrders = activeOrders
-                // .filter(order => {
-                //     const match = order.branchId === user.branchId;
-                //     if (!match) console.log(`[KitchenPage] Filtering out order ${order.id} due to branch mismatch. Order Branch: ${order.branchId}, User Branch: ${user.branchId}`);
-                //     return match;
-                // })
+                .filter(order => order.branchId === user.branchId)
                 .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
             console.log(`[KitchenPage] Orders (branch filter disabled): ${branchOrders.length}`);

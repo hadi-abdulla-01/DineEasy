@@ -606,15 +606,37 @@ export async function updateKitchenUserAction(userId: string, formData: FormData
 export async function deleteKitchenUserAction(userId: string, deletedBy: string | null, restaurantId?: string) {
     try {
         const userToDelete = await getKitchenUserById(userId, restaurantId);
-        if (userToDelete && deletedBy) {
-            const deleter = await getKitchenUserById(deletedBy, restaurantId);
-            if (deleter) {
-                await logActivity(deleter.id, deleter.username, 'Deleted User', `Deleted user: ${userToDelete.username}`, restaurantId || 'dineeasee-restaurant');
+        if (userToDelete) {
+            if (deletedBy) {
+                const deleter = await getKitchenUserById(deletedBy, restaurantId);
+                if (deleter) {
+                    await logActivity(deleter.id, deleter.username, 'Deleted User', `Deleted user: ${userToDelete.username}`, restaurantId || 'dineeasee-restaurant');
+                }
+            }
+
+            // Delete from Firebase Auth
+            if (userToDelete.firebaseUid) {
+                // specific dynamic import to avoid bundling admin sdk on client if this file is mixed? 
+                // 'use server' handles it, but let's be safe or just import at top. 
+                // Since actions.ts is 'use server', imports stay on server.
+                const { getAdminAuth } = await import('@/firebase/admin');
+                const adminAuth = getAdminAuth();
+                if (adminAuth) {
+                    try {
+                        await adminAuth.deleteUser(userToDelete.firebaseUid);
+                        console.log(`Deleted Firebase Auth user: ${userToDelete.firebaseUid}`);
+                    } catch (authError) {
+                        console.error("Failed to delete user from Firebase Auth:", authError);
+                    }
+                } else {
+                    console.warn("Skipping Firebase Auth deletion: Warning - Admin Auth could not be initialized. Check FIREBASE_SERVICE_ACCOUNT_KEY.");
+                }
             }
         }
         await deleteKitchenUser(userId, restaurantId);
         revalidatePath('/admin/user-management');
     } catch (error) {
+        console.error("Error deleting user:", error);
         return { message: 'Database Error: Failed to delete user.' };
     }
 }
@@ -892,10 +914,10 @@ export async function updateManualSessionOverrideAction(formData: FormData) {
 
 export async function addMenuCategoryAction(formData: FormData) {
     const branchId = formData.get('branchId') as string;
-    const restaurantId = formData.get('restaurantId') as string;
     const categoryName = formData.get('categoryName') as string;
+    const restaurantId = formData.get('restaurantId') as string;
 
-    if (!branchId || !categoryName) {
+    if (!branchId || !categoryName || !restaurantId) {
         return { message: 'Missing required fields.' };
     }
 
@@ -912,8 +934,12 @@ export async function addMenuCategoryAction(formData: FormData) {
     }
 }
 
-export async function removeMenuCategoryAction(branchId: string, categoryName: string, restaurantId?: string) {
-    if (!branchId || !categoryName) {
+export async function removeMenuCategoryAction(formData: FormData) {
+    const branchId = formData.get('branchId') as string;
+    const categoryName = formData.get('categoryName') as string;
+    const restaurantId = formData.get('restaurantId') as string;
+
+    if (!branchId || !categoryName || !restaurantId) {
         return { message: 'Missing required fields.' };
     }
 

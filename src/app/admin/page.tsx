@@ -9,6 +9,7 @@ import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import type { ChartConfig } from '@/components/ui/chart';
 import { DollarSign, ShoppingCart, Users, TrendingUp, LoaderCircle } from 'lucide-react';
 import { useAuth } from './auth-provider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type CombinedOrder = (Order | RemoteOrder) & { type: 'Dine-in' | 'Remote' };
 
@@ -23,7 +24,19 @@ const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
 export default function AdminDashboardPage() {
     const { user } = useAuth();
-    const { getOrders, getRemoteOrders, getSettings, getMenuItems, getMainBranch, restaurantId } = useRestaurantData();
+    const { getOrders, getRemoteOrders, getSettings, getMenuItems, getMainBranch, getBranches, restaurantId } = useRestaurantData();
+    const [branches, setBranches] = useState<Branch[]>([]);
+    const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('all');
+
+    // Determine if the user is a Global Admin (Admin role + No specific branch assigned, OR the 'admin' superuser)
+    const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
+
+    useEffect(() => {
+        if (isGlobalAdmin && restaurantId) {
+            getBranches().then(setBranches);
+        }
+    }, [isGlobalAdmin, restaurantId, getBranches]);
+
     const [allOrders, setAllOrders] = useState<CombinedOrder[]>([]);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -35,18 +48,24 @@ export default function AdminDashboardPage() {
         async function fetchData() {
             setIsLoading(true);
 
-            // 1. Determine which branch settings to load.
-            let settingsBranchId = user.branchId;
-            if (user.role === 'Admin' && !settingsBranchId) {
+            // Determine target branch based on user role and filter
+            // If Global Admin: Use filter (undefined for 'all', or specific ID)
+            // If Branch User: Always use their assigned branchId
+            const targetBranchId = isGlobalAdmin
+                ? (selectedBranchFilter === 'all' ? undefined : selectedBranchFilter)
+                : user!.branchId; // user is guaranteed non-null here
+
+            // Determine settings execution context
+            // Default to target branch if selected, otherwise fallback to Main Branch
+            let settingsBranchId = targetBranchId;
+            if (!settingsBranchId) {
                 const mainBranch = await getMainBranch();
-                if (mainBranch) {
-                    settingsBranchId = mainBranch.id;
-                }
+                settingsBranchId = mainBranch?.id;
             }
 
-            // If we still don't have a branch ID for settings, we can't proceed.
             if (!settingsBranchId) {
-                console.error("Could not determine branch for fetching settings.");
+                // Should not happen for valid restaurants.
+                console.error("Could not determine settings context");
                 setIsLoading(false);
                 return;
             }
@@ -54,13 +73,10 @@ export default function AdminDashboardPage() {
             const fetchedSettings = await getSettings(settingsBranchId);
             setSettings(fetchedSettings);
 
-            // 2. Determine which branch's data to fetch. Admin gets all.
-            const dataBranchId = user.role === 'Admin' ? undefined : user.branchId;
-
             const [fetchedMenuItems, dineInOrders, remoteOrders] = await Promise.all([
-                getMenuItems(dataBranchId),
-                getOrders(dataBranchId),
-                getRemoteOrders(dataBranchId)
+                getMenuItems(targetBranchId),
+                getOrders(targetBranchId),
+                getRemoteOrders(targetBranchId)
             ]);
 
             setMenuItems(fetchedMenuItems);
@@ -75,7 +91,7 @@ export default function AdminDashboardPage() {
         }
 
         fetchData();
-    }, [user, user?.branchId]); // Depend on user and branchId for stability
+    }, [user, selectedBranchFilter, isGlobalAdmin, getBranches, getOrders, getRemoteOrders, getSettings, getMenuItems, getMainBranch]);
 
     const stats = useMemo(() => {
         const totalRevenue = allOrders.reduce((acc, order) => acc + (order.total || 0), 0);
@@ -124,9 +140,24 @@ export default function AdminDashboardPage() {
     return (
         <div className="space-y-8">
             <Card>
-                <CardHeader>
-                    <CardTitle className="font-headline">Welcome, {user.username}!</CardTitle>
-                    <CardDescription>Here's a quick overview of your restaurant's performance.</CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle className="font-headline">Welcome, {user.username}!</CardTitle>
+                        <CardDescription>Here's a quick overview of your restaurant's performance.</CardDescription>
+                    </div>
+                    {isGlobalAdmin && (
+                        <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Filter by branch" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Branches</SelectItem>
+                                {branches.map(b => (
+                                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
                 </CardHeader>
             </Card>
 
