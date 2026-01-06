@@ -598,7 +598,31 @@ export async function createOrder(orderData: Omit<Order, 'id' | 'createdAt' | 's
 
     const newOrderData = { ...orderData, invoiceNumber, subtotal, taxes: appliedTaxes, totalTaxAmount, total, createdAt: serverTimestamp(), status: 'received' as const };
     const docRef = await addDoc(ordersRef, newOrderData);
-    return { ...newOrderData, id: docRef.id, createdAt: new Date().toISOString() } as Order;
+    const order = { ...newOrderData, id: docRef.id, createdAt: new Date().toISOString() } as Order;
+
+    // Send push notification to kitchen devices
+    try {
+        await fetch('/api/send-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                restaurantId,
+                branchId: orderData.branchId,
+                order: {
+                    id: docRef.id,
+                    orderType: orderData.orderType,
+                    customerName: orderData.customerName,
+                    items: orderData.items,
+                },
+            }),
+        });
+        console.log('📱 Push notification sent for order:', docRef.id);
+    } catch (error) {
+        console.error('❌ Failed to send push notification:', error);
+        // Don't fail the order creation if notification fails
+    }
+
+    return order;
 }
 
 export async function addItemsToOrder(orderId: string, items: OrderItem[], notes?: string, restaurantId: string = 'dineeasee-restaurant'): Promise<Order | undefined> {
