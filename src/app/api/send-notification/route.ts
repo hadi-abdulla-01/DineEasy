@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
         const tokens = tokensSnapshot.docs.map(doc => doc.data().token);
         console.log(`📱 Sending to ${tokens.length} device(s)`);
 
-        // Send FCM notification
+        // Send FCM notification with high priority for heads-up display
         const message = {
             notification: {
                 title: `🍽️ New Order - ${order.orderType}`,
@@ -65,9 +65,18 @@ export async function POST(request: NextRequest) {
                 notification: {
                     channelId: 'kitchen_orders',
                     sound: 'default',
-                    priority: 'high' as const,
+                    priority: 'max' as const,  // Maximum priority for heads-up notification
                     defaultSound: true,
                     defaultVibrateTimings: true,
+                    visibility: 'public' as const,  // Show on lock screen
+                },
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: 'default',
+                        badge: 1,
+                    },
                 },
             },
         };
