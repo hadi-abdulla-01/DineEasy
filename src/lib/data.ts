@@ -600,9 +600,14 @@ export async function createOrder(orderData: Omit<Order, 'id' | 'createdAt' | 's
     const docRef = await addDoc(ordersRef, newOrderData);
     const order = { ...newOrderData, id: docRef.id, createdAt: new Date().toISOString() } as Order;
 
-    // Send push notification to kitchen devices
+    // Send push notification to kitchen devices (works on Vercel)
     try {
-        await fetch('/api/send-notification', {
+        // Use absolute URL for server-side fetch
+        const baseUrl = typeof window !== 'undefined'
+            ? window.location.origin
+            : process.env.NEXT_PUBLIC_SITE_URL || 'https://dineeasy-ochre.vercel.app';
+
+        await fetch(`${baseUrl}/api/send-notification`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
