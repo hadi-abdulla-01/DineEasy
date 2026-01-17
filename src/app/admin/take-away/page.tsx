@@ -1,7 +1,7 @@
 
 'use client';
 import { RemoteOrderForm } from "@/components/remote-order-form";
-import type { MenuItem, Order, RemoteOrder, Branch } from "@/lib/definitions";
+import type { MenuItem, Order, RemoteOrder, Branch, RestaurantSettings } from "@/lib/definitions";
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "../auth-provider";
@@ -11,8 +11,9 @@ import { getOrderById, getRemoteOrderById } from "@/lib/data";
 
 export default function TakeAwayPage() {
     const { user } = useAuth();
-    const { getMenuItems, getBranches } = useRestaurantData();
+    const { getMenuItems, getBranches, getMainBranch, getSettings, restaurantId } = useRestaurantData();
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+    const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [correctionOrder, setCorrectionOrder] = useState<Order | RemoteOrder | null>(null);
     const searchParams = useSearchParams();
     const correctionId = searchParams.get('correction_for');
@@ -23,18 +24,41 @@ export default function TakeAwayPage() {
     const [branches, setBranches] = useState<Branch[]>([]);
 
     useEffect(() => {
-        if (isGlobalAdmin) {
-            getBranches().then(setBranches);
-        }
-    }, [isGlobalAdmin, getBranches]);
+        async function determineBranch() {
+            if (!user || !restaurantId) return;
 
-    const fetchItems = useCallback(() => {
+            if (isGlobalAdmin) {
+                const [fetchedBranches, mainBranch] = await Promise.all([
+                    getBranches(),
+                    getMainBranch(),
+                ]);
+                setBranches(fetchedBranches);
+                if (mainBranch && !selectedBranchId) {
+                    setSelectedBranchId(mainBranch.id);
+                }
+            } else {
+                setSelectedBranchId(user.branchId);
+            }
+        }
+        determineBranch();
+    }, [user, restaurantId, isGlobalAdmin, getBranches, getMainBranch, selectedBranchId]);
+
+    const fetchBranchData = useCallback(async () => {
         if (!selectedBranchId) return;
-        getMenuItems(selectedBranchId).then(setMenuItems);
-    }, [selectedBranchId, getMenuItems]);
+        const [fetchedMenuItems, fetchedSettings] = await Promise.all([
+            getMenuItems(selectedBranchId),
+            getSettings(selectedBranchId)
+        ]);
+        setMenuItems(fetchedMenuItems);
+        setSettings(fetchedSettings);
+    }, [selectedBranchId, getMenuItems, getSettings]);
+
 
     useEffect(() => {
-        fetchItems();
+        if (selectedBranchId) {
+            fetchBranchData();
+        }
+
         if (correctionId && correctionType) {
             if (correctionType === 'Dine-in') {
                 getOrderById(correctionId).then(order => setCorrectionOrder(order || null));
@@ -42,7 +66,8 @@ export default function TakeAwayPage() {
                 getRemoteOrderById(correctionId).then(order => setCorrectionOrder(order || null));
             }
         }
-    }, [fetchItems, correctionId, correctionType]);
+    }, [selectedBranchId, fetchBranchData, correctionId, correctionType]);
+
 
     if (!user) {
         return <div>Loading...</div>;
@@ -65,19 +90,23 @@ export default function TakeAwayPage() {
                 </div>
             )}
 
-            {selectedBranchId ? (
+            {selectedBranchId && settings ? (
                 <RemoteOrderForm
                     menu={menuItems}
                     orderType="Take-away"
-                    onItemsUpdate={fetchItems}
+                    onItemsUpdate={fetchBranchData}
                     correctionOrder={correctionOrder}
                     branchId={selectedBranchId}
+                    settings={settings}
                 />
             ) : (
                 <div className="flex h-40 items-center justify-center border-2 border-dashed rounded-lg">
-                    <p className="text-muted-foreground">Select a branch to start a Take Away order.</p>
+                    <p className="text-muted-foreground">
+                        {isGlobalAdmin ? "Select a branch to start a Take Away order." : "Loading menu..."}
+                    </p>
                 </div>
             )}
         </div>
     );
 }
+

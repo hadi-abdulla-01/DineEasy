@@ -3,6 +3,7 @@ import type { NavMenuKey } from './definitions';
 
 export const ALL_PERMISSIONS_CONFIG: {key: NavMenuKey, label: string, rights: ('view' | 'create' | 'edit' | 'delete')[]}[] = [
     { key: 'dashboard', label: 'Dashboard', rights: ['view'] },
+    { key: 'pos', label: 'POS Screen', rights: ['view'] },
     { key: 'tableOrder', label: 'Table Order', rights: ['view'] },
     { key: 'tables', label: 'Table Management', rights: ['view', 'create', 'edit', 'delete'] },
     { key: 'menu', label: 'Menu Management', rights: ['view', 'create', 'edit', 'delete'] },

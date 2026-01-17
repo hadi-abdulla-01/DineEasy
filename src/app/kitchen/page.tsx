@@ -1,4 +1,5 @@
 
+
 'use client';
 import { collection, query, where, onSnapshot, DocumentSnapshot } from "firebase/firestore";
 import { getClientFirebase } from "@/firebase/client";
@@ -15,6 +16,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/app/admin/auth-provider";
 import { getSettings, getTableById } from "@/lib/data";
 import { extractRestaurantId } from "@/lib/auth-utils";
+import { Badge } from "@/components/ui/badge";
 
 type OrderWithTable = Order & { table?: Table };
 
@@ -276,9 +278,16 @@ export default function KitchenPage() {
                                 </div>
                                 <OrderStatusBadge status={order.status} />
                             </div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-1 pt-1">
-                                <Clock className="h-3 w-3" />
-                                <span>{formatDistanceInTimezone(order.createdAt, settings.timezone)}</span>
+                            <div className="text-xs text-muted-foreground flex items-center gap-2 pt-1">
+                               <div className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    <span>{formatDistanceInTimezone(order.createdAt, settings.timezone)}</span>
+                                </div>
+                                {order.orderType === 'Take-away' && order.takeAwayTime && (
+                                    <Badge variant="secondary" className="font-bold">
+                                        Pickup: {order.takeAwayTime}
+                                    </Badge>
+                                )}
                             </div>
                         </CardHeader>
                         <CardContent className="flex-1 pb-3">

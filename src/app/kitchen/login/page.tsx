@@ -7,7 +7,6 @@ import svgPaths from "@/imports/svg-ygbblntbv8";
 import imgImage2 from "@/assets/kitchen-login-illustration.png";
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { getKitchenUserByUsername } from '@/lib/data';
 
 function Wrapper({ children }: React.PropsWithChildren<{}>) {
     return (
@@ -57,9 +56,10 @@ function Group2() {
 }
 
 export default function KitchenLoginPage() {
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const { login } = useAuth();
     const router = useRouter();
 
@@ -67,16 +67,31 @@ export default function KitchenLoginPage() {
         e.preventDefault();
         setError('');
 
+        if (!email || !password) {
+            setError('Please enter email and password');
+            return;
+        }
+
+        setIsLoading(true);
         try {
-            const user = await getKitchenUserByUsername(username);
-            if (user && user.password === password) {
-                login(user);
+            const { signInWithEmail } = await import('@/lib/auth');
+            const result = await signInWithEmail(email, password);
+
+            if (result.success && result.user) {
+                if (result.user.role !== 'Kitchen') {
+                    setError('Only kitchen staff can log in here. Please use admin login.');
+                    setIsLoading(false);
+                    return;
+                }
+                login(result.user);
             } else {
-                setError('Invalid username or password.');
+                setError(result.error || 'Login failed');
+                setIsLoading(false);
             }
         } catch (err) {
             console.error("Login error:", err);
             setError('An error occurred during login.');
+            setIsLoading(false);
         }
     };
 
@@ -146,10 +161,10 @@ export default function KitchenLoginPage() {
                                     <Wrapper>
                                         <Group1 />
                                         <input
-                                            type="text"
-                                            placeholder="Kitchen User"
-                                            value={username}
-                                            onChange={(e) => setUsername(e.target.value)}
+                                            type="email"
+                                            placeholder="Email Address"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
                                             className="w-full outline-none text-[#969ab8] text-[14px] font-['Poppins:Medium',sans-serif] placeholder:text-[#969ab8] bg-transparent"
                                         />
                                     </Wrapper>
@@ -179,15 +194,16 @@ export default function KitchenLoginPage() {
                             {/* Login Button */}
                             <motion.button
                                 type="submit"
-                                className="bg-[#cb1e1d] rounded-[8px] px-16 py-3 w-full transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                                disabled={isLoading}
+                                className="bg-[#cb1e1d] rounded-[8px] px-16 py-3 w-full transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.5, delay: 0.8 }}
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
+                                whileHover={{ scale: isLoading ? 1 : 1.02 }}
+                                whileTap={{ scale: isLoading ? 1 : 0.98 }}
                             >
                                 <p className="font-['Poppins:SemiBold',sans-serif] leading-[normal] not-italic text-[15px] text-center text-white tracking-[0.1px]">
-                                    Login
+                                    {isLoading ? 'Logging in...' : 'Login'}
                                 </p>
                             </motion.button>
                         </motion.div>

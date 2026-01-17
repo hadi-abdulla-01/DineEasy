@@ -1,3 +1,4 @@
+
 'use client';
 
 import Logo from "@/components/logo";
@@ -6,7 +7,7 @@ import type { MealSession } from "@/lib/definitions";
 
 interface OrderHeaderProps {
     restaurantName: string;
-    tableNumber: number;
+    tableNumber: string;
     currentSession?: MealSession | null;
     customerName: string;
 }

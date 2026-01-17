@@ -1,6 +1,5 @@
 
 'use client';
-'use client';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { OrderStatusBadge } from "@/components/order-status-badge";
 import { Separator } from "@/components/ui/separator";
@@ -18,6 +17,8 @@ import { useAuth } from "../auth-provider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRestaurantData } from "@/lib/client-data";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 type OrderWithTable = Order & { table?: Table };
 
@@ -52,7 +53,45 @@ function PrintInvoiceButton({ order, settings }: { order: OrderWithTable, settin
     )
 }
 
-function UpdateStatusButton({ order, currentStatus, restaurantId }: { order: Order; currentStatus: OrderStatus, restaurantId: string }) {
+function FinalizePaymentForm({ order, restaurantId }: { order: OrderWithTable, restaurantId: string }) {
+    const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('card');
+
+    const completeOrderAction = async (formData: FormData) => {
+        formData.append('paymentMethod', paymentMethod);
+        formData.append('status', 'completed');
+        formData.append('redirectTo', '/admin/kitchen');
+        await updateOrderStatusAction(order.id, formData);
+    }
+    
+    return (
+        <form action={completeOrderAction} className="w-full space-y-3">
+             <input type="hidden" name="restaurantId" value={restaurantId} />
+             <div>
+                <Label className="text-sm font-medium">Payment Method</Label>
+                 <RadioGroup
+                    value={paymentMethod}
+                    onValueChange={(value: 'cash' | 'card') => setPaymentMethod(value)}
+                    className="mt-2 grid grid-cols-2 gap-2"
+                >
+                    <Label htmlFor={`cash-${order.id}`} className="flex items-center gap-2 rounded-md border p-2 cursor-pointer hover:bg-accent [&:has([data-state=checked])]:border-primary">
+                        <RadioGroupItem value="cash" id={`cash-${order.id}`} />
+                        Cash
+                    </Label>
+                    <Label htmlFor={`card-${order.id}`} className="flex items-center gap-2 rounded-md border p-2 cursor-pointer hover:bg-accent [&:has([data-state=checked])]:border-primary">
+                        <RadioGroupItem value="card" id={`card-${order.id}`} />
+                        Card/Other
+                    </Label>
+                </RadioGroup>
+            </div>
+            <Button type="submit" size="sm" className="w-full">
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Complete Order
+            </Button>
+        </form>
+    );
+}
+
+function UpdateStatusButton({ order, currentStatus, restaurantId }: { order: OrderWithTable; currentStatus: OrderStatus, restaurantId: string }) {
     const nextStatusMap: Partial<Record<OrderStatus, OrderStatus>> = {
         received: 'preparing',
         preparing: 'ready',
@@ -71,16 +110,7 @@ function UpdateStatusButton({ order, currentStatus, restaurantId }: { order: Ord
     const isButtonDisabled = isReadyButton && !allItemsReady;
 
     if (currentStatus === 'ready') {
-        return (
-            <div className="w-full">
-                <Button asChild size="sm" className="w-full">
-                    <Link href={`/admin/orders/${order.id}/payment`}>
-                        <CreditCard className="mr-2 h-4 w-4" />
-                        Proceed to Payment
-                    </Link>
-                </Button>
-            </div>
-        )
+        return <FinalizePaymentForm order={order} restaurantId={restaurantId} />;
     }
 
     return (
@@ -290,9 +320,16 @@ export default function AdminKitchenPage() {
                                     </div>
                                     <OrderStatusBadge status={order.status} />
                                 </div>
-                                <div className="text-xs text-muted-foreground flex items-center gap-1 pt-2">
-                                    <Clock className="h-3 w-3" />
-                                    <span>{formatDistanceInTimezone(order.createdAt, settings?.timezone)}</span>
+                                <div className="text-xs text-muted-foreground flex items-center gap-2 pt-2">
+                                    <div className="flex items-center gap-1">
+                                        <Clock className="h-3 w-3" />
+                                        <span>{formatDistanceInTimezone(order.createdAt, settings?.timezone)}</span>
+                                    </div>
+                                    {order.orderType === 'Take-away' && order.takeAwayTime && (
+                                        <Badge variant="secondary" className="font-bold">
+                                            Pickup: {order.takeAwayTime}
+                                        </Badge>
+                                    )}
                                 </div>
                             </CardHeader>
                             <CardContent className="flex-1">

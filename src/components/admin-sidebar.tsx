@@ -13,12 +13,14 @@ import {
     History,
     Users,
     Settings,
+    Monitor,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/app/admin/auth-provider';
 import type { NavMenuKey } from '@/lib/definitions';
+import { isSuperAdmin } from '@/lib/auth-utils';
 
 interface AdminSidebarProps {
     isOpen: boolean;
@@ -30,30 +32,13 @@ export default function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
     const { user } = useAuth();
 
     if (!user) return null;
-    
-    // Fallback for admin user if permissions are not set
-    if (user.role === 'Admin' && !user.permissions) {
-        user.permissions = {
-            dashboard: { view: true },
-            tableOrder: { view: true },
-            tables: { view: true, create: true, edit: true, delete: true },
-            menu: { view: true, create: true, edit: true, delete: true },
-            kitchen: { view: true },
-            sales: { view: true },
-            salesHistory: { view: true, edit: true, delete: true },
-            onlineOrders: { view: true, create: true },
-            takeAway: { view: true, create: true },
-            userManagement: { view: true, create: true, edit: true, delete: true },
-            settings: { view: true, edit: true },
-        };
-    }
-
 
     const navGroups = [
         {
             label: 'Main',
             items: [
                 { key: 'dashboard' as NavMenuKey, icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
+                { key: 'pos' as NavMenuKey, icon: Monitor, label: 'POS Screen', href: '/admin/pos' },
                 { key: 'tableOrder' as NavMenuKey, icon: Grid2x2, label: 'Table Order', href: '/admin/table-order' },
                 { key: 'menu' as NavMenuKey, icon: Utensils, label: 'Menu Management', href: '/admin/menu' },
                 { key: 'kitchen' as NavMenuKey, icon: ChefHat, label: 'Kitchen View', href: '/admin/kitchen' },
@@ -78,6 +63,19 @@ export default function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
         }
     ];
 
+    const hasPermission = (key: NavMenuKey) => {
+        if (!user) return false;
+
+        // Super Admins and regular Admins have full access
+        if ((user.email && isSuperAdmin(user.email)) || user.role === 'Admin') {
+            return true;
+        }
+
+        // For all other roles, check their specific permission
+        return !!user.permissions?.[key]?.view;
+    };
+
+
     return (
         <>
             {isOpen && (
@@ -98,7 +96,7 @@ export default function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
                 <nav className="h-full overflow-y-auto p-4 flex flex-col">
                     <div className="flex-1 space-y-6">
                         {navGroups.map((group, groupIndex) => {
-                            const visibleGroupItems = group.items.filter(item => user.permissions?.[item.key]?.view);
+                            const visibleGroupItems = group.items.filter(item => hasPermission(item.key));
                             if (visibleGroupItems.length === 0) return null;
 
                             return (
@@ -130,10 +128,6 @@ export default function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
                                             );
                                         })}
                                     </div>
-                                    {/* Add separator except for the last group */}
-                                    {groupIndex < navGroups.length - 1 && (
-                                        <div className="my-4 border-b border-gray-100" />
-                                    )}
                                 </div>
                             )
                         })}

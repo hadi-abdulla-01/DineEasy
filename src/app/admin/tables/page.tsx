@@ -1,9 +1,9 @@
 
 
 'use client';
-import { createTableAction } from "@/lib/actions";
+import { createTableAction, updateTableFloorAction } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import type { Table, RestaurantSettings, Branch } from "@/lib/definitions";
 import { Printer, Trash2 } from "lucide-react";
 import { QRCode } from "@/components/qr-code";
@@ -13,15 +13,15 @@ import { deleteTableAction } from "@/lib/actions";
 import { useRestaurantData } from "@/lib/client-data";
 
 
-// TableList now accepts restaurantId prop
-function TableList({ tables, settings, restaurantId }: { tables: Table[], settings: RestaurantSettings | null, restaurantId: string }) {
+function TableList({ tables, settings, restaurantId, onDelete, onFloorChange }: { tables: Table[], settings: RestaurantSettings | null, restaurantId: string, onDelete: (tableId: string) => void, onFloorChange: (tableId: string, floor: string) => void }) {
   const handleDelete = async (tableId: string) => {
     if (confirm('Are you sure you want to delete this table?')) {
       await deleteTableAction(tableId, restaurantId);
+      onDelete(tableId); // Trigger refetch
     }
   };
 
-  const handlePrint = (tableId: string, tableNumber: number) => {
+  const handlePrint = (tableId: string, tableNumber: string) => {
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       const qrCodeWrapper = document.getElementById(`qr-code-wrapper-${tableId}`);
@@ -91,8 +91,8 @@ function TableList({ tables, settings, restaurantId }: { tables: Table[], settin
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {tables.map((table) => (
-        <div key={table.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6 hover:shadow-lg transition-shadow border dark:border-gray-700">
-          <div className="flex items-center justify-between mb-4">
+        <div key={table.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6 hover:shadow-lg transition-shadow border dark:border-gray-700 space-y-4">
+          <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Table {table.number}</h3>
             <div className="flex gap-2">
               <button
@@ -111,6 +111,25 @@ function TableList({ tables, settings, restaurantId }: { tables: Table[], settin
               </button>
             </div>
           </div>
+          
+          {settings?.multiFloorEnabled && (settings.floors?.length ?? 0) > 0 && (
+            <div>
+              <Select
+                value={table.floor || '__none__'}
+                onValueChange={(value) => onFloorChange(table.id, value === '__none__' ? '' : value)}
+              >
+                <SelectTrigger className="w-full text-xs h-9">
+                  <SelectValue placeholder="Assign to a floor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No Floor</SelectItem>
+                  {settings.floors?.map(floor => (
+                    <SelectItem key={floor} value={floor}>{floor}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div id={`qr-code-wrapper-${table.id}`} className="flex flex-col items-center justify-center py-4 bg-white dark:bg-gray-700 rounded-xl border dark:border-gray-600">
             {settings ? (
@@ -137,9 +156,21 @@ export default function TableManagementPage() {
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
   const [mainBranch, setMainBranch] = useState<Branch | null>(null);
   const [tableNumber, setTableNumber] = useState('');
+  const [floorFilter, setFloorFilter] = useState('all');
   const formRef = useRef<HTMLFormElement>(null);
 
   const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
+
+  const fetchBranchData = useCallback(async () => {
+    if (selectedBranchId) {
+      const [tables, settings] = await Promise.all([
+        getTables(selectedBranchId),
+        getSettings(selectedBranchId)
+      ]);
+      setTables(tables);
+      setSettings(settings);
+    }
+  }, [selectedBranchId, getTables, getSettings]);
 
   useEffect(() => {
     async function fetchInitialData() {
@@ -164,22 +195,12 @@ export default function TableManagementPage() {
   }, [user, isGlobalAdmin, selectedBranchId, getMainBranch, getBranches]);
 
   useEffect(() => {
-    async function fetchBranchData() {
-      if (selectedBranchId) {
-        const [tables, settings] = await Promise.all([
-          getTables(selectedBranchId),
-          getSettings(selectedBranchId)
-        ]);
-        setTables(tables);
-        setSettings(settings);
-      }
-    }
     fetchBranchData();
 
     const interval = setInterval(fetchBranchData, 5000);
     return () => clearInterval(interval);
 
-  }, [selectedBranchId]);
+  }, [fetchBranchData]);
 
   const handleAddTable = async (formData: FormData) => {
     if (!selectedBranchId) {
@@ -188,15 +209,37 @@ export default function TableManagementPage() {
     }
     formData.append('branchId', selectedBranchId);
     formData.append('restaurantId', restaurantId);
+    
+    // If a floor is selected in the filter, pre-assign the new table to it
+    if(settings?.multiFloorEnabled && floorFilter !== 'all' && floorFilter !== '__none__') {
+      formData.append('floor', floorFilter);
+    }
 
     await createTableAction(formData);
     // Refetch tables after adding a new one
-    if (selectedBranchId) {
-      getTables(selectedBranchId).then(setTables);
-    }
+    await fetchBranchData();
     setTableNumber('');
     formRef.current?.reset();
   };
+  
+  const handleFloorChange = async (tableId: string, floor: string) => {
+    await updateTableFloorAction(tableId, floor, restaurantId);
+    fetchBranchData();
+  };
+
+  const handleDelete = async (tableId: string) => {
+    await deleteTableAction(tableId, restaurantId);
+    await fetchBranchData();
+  };
+  
+  const filteredTables = floorFilter === 'all'
+    ? tables
+    : tables.filter(table => {
+        if (floorFilter === '__none__') {
+            return !table.floor || table.floor === '';
+        }
+        return table.floor === floorFilter;
+    });
 
   if (!user) {
     return <div>Loading...</div>;
@@ -210,18 +253,34 @@ export default function TableManagementPage() {
             <h2 className="text-2xl font-bold dark:text-gray-100">Table Management</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">Add or manage tables for a branch.</p>
           </div>
-          {isGlobalAdmin && (
-            <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-              <SelectTrigger className="w-full sm:w-[220px]">
-                <SelectValue placeholder="Select a branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {allBranches.map(branch => (
-                  <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+            {isGlobalAdmin && (
+              <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Select a branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allBranches.map(branch => (
+                    <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+             {settings?.multiFloorEnabled && (
+              <Select value={floorFilter} onValueChange={setFloorFilter}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Filter by floor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Floors</SelectItem>
+                  <SelectItem value="__none__">No Floor</SelectItem>
+                  {settings.floors?.map(floor => (
+                    <SelectItem key={floor} value={floor}>{floor}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </div>
 
         <form action={handleAddTable} ref={formRef} className="flex flex-col sm:flex-row items-center gap-4 justify-center">
@@ -232,7 +291,7 @@ export default function TableManagementPage() {
               name="tableNumber"
               value={tableNumber}
               onChange={(e) => setTableNumber(e.target.value)}
-              placeholder="e.g., 10"
+              placeholder="e.g., 10 or F1"
               className="w-full sm:w-48 px-4 py-2.5 bg-gray-50 dark:bg-gray-700 dark:text-gray-100 rounded-lg border border-gray-200 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500"
             />
           </div>
@@ -245,7 +304,7 @@ export default function TableManagementPage() {
         </form>
       </div>
 
-      <TableList tables={tables} settings={settings} restaurantId={restaurantId} />
+      <TableList tables={filteredTables} settings={settings} restaurantId={restaurantId} onDelete={handleDelete} onFloorChange={handleFloorChange} />
     </div>
   );
 }

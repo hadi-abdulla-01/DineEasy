@@ -6,12 +6,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import type { KitchenUser } from '@/lib/definitions';
 import { LoaderCircle } from 'lucide-react';
 import { isSuperAdmin } from '@/lib/auth-utils';
+import { getKitchenUserById } from '@/lib/data'; // Assuming this function can be used client-side
 
 type AuthContextType = {
   isAuthenticated: boolean;
   user: KitchenUser | null;
   login: (user: KitchenUser) => void;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,15 +41,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const isProtected = isProtectedRoute(pathname);
+    // Check if user is on any login page
+    const isOnLoginPage = pathname.startsWith('/login') ||
+      pathname.startsWith('/admin/login') ||
+      pathname.startsWith('/kitchen/login');
 
     if (isProtected) {
       if (!currentUser) {
-        router.push('/login?role=admin');
+        // Only redirect if not on a login-related page to avoid redirect loops
+        if (!isOnLoginPage) {
+          router.push('/login?role=admin');
+        }
       } else {
         // Handle role-based redirects for authenticated users on protected routes
-        if (currentUser.role === 'Kitchen' && pathname.startsWith('/admin')) {
+        if (currentUser.role === 'Kitchen' && pathname.startsWith('/admin') && !isOnLoginPage) {
           router.replace('/kitchen');
-        } else if (currentUser.role !== 'Kitchen' && pathname.startsWith('/kitchen')) {
+        } else if (currentUser.role !== 'Kitchen' && pathname.startsWith('/kitchen') && !isOnLoginPage) {
           router.replace('/admin');
         }
       }
@@ -77,6 +86,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/login?role=admin');
   };
 
+  const refreshUser = async () => {
+    if (user?.id && user.restaurantId) {
+      const refreshedUser = await getKitchenUserById(user.id, user.restaurantId);
+      if (refreshedUser) {
+        login(refreshedUser);
+      }
+    }
+  };
+
   const isAuthenticated = !!user;
 
   // Show a loading screen only when trying to access a protected route without being authenticated yet.
@@ -92,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

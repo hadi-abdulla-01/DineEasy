@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -35,14 +36,14 @@ type CartSheetProps = {
   onRemoveFromCart: (orderItemId: string) => void;
   onNotesChange: (orderItemId: string, notes: string) => void;
   onOrderPlaced: () => void;
-  existingOrderId?: string;
+  existingOrder?: Order;
   branchId?: string;
   settings: RestaurantSettings | null;
   customerInfo?: { name: string, phone: string };
   restaurantId?: string;
 };
 
-export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, onNotesChange, onOrderPlaced, existingOrderId, branchId, settings, customerInfo, restaurantId }: CartSheetProps) {
+export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, onNotesChange, onOrderPlaced, existingOrder, branchId, settings, customerInfo, restaurantId }: CartSheetProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -159,21 +160,22 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
           <input type="hidden" name="tableId" value={tableId} />
           <input type="hidden" name="items" value={JSON.stringify(cart)} />
           <input type="hidden" name="isCustomerFacing" value={String(isCustomerFacing)} />
-          {existingOrderId && <input type="hidden" name="existingOrderId" value={existingOrderId} />}
+          {existingOrder?.id && <input type="hidden" name="existingOrderId" value={existingOrder.id} />}
           {branchId && <input type="hidden" name="branchId" value={branchId} />}
           {restaurantId && <input type="hidden" name="restaurantId" value={restaurantId} />}
-          {customerInfo?.name && <input type="hidden" name="customerName" value={customerInfo.name} />}
-          {customerInfo?.phone && <input type="hidden" name="customerPhone" value={customerInfo.phone} />}
-
-          {!isCustomerFacing && !customerInfo && (
+          
+          {isCustomerFacing && customerInfo?.name && <input type="hidden" name="customerName" value={customerInfo.name} />}
+          {isCustomerFacing && customerInfo?.phone && <input type="hidden" name="customerPhone" value={customerInfo.phone} />}
+          
+          {!isCustomerFacing && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="customerName-sheet">Customer Name</Label>
-                <Input id="customerName-sheet" name="customerName" placeholder="For dine-in" required />
+                <Label htmlFor="customerName-sheet">Customer Name (Optional)</Label>
+                <Input id="customerName-sheet" name="customerName" placeholder="For dine-in" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="customerPhone-sheet">Customer Phone</Label>
-                <Input id="customerPhone-sheet" name="customerPhone" placeholder="For dine-in" required />
+                <Label htmlFor="customerPhone-sheet">Customer Phone (Optional)</Label>
+                <Input id="customerPhone-sheet" name="customerPhone" placeholder="For dine-in" />
               </div>
             </>
           )}

@@ -55,6 +55,7 @@ export function RemoteOrderCartSheet({ cart, orderType, onRemoveFromCart, onOrde
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [customerDetails, setCustomerDetails] = useState<CustomerDetails>({ name: '', phone: '', address: '', platform: '' });
+  const [takeAwayTime, setTakeAwayTime] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
   
   const platforms = settings?.onlineOrderPlatforms || [];
@@ -74,6 +75,8 @@ export function RemoteOrderCartSheet({ cart, orderType, onRemoveFromCart, onOrde
           address: correctionOrder.customerDetails.address || '',
           platform: correctionOrder.customerDetails.platform || (platforms.length > 0 ? platforms[0] : ''),
         });
+        if (correctionOrder.takeAwayTime) setTakeAwayTime(correctionOrder.takeAwayTime);
+
       } else {
         setCustomerDetails({
           name: correctionOrder.customerName,
@@ -81,6 +84,7 @@ export function RemoteOrderCartSheet({ cart, orderType, onRemoveFromCart, onOrde
           address: '',
           platform: platforms.length > 0 ? platforms[0] : '',
         });
+        if (correctionOrder.takeAwayTime) setTakeAwayTime(correctionOrder.takeAwayTime);
       }
     }
   }, [correctionOrder, platforms]);
@@ -118,6 +122,7 @@ export function RemoteOrderCartSheet({ cart, orderType, onRemoveFromCart, onOrde
     setOpen(false);
     formRef.current?.reset();
     setCustomerDetails({ name: '', phone: '', address: '', platform: platforms.length > 0 ? platforms[0] : '' });
+    setTakeAwayTime('');
   };
 
   const currentOrderType = correctionOrder ? correctionOrder.orderType : orderType;
@@ -224,6 +229,18 @@ export function RemoteOrderCartSheet({ cart, orderType, onRemoveFromCart, onOrde
                               )}
                           </div>
                       </>
+                    )}
+                     {currentOrderType === 'Take-away' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="takeAwayTime">Pickup Time (Optional)</Label>
+                            <Input
+                                id="takeAwayTime"
+                                name="takeAwayTime"
+                                type="time"
+                                value={takeAwayTime}
+                                onChange={(e) => setTakeAwayTime(e.target.value)}
+                            />
+                        </div>
                     )}
                   </div>
                 </div>

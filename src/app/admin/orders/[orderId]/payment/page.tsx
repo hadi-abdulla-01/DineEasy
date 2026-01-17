@@ -2,7 +2,7 @@
 'use client';
 import { updateOrderStatusAction } from "@/lib/actions";
 import { useEffect, useState } from "react";
-import { notFound, useParams } from "next/navigation";
+import { notFound, useParams, useSearchParams } from "next/navigation";
 import type { Order, RestaurantSettings, Table } from "@/lib/definitions";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,10 +40,12 @@ export default function PaymentPage() {
     const [order, setOrder] = useState<OrderWithTable | null>(null);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
-    const [cashReceived, setCashReceived] = useState<number | string>('');
+    const [cashReceived, setCashReceived] = useState<number | string>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const params = useParams();
+    const searchParams = useSearchParams();
     const orderId = params.orderId as string;
+    const redirectTo = searchParams.get('redirectTo') || '/admin/kitchen';
 
     useEffect(() => {
         if (orderId) {
@@ -64,10 +66,14 @@ export default function PaymentPage() {
                 }
 
                 setOrder({ ...fetchedOrder, table });
-                setCashReceived(fetchedOrder.total);
+                setCashReceived(0);
             });
         }
     }, [orderId, getOrderById, getSettings, getTableById]);
+
+    const handleDenominationClick = (amount: number) => {
+        setCashReceived(prev => (Number(prev) || 0) + amount);
+    };
 
     if (!order || !settings) {
         return (
@@ -105,8 +111,8 @@ export default function PaymentPage() {
             console.log('[PaymentPage] Order completed successfully', result);
             // If we get here, the redirect didn't happen, so do it manually
             if (!result || result.message) {
-                console.log('[PaymentPage] Manual redirect');
-                window.location.href = '/admin/kitchen';
+                console.log('[PaymentPage] Manual redirect to:', redirectTo);
+                window.location.href = redirectTo;
             }
         } catch (error: any) {
             // Next.js redirect() throws a special error - don't catch it
@@ -159,6 +165,7 @@ export default function PaymentPage() {
 
             <Card>
                 <form onSubmit={handleCompleteOrder}>
+                    <input type="hidden" name="redirectTo" value={redirectTo} />
                     <CardHeader>
                         <CardTitle className="font-headline">Process Payment</CardTitle>
                         <CardDescription>Select a payment method and finalize the order.</CardDescription>
@@ -187,6 +194,28 @@ export default function PaymentPage() {
                         {paymentMode === 'cash' && (
                             <div className="space-y-4 rounded-lg border bg-muted/50 p-4">
                                 <h4 className="font-semibold">Cash Payment</h4>
+                                <div className="flex flex-wrap gap-2 pt-2">
+                                    {settings.posSettings?.cashDenominations?.sort((a, b) => a - b).map(denom => (
+                                        <Button
+                                            key={denom}
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleDenominationClick(denom)}
+                                        >
+                                            {currencySymbol}{denom}
+                                        </Button>
+                                    ))}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setCashReceived(order.total.toFixed(currencyDecimalPlaces))}
+                                    >
+                                        Exact Amount
+                                    </Button>
+                                </div>
+                                <Separator />
                                 <div className="space-y-2">
                                     <Label htmlFor="cashReceived">Cash Received</Label>
                                     <div className="relative">
@@ -221,4 +250,3 @@ export default function PaymentPage() {
         </div>
     );
 }
-

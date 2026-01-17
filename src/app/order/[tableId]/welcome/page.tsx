@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -18,7 +19,7 @@ export default function WelcomePage() {
     
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
-    const [tableNumber, setTableNumber] = useState<number | null>(null);
+    const [tableNumber, setTableNumber] = useState<string | null>(null);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(true);
 

@@ -1,11 +1,10 @@
 
-
 'use server';
 
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { OrderItem, OrderStatus, MenuItem, Table, RemoteOrder, Order, KitchenUser, RestaurantSettings, AddonGroup, SelectedAddon, UserRole, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog } from './definitions';
+import type { OrderItem, OrderStatus, MenuItem, Table, RemoteOrder, Order, KitchenUser, RestaurantSettings, AddonGroup, SelectedAddon, UserRole, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails } from './definitions';
 import {
     createOrder,
     updateTableStatus,
@@ -40,6 +39,7 @@ import {
     logActivity,
     getKitchenUserById,
     getBranchById,
+    updateTable,
 } from './data';
 
 
@@ -80,19 +80,22 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
     const existingOrderId = formData.get('existingOrderId') as string | null;
 
 
-    const CustomerSchema = z.object({
-        customerName: z.string().min(1, "Name is required."),
-        customerPhone: z.string().min(1, "Phone is required."),
-    });
+    if (isCustomerFacing) {
+        const CustomerSchema = z.object({
+            customerName: z.string().min(1, "Name is required."),
+            customerPhone: z.string().min(1, "Phone is required."),
+        });
 
-    const validatedCustomerFields = CustomerSchema.safeParse({ customerName, customerPhone });
+        const validatedCustomerFields = CustomerSchema.safeParse({ customerName, customerPhone });
 
-    if (!validatedCustomerFields.success) {
-        return {
-            errors: validatedCustomerFields.error.flatten().fieldErrors,
-            message: 'Customer name and phone are required.',
-        };
+        if (!validatedCustomerFields.success) {
+            return {
+                errors: validatedCustomerFields.error.flatten().fieldErrors,
+                message: 'Customer name and phone are required.',
+            };
+        }
     }
+
 
     const restaurantId = formData.get('restaurantId') as string;
 
@@ -140,11 +143,12 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
                 finalOrder = await updateOrderStatus(finalOrder.id, 'preparing', undefined, restaurantId);
             }
         } else {
+             const table = await getTableById(tableId, restaurantId);
             const orderToCreate = {
                 tableId,
                 branchId,
-                customerName: customerName,
-                customerPhone: customerPhone,
+                customerName: customerName || `Table ${table?.number}`,
+                customerPhone: customerPhone || 'N/A',
                 items: newItems,
                 orderType: 'Dine-in' as Order['orderType'],
                 notes: orderNotes,
@@ -184,8 +188,9 @@ export async function updateOrderStatusAction(orderId: string, formData: FormDat
     const status = formData.get('status') as OrderStatus;
     const paymentMethod = formData.get('paymentMethod') as Order['paymentMethod'];
     const restaurantId = formData.get('restaurantId') as string;
+    const redirectTo = formData.get('redirectTo') as string | null;
 
-    console.log('[updateOrderStatusAction] Called with:', { orderId, status, paymentMethod, restaurantId });
+    console.log('[updateOrderStatusAction] Called with:', { orderId, status, paymentMethod, restaurantId, redirectTo });
 
     if (!status) {
         return { message: 'Status is required.' };
@@ -217,10 +222,12 @@ export async function updateOrderStatusAction(orderId: string, formData: FormDat
         revalidatePath(`/order/${order.tableId}/status/${order.id}`);
         revalidatePath('/admin/sales');
         revalidatePath('/admin/sales-history');
+        revalidatePath('/admin/pos');
 
         if (status === 'completed') {
-            console.log('[updateOrderStatusAction] Redirecting to /admin/kitchen');
-            redirect('/admin/kitchen');
+            const redirectUrl = redirectTo || '/admin/kitchen';
+            console.log(`[updateOrderStatusAction] Redirecting to ${redirectUrl}`);
+            redirect(redirectUrl);
         }
 
     } catch (error: any) {
@@ -273,11 +280,13 @@ export async function cancelOrderItemAction(orderId: string, orderItemId: string
 }
 
 export async function createTableAction(formData: FormData) {
-    const tableNumber = formData.get('tableNumber');
+    const tableNumber = formData.get('tableNumber') as string;
     const branchId = formData.get('branchId') as string;
     const restaurantId = formData.get('restaurantId') as string;
+    const floor = formData.get('floor') as string;
+
     if (tableNumber && branchId) {
-        await createTable(Number(tableNumber), branchId, restaurantId);
+        await createTable(tableNumber, branchId, restaurantId, floor);
         revalidatePath('/admin/tables');
         revalidatePath('/admin');
     }
@@ -288,7 +297,7 @@ export async function addMenuItemAction(formData: FormData) {
     const price = parseFloat(formData.get('price') as string);
     const description = formData.get('description') as string;
     const image = formData.get('image') as string | null;
-    const category = (formData.get('category') === 'new' ? formData.get('newCategory') : formData.get('category')) as string;
+    const category = formData.get('category') as string;
     const prepTimeValue = formData.get('prepTime');
     const prepTime = prepTimeValue ? Number(prepTimeValue) : undefined;
     const isBestSeller = formData.get('isBestSeller') === 'on';
@@ -349,7 +358,7 @@ export async function updateMenuItemAction(itemId: string, formData: FormData) {
     const price = parseFloat(formData.get('price') as string);
     const description = formData.get('description') as string;
     const image = formData.get('image') as string | null;
-    const category = (formData.get('category') === 'new' ? formData.get('newCategory') : formData.get('category')) as string;
+    const category = formData.get('category') as string;
     const addonGroupsString = formData.get('addonGroups') as string | null;
     const prepTime = Number(formData.get('prepTime')) || undefined;
     const isBestSeller = formData.get('isBestSeller') === 'on';
@@ -450,14 +459,19 @@ export async function addRemoteOrderAction(formData: FormData) {
     const orderType = formData.get('orderType') as RemoteOrder['orderType'];
     const createdByName = formData.get('createdByName') as string | null;
     const restaurantId = formData.get('restaurantId') as string;
+    const takeAwayTime = formData.get('takeAwayTime') as string | null;
 
-    const newOrderData = {
+    const newOrderData: any = {
         orderType,
         customerDetails,
         items: cartItems,
         branchId: formData.get('branchId') as string,
         createdByName: createdByName || undefined,
     };
+
+    if (takeAwayTime) {
+        newOrderData.takeAwayTime = takeAwayTime;
+    }
 
     const newRemoteOrder = await addRemoteOrder(newOrderData, restaurantId);
 
@@ -510,10 +524,15 @@ export async function createKitchenUserAction(restaurantId: string, formData: Fo
         return { message: "Username already exists. Please choose a different one." };
     }
 
-    if (!permissionsString) {
-        return { message: "Missing permissions." };
+    let permissions: UserPermissions = {};
+    if (permissionsString) {
+        try {
+            permissions = JSON.parse(permissionsString);
+        } catch (e) {
+            console.error("Failed to parse permissions JSON", e);
+            return { message: "Invalid permissions data provided." };
+        }
     }
-    const permissions: UserPermissions = JSON.parse(permissionsString);
 
     // Remove duplicates
     const uniqueCategories = Array.from(new Set(categories));
@@ -556,7 +575,7 @@ export async function createKitchenUserAction(restaurantId: string, formData: Fo
 }
 
 
-export async function updateKitchenUserAction(userId: string, formData: FormData) {
+export async function updateKitchenUserAction(userId: string, formData: FormData): Promise<KitchenUser | undefined> {
     const username = formData.get('username') as string;
     const password = formData.get('password') as string;
     const role = formData.get('role') as UserRole;
@@ -597,8 +616,10 @@ export async function updateKitchenUserAction(userId: string, formData: FormData
             }
         }
         revalidatePath('/admin/user-management');
+        return updatedUser;
     } catch (error) {
-        return { message: 'Database Error: Failed to update user.' };
+        console.error('Database Error: Failed to update user.', error);
+        return undefined;
     }
 }
 
@@ -625,8 +646,8 @@ export async function deleteKitchenUserAction(userId: string, deletedBy: string 
                     try {
                         await adminAuth.deleteUser(userToDelete.firebaseUid);
                         console.log(`Deleted Firebase Auth user: ${userToDelete.firebaseUid}`);
-                    } catch (authError) {
-                        console.error("Failed to delete user from Firebase Auth:", authError);
+                    } catch (e) {
+                        console.warn(`Failed to delete auth user ${userToDelete.firebaseUid}:`, e);
                     }
                 } else {
                     console.warn("Skipping Firebase Auth deletion: Warning - Admin Auth could not be initialized. Check FIREBASE_SERVICE_ACCOUNT_KEY.");
@@ -655,13 +676,6 @@ export async function updateSettingsAction(formData: FormData) {
     const branchId = formData.get('branchId') as string | undefined;
     const restaurantId = formData.get('restaurantId') as string;
 
-    if (!branchId && formData.has('branchId')) {
-        // This case handles a form that's supposed to be for a branch but branchId is empty.
-        // We probably should throw an error or handle it gracefully.
-        // For now, let's assume it's a global update if branchId is falsy.
-    }
-
-
     const newSettings: Partial<RestaurantSettings & Branch> = {};
 
     // Global Restaurant Settings
@@ -676,15 +690,15 @@ export async function updateSettingsAction(formData: FormData) {
     if (formData.has('qrCodeBackgroundColor')) newSettings.qrCodeBackgroundColor = formData.get('qrCodeBackgroundColor') as string;
 
     if (formData.has('taxes')) {
-        const taxesString = formData.get('taxes') as string;
         try {
-            const taxes = JSON.parse(taxesString);
-            if (Array.isArray(taxes)) {
-                newSettings.taxes = taxes as Tax[];
-            }
-        } catch (e) {
-            console.error("Failed to parse taxes JSON", e);
-        }
+            newSettings.taxes = JSON.parse(formData.get('taxes') as string);
+        } catch (e) { console.error("Failed to parse taxes JSON", e); }
+    }
+
+    if (formData.has('posSettings')) {
+        try {
+            newSettings.posSettings = JSON.parse(formData.get('posSettings') as string);
+        } catch (e) { console.error("Failed to parse posSettings JSON", e); }
     }
 
     const qrCodeLogo = formData.get('qrCodeLogo');
@@ -694,49 +708,48 @@ export async function updateSettingsAction(formData: FormData) {
         newSettings.qrCodeLogo = qrCodeLogo as string;
     }
 
-    if (formData.has('onlineOrderingEnabled')) newSettings.onlineOrderingEnabled = formData.get('onlineOrderingEnabled') === 'true';
+    if (formData.has('onlineOrderingEnabledSwitch')) {
+        newSettings.onlineOrderingEnabled = formData.get('onlineOrderingEnabledSwitch') === 'on';
+    }
     if (formData.has('deliveryFee')) newSettings.deliveryFee = Number(formData.get('deliveryFee'));
     if (formData.has('minimumOrderValue')) newSettings.minimumOrderValue = Number(formData.get('minimumOrderValue'));
 
     if (formData.has('onlineOrderPlatforms')) {
-        const platformsString = formData.get('onlineOrderPlatforms') as string;
         try {
-            const platforms = JSON.parse(platformsString);
-            if (Array.isArray(platforms)) {
-                newSettings.onlineOrderPlatforms = platforms;
-            }
-        } catch (e) {
-            console.error("Failed to parse online order platforms JSON", e);
-        }
+            newSettings.onlineOrderPlatforms = JSON.parse(formData.get('onlineOrderPlatforms') as string);
+        } catch (e) { console.error("Failed to parse online order platforms JSON", e); }
     }
 
     if (formData.has('invoiceSettings')) {
-        const invoiceSettingsString = formData.get('invoiceSettings') as string;
         try {
-            const settings = JSON.parse(invoiceSettingsString);
-            if (typeof settings.useUnifiedNumbering === 'boolean') {
-                newSettings.invoiceSettings = settings as InvoiceSettings;
-            }
-        } catch (e) {
-            console.error("Failed to parse invoice settings JSON", e);
-        }
+            newSettings.invoiceSettings = JSON.parse(formData.get('invoiceSettings') as string);
+        } catch (e) { console.error("Failed to parse invoice settings JSON", e); }
     }
 
     if (formData.has('printSettings')) {
-        const printSettingsString = formData.get('printSettings') as string;
         try {
-            const settings = JSON.parse(printSettingsString);
-            if (settings.invoicePrintSize && settings.kitchenTicketPrintSize) {
-                newSettings.printSettings = settings as PrintSettings;
-            }
-        } catch (e) {
-            console.error("Failed to parse print settings JSON", e);
-        }
+            newSettings.printSettings = JSON.parse(formData.get('printSettings') as string);
+        } catch (e) { console.error("Failed to parse print settings JSON", e); }
     }
+    
+    if (formData.has('multiFloorEnabled')) {
+        newSettings.multiFloorEnabled = formData.get('multiFloorEnabled') === 'true';
+    }
+
+    if (formData.has('floors')) {
+        try {
+            newSettings.floors = JSON.parse(formData.get('floors') as string);
+        } catch (e) { console.error("Failed to parse floors JSON", e); }
+    }
+
+    if (formData.has('defaultFloor')) {
+        newSettings.defaultFloor = formData.get('defaultFloor') as string;
+    }
+
 
     try {
         await updateSettings(branchId, newSettings, restaurantId);
-        revalidatePath('/', 'layout'); // Revalidate all pages that might use settings
+        revalidatePath('/', 'layout');
     } catch (error) {
         return { message: 'Database Error: Failed to update settings.' };
     }
@@ -774,9 +787,19 @@ export async function deleteTableAction(tableId: string, restaurantId?: string) 
     try {
         await deleteTable(tableId, restaurantId);
         revalidatePath('/admin/tables');
-        revalidatePath('/admin');
     } catch (error) {
+        console.error('Error in deleteTableAction:', error);
         return { message: 'Database Error: Failed to delete table.' };
+    }
+}
+
+export async function updateTableFloorAction(tableId: string, floor: string, restaurantId?: string) {
+    try {
+        await updateTable(tableId, { floor }, restaurantId);
+        revalidatePath('/admin/tables');
+    } catch (error) {
+        console.error('Error updating table floor:', error);
+        return { message: 'Database Error: Failed to update table floor.' };
     }
 }
 
@@ -911,7 +934,6 @@ export async function updateManualSessionOverrideAction(formData: FormData) {
 }
 
 // --- Category Management Actions ---
-
 export async function addMenuCategoryAction(formData: FormData) {
     const branchId = formData.get('branchId') as string;
     const categoryName = formData.get('categoryName') as string;
@@ -924,8 +946,8 @@ export async function addMenuCategoryAction(formData: FormData) {
     try {
         const { addMenuCategory } = await import('./data');
         await addMenuCategory(branchId, categoryName.trim(), restaurantId);
-        revalidatePath('/admin/settings/categories');
-        revalidatePath('/admin/menu');
+        revalidatePath('/admin/settings/categories', 'page');
+        revalidatePath('/admin/menu', 'page');
     } catch (error) {
         if (error instanceof Error) {
             return { message: error.message };
@@ -933,6 +955,7 @@ export async function addMenuCategoryAction(formData: FormData) {
         return { message: 'Database Error: Failed to add category.' };
     }
 }
+
 
 export async function removeMenuCategoryAction(formData: FormData) {
     const branchId = formData.get('branchId') as string;
@@ -946,8 +969,8 @@ export async function removeMenuCategoryAction(formData: FormData) {
     try {
         const { removeMenuCategory } = await import('./data');
         await removeMenuCategory(branchId, categoryName, restaurantId);
-        revalidatePath('/admin/settings/categories');
-        revalidatePath('/admin/menu');
+        revalidatePath('/admin/settings/categories', 'page');
+        revalidatePath('/admin/menu', 'page');
     } catch (error) {
         if (error instanceof Error) {
             return { message: error.message };
@@ -955,3 +978,7 @@ export async function removeMenuCategoryAction(formData: FormData) {
         return { message: 'Database Error: Failed to remove category.' };
     }
 }
+
+
+
+    

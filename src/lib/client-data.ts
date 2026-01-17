@@ -18,7 +18,8 @@ import type {
     RestaurantSettings,
     Branch,
     ActivityLog,
-    Tax
+    Tax,
+    OrderItem
 } from './definitions';
 
 /**
@@ -58,6 +59,7 @@ export function useRestaurantData() {
         cancelOrderItem: (orderId: string, itemId: string) => serverData.cancelOrderItem(orderId, itemId, restaurantId),
         cancelOrdersForTable: (tableId: string) => serverData.cancelOrdersForTable(tableId, restaurantId),
         deleteOrder: (id: string, type: 'Dine-in' | 'Remote') => serverData.deleteOrder(id, type, restaurantId),
+        updateFullOrder: (orderId: string, orderType: 'Dine-in' | 'Take-away' | 'Online', updateData: { items: OrderItem[], customerName?: string, customerPhone?: string, tableId?: string, paymentMethod?: 'cash' | 'card' | 'qr', address?: string, platform?: string, takeAwayTime?: string }) => serverData.updateFullOrder(orderId, orderType, updateData, restaurantId),
 
         // Remote Orders
         getRemoteOrders: (branchId?: string) => serverData.getRemoteOrders(branchId, restaurantId),

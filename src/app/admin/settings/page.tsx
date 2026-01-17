@@ -1,8 +1,9 @@
 
+
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Settings, ChevronRight, QrCode, ShoppingBasket, Globe, FileText, Printer, GitBranch, Building, Clock, Tag } from "lucide-react";
+import { Settings, ChevronRight, QrCode, ShoppingBasket, Globe, FileText, Printer, GitBranch, Building, Clock, Tag, Layers, Monitor } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from '@/app/admin/auth-provider';
 import { useEffect, useState } from 'react';
@@ -36,6 +37,13 @@ const branchSettingsSections = [
         icon: <Settings className="h-6 w-6" />,
         roles: ['Admin', 'Manager']
     },
+     {
+        title: "Floor Management",
+        description: "Configure floors for multi-level table layouts.",
+        href: "/admin/settings/floors",
+        icon: <Layers className="h-6 w-6" />,
+        roles: ['Admin', 'Manager'],
+    },
     {
         title: "Menu Categories",
         description: "Manage food categories like Meals, Snacks, Beverages, and more.",
@@ -48,6 +56,13 @@ const branchSettingsSections = [
         description: "Configure breakfast, lunch, dinner times and session-based menu availability.",
         href: "/admin/settings/sessions",
         icon: <Clock className="h-6 w-6" />,
+        roles: ['Admin', 'Manager']
+    },
+    {
+        title: "POS Settings",
+        description: "Configure cash denominations and other POS screen options.",
+        href: "/admin/settings/pos",
+        icon: <Monitor className="h-6 w-6" />,
         roles: ['Admin', 'Manager']
     },
     {

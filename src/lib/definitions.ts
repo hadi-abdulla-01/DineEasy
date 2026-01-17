@@ -26,12 +26,19 @@ export type RestaurantSettings = {
     onlineOrderPlatforms?: string[];
     invoiceSettings?: InvoiceSettings;
     printSettings?: PrintSettings;
+    posSettings?: {
+        cashDenominations: number[];
+        enableOnScreenKeyboard?: boolean;
+    };
     mealSessions?: MealSession[];
     manualSessionOverride?: {
         enabled: boolean;
         sessionId: string | null; // null when disabled or no session selected
     };
     menuCategories?: string[]; // Food categories like Meals, Snacks, Beverages, etc.
+    multiFloorEnabled?: boolean;
+    floors?: string[];
+    defaultFloor?: string;
 };
 
 export type Branch = {
@@ -43,11 +50,12 @@ export type Branch = {
 
 export type Table = {
     id: string;
-    number: number;
+    number: string;
     status: 'available' | 'occupied';
     position?: { x: number; y: number };
     branchId: string;
     restaurantId?: string;
+    floor?: string;
 };
 
 export type AddonOption = {
@@ -130,6 +138,7 @@ export type Order = {
     items: OrderItem[];
     status: OrderStatus;
     subtotal: number;
+    discount?: number;
     taxes: AppliedTax[];
     totalTaxAmount: number;
     total: number;
@@ -156,6 +165,7 @@ export type RemoteOrder = {
     customerDetails: CustomerDetails;
     items: OrderItem[];
     subtotal: number;
+    discount?: number;
     taxes: AppliedTax[];
     totalTaxAmount: number;
     total: number;
@@ -163,11 +173,13 @@ export type RemoteOrder = {
     paymentMethod?: 'cash' | 'card';
     branchId: string;
     createdByName?: string;
+    takeAwayTime?: string;
+    notes?: string;
 };
 
 export type UserRole = 'Admin' | 'Manager' | 'Server' | 'Kitchen';
 
-export type NavMenuKey = 'dashboard' | 'tableOrder' | 'tables' | 'menu' | 'kitchen' | 'sales' | 'salesHistory' | 'onlineOrders' | 'takeAway' | 'userManagement' | 'settings';
+export type NavMenuKey = 'dashboard' | 'tableOrder' | 'tables' | 'menu' | 'kitchen' | 'sales' | 'salesHistory' | 'onlineOrders' | 'takeAway' | 'userManagement' | 'settings' | 'pos';
 
 export type UserPermission = {
     view?: boolean;

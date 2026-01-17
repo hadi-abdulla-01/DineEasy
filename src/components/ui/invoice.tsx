@@ -1,4 +1,5 @@
 
+
 'use client';
 import type { Order, RemoteOrder, RestaurantSettings } from "@/lib/definitions";
 import React from 'react';
@@ -105,6 +106,12 @@ export function Invoice({ order, settings }: { order: CombinedOrder, settings: R
                             <td style={{ padding: '2px 5px', textAlign: 'right' }}>Subtotal:</td>
                             <td style={{ width: '80px', padding: '2px 5px', textAlign: 'right' }}>{currencySymbol}{order.subtotal.toFixed(currencyDecimalPlaces)}</td>
                         </tr>
+                        {order.discount && order.discount > 0 && (
+                             <tr>
+                                <td style={{ padding: '2px 5px', textAlign: 'right' }}>Discount:</td>
+                                <td style={{ width: '80px', padding: '2px 5px', textAlign: 'right' }}>-{currencySymbol}{order.discount.toFixed(currencyDecimalPlaces)}</td>
+                            </tr>
+                        )}
                         {Array.isArray(order.taxes) && order.taxes.map((tax, index) => (
                             <tr key={index}>
                                 <td style={{ padding: '2px 5px', textAlign: 'right' }}>{tax.name} ({tax.rate}%):</td>

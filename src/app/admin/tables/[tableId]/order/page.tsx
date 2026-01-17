@@ -1,13 +1,14 @@
 
+
 'use client';
 
 import { OrderForm } from "@/components/order-form";
-import { notFound, useParams } from "next/navigation";
+import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { OrderStatusBadge } from "@/components/order-status-badge";
 import { CheckCircle, LoaderCircle } from "lucide-react";
-import type { Order, Table, MenuItem } from "@/lib/definitions";
+import type { Order, Table, MenuItem, RestaurantSettings } from "@/lib/definitions";
 import { useEffect, useState } from "react";
 import { useRestaurantData } from "@/lib/client-data";
 
@@ -55,10 +56,11 @@ function CurrentOrderDisplay({ orders }: { orders: Order[] }) {
 export default function AdminOrderPage() {
     const params = useParams();
     const { tableId } = params;
-    const { getMenuItems, getTableById, getActiveOrders } = useRestaurantData();
+    const { getMenuItems, getTableById, getActiveOrders, getSettings, restaurantId } = useRestaurantData();
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [table, setTable] = useState<Table | null>(null);
     const [ordersForTable, setOrdersForTable] = useState<Order[]>([]);
+    const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -71,35 +73,44 @@ export default function AdminOrderPage() {
             setIsLoading(true);
 
             try {
-                const [fetchedTable, fetchedMenuItems, activeOrders] = await Promise.all([
-                    getTableById(tableId),
-                    getMenuItems(),
-                    getActiveOrders()
-                ]);
+                // 1. Fetch table data first to get the branchId
+                const fetchedTable = await getTableById(tableId);
 
-                if (!fetchedTable) {
+                if (!fetchedTable || !fetchedTable.branchId) {
                     notFound();
                     return;
                 }
-
                 setTable(fetchedTable);
+
+                // 2. Use the branchId to fetch related data
+                const [fetchedMenuItems, activeOrders, fetchedSettings] = await Promise.all([
+                    getMenuItems(fetchedTable.branchId),
+                    getActiveOrders(fetchedTable.branchId),
+                    getSettings(fetchedTable.branchId)
+                ]);
+
                 setMenuItems(fetchedMenuItems);
                 setOrdersForTable(activeOrders.filter(order => order.tableId === tableId));
+                setSettings(fetchedSettings);
+
             } catch (error) {
                 console.error("Failed to load order page data:", error);
             } finally {
                 setIsLoading(false);
             }
         }
-        loadData();
-    }, [tableId, getTableById, getMenuItems, getActiveOrders]);
+        if (restaurantId) {
+          loadData();
+        }
+    }, [tableId, restaurantId, getTableById, getMenuItems, getActiveOrders, getSettings]);
+
 
     if (isLoading) {
         return (
             <div className="flex h-[80vh] items-center justify-center">
                 <div className="flex flex-col items-center gap-2">
                     <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="text-muted-foreground">Loading order screen...</p>
+                    <p className="text-muted-foreground">Loading menu...</p>
                 </div>
             </div>
         );
@@ -121,7 +132,13 @@ export default function AdminOrderPage() {
 
             <CurrentOrderDisplay orders={ordersForTable} />
 
-            <OrderForm menu={menuItems} tableId={table.id} isCustomerFacing={false} />
+            <OrderForm 
+                menu={menuItems} 
+                tableId={table.id} 
+                isCustomerFacing={false}
+                settings={settings}
+                restaurantId={restaurantId}
+            />
         </div>
     )
 }

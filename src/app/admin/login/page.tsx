@@ -6,7 +6,6 @@ import { motion } from "motion/react";
 import svgPaths from "@/imports/svg-6hzyqt81bp";
 import imgImage1 from "@/assets/admin-login-illustration.png";
 import Link from 'next/link';
-import { getKitchenUserByUsername } from '@/lib/data';
 
 function Wrapper({ children }: React.PropsWithChildren<{}>) {
     return (
@@ -56,29 +55,41 @@ function Group2() {
 }
 
 export default function AdminLoginPage() {
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const { login } = useAuth();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
 
+        if (!email || !password) {
+            setError('Please enter email and password');
+            return;
+        }
+
+        setIsLoading(true);
         try {
-            const user = await getKitchenUserByUsername(username);
-            if (user && user.password === password) {
-                if (user.role === 'Kitchen') {
+            const { signInWithEmail } = await import('@/lib/auth');
+            const result = await signInWithEmail(email, password);
+
+            if (result.success && result.user) {
+                if (result.user.role === 'Kitchen') {
                     setError('Kitchen staff must log in through the kitchen portal.');
+                    setIsLoading(false);
                     return;
                 }
-                login(user);
+                login(result.user);
             } else {
-                setError('Invalid username or password.');
+                setError(result.error || 'Login failed');
+                setIsLoading(false);
             }
         } catch (err) {
             console.error("Login error:", err);
             setError('An error occurred during login.');
+            setIsLoading(false);
         }
     };
 
@@ -148,10 +159,10 @@ export default function AdminLoginPage() {
                                     <Wrapper>
                                         <Group1 />
                                         <input
-                                            type="text"
-                                            placeholder="Your Username"
-                                            value={username}
-                                            onChange={(e) => setUsername(e.target.value)}
+                                            type="email"
+                                            placeholder="Email Address"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
                                             className="w-full outline-none text-[#969ab8] text-[14px] font-['Poppins:Medium',sans-serif] placeholder:text-[#969ab8] bg-transparent"
                                         />
                                     </Wrapper>
@@ -181,15 +192,16 @@ export default function AdminLoginPage() {
                             {/* Login Button */}
                             <motion.button
                                 type="submit"
-                                className="bg-[#cb1e1d] rounded-[8px] px-16 py-3 w-full transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                                disabled={isLoading}
+                                className="bg-[#cb1e1d] rounded-[8px] px-16 py-3 w-full transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.5, delay: 0.8 }}
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
+                                whileHover={{ scale: isLoading ? 1 : 1.02 }}
+                                whileTap={{ scale: isLoading ? 1 : 0.98 }}
                             >
                                 <p className="font-['Poppins:SemiBold',sans-serif] leading-[normal] not-italic text-[15px] text-center text-white tracking-[0.1px]">
-                                    Log In
+                                    {isLoading ? 'Logging in...' : 'Log In'}
                                 </p>
                             </motion.button>
                         </motion.div>

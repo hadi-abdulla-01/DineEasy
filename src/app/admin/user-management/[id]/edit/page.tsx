@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useEffect, useState } from 'react';
 import { updateKitchenUserAction } from '@/lib/actions';
@@ -22,7 +23,7 @@ import { useRestaurantData } from '@/lib/client-data';
 const USER_ROLES: UserRole[] = ['Admin', 'Manager', 'Server', 'Kitchen'];
 
 export default function EditUserPage() {
-    const { user: currentUser } = useAuth();
+    const { user: currentUser, login, refreshUser } = useAuth();
     const { getKitchenUserById, getMenuItems, getBranches, getMainBranch, restaurantId } = useRestaurantData();
     const [user, setUser] = useState<KitchenUser | null>(null);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -40,7 +41,7 @@ export default function EditUserPage() {
     const [selectAllPermissions, setSelectAllPermissions] = useState(false);
 
     useEffect(() => {
-        if (userId) {
+        if (userId && restaurantId) {
             getKitchenUserById(userId).then(fetchedUser => {
                 if (fetchedUser) {
                     setUser(fetchedUser);
@@ -56,7 +57,7 @@ export default function EditUserPage() {
             getBranches().then(setBranches);
             getMainBranch().then(setMainBranch);
         }
-    }, [userId, getKitchenUserById, getMenuItems, getBranches, getMainBranch]);
+    }, [userId, restaurantId, getKitchenUserById, getMenuItems, getBranches, getMainBranch]);
 
     const handleSubmit = async (formData: FormData) => {
         formData.delete('categories');
@@ -66,8 +67,17 @@ export default function EditUserPage() {
 
         formData.append('permissions', JSON.stringify(permissions));
         formData.append('restaurantId', restaurantId);
+        if(currentUser?.id) {
+            formData.append('updatedBy', currentUser.id);
+        }
 
         await updateKitchenUserAction(userId, formData);
+        
+        // If the admin is editing their own profile, refresh the session
+        if (currentUser?.id === userId) {
+           await refreshUser();
+        }
+
         router.push('/admin/user-management');
     };
 

@@ -42,6 +42,7 @@ export async function signInWithEmail(email: string, password: string): Promise<
                     branchId: '',
                     permissions: {
                         dashboard: { view: true },
+                        pos: { view: true },
                         tableOrder: { view: true },
                         tables: { view: true, create: true, edit: true, delete: true },
                         menu: { view: true, create: true, edit: true, delete: true },
