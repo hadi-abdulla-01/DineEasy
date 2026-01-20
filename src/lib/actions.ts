@@ -1,10 +1,11 @@
 
+
 'use server';
 
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { OrderItem, OrderStatus, MenuItem, Table, RemoteOrder, Order, KitchenUser, RestaurantSettings, AddonGroup, SelectedAddon, UserRole, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails } from './definitions';
+import type { OrderItem, OrderStatus, MenuItem, Table, Order, KitchenUser, RestaurantSettings, AddonGroup, SelectedAddon, UserRole, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, RemoteOrder } from './definitions';
 import {
     createOrder,
     updateTableStatus,
@@ -14,7 +15,6 @@ import {
     addMenuItem,
     updateMenuItem,
     toggleMenuItemAvailability,
-    addRemoteOrder,
     getOrdersByTableId,
     cancelOrdersForTable,
     createKitchenUserInFirestore,
@@ -207,23 +207,15 @@ export async function updateOrderStatusAction(orderId: string, formData: FormDat
         console.log('[updateOrderStatusAction] Order updated:', updatedOrder?.status);
 
         if (updatedOrder && (status === 'completed' || status === 'cancelled')) {
-            if (updatedOrder.orderType === 'Dine-in') {
+            if (updatedOrder.orderType === 'Dine-in' && updatedOrder.tableId) {
                 const otherOrders = await getOrdersByTableId(updatedOrder.tableId, restaurantId);
                 const activeOrdersOnTable = otherOrders.filter(o => o.id !== orderId && o.status !== 'completed' && o.status !== 'cancelled');
                 if (activeOrdersOnTable.length === 0) {
                     await updateTableStatus(updatedOrder.tableId, 'available', restaurantId);
                 }
             }
-            revalidatePath('/admin');
         }
-
-        revalidatePath('/kitchen', 'layout');
-        revalidatePath('/admin/kitchen', 'page');
-        revalidatePath(`/order/${order.tableId}/status/${order.id}`);
-        revalidatePath('/admin/sales');
-        revalidatePath('/admin/sales-history');
-        revalidatePath('/admin/pos');
-
+        
         if (status === 'completed') {
             const redirectUrl = redirectTo || '/admin/kitchen';
             console.log(`[updateOrderStatusAction] Redirecting to ${redirectUrl}`);
@@ -445,51 +437,61 @@ export async function updateTableStatusAction(tableId: string, status: Table['st
     }
 }
 
-export async function addRemoteOrderAction(formData: FormData) {
-    const cartJSON = formData.get('cart') as string;
-    const cartItems = JSON.parse(cartJSON);
+export async function createOrderAction(orderData: any, restaurantId: string) {
+  const newOrder = await createOrder(orderData, restaurantId);
+  // Revalidations removed to prevent full page reloads on POS screen
+  return newOrder;
+}
 
-    const customerDetails = {
+export async function createRemoteOrderAction(formData: FormData): Promise<RemoteOrder> {
+    const cartJSON = formData.get('cart') as string;
+    const cartItems = JSON.parse(cartJSON) as OrderItem[];
+
+    const orderType = formData.get('orderType') as Order['orderType'];
+    const createdByName = formData.get('createdByName') as string | null;
+    const restaurantId = formData.get('restaurantId') as string;
+    const branchId = formData.get('branchId') as string;
+    const takeAwayTime = formData.get('takeAwayTime') as string | null;
+
+    const customerDetails: CustomerDetails = {
         name: formData.get('name') as string,
         phone: formData.get('phone') as string,
         address: formData.get('address') as string,
         platform: formData.get('platform') as string,
     }
 
-    const orderType = formData.get('orderType') as RemoteOrder['orderType'];
-    const createdByName = formData.get('createdByName') as string | null;
-    const restaurantId = formData.get('restaurantId') as string;
-    const takeAwayTime = formData.get('takeAwayTime') as string | null;
-
-    const newOrderData: any = {
+    const orderData = {
         orderType,
+        customerName: customerDetails.name,
+        customerPhone: customerDetails.phone,
         customerDetails,
         items: cartItems,
-        branchId: formData.get('branchId') as string,
+        branchId: branchId,
         createdByName: createdByName || undefined,
+        notes: formData.get('orderNotes') as string | undefined,
+        takeAwayTime: takeAwayTime || undefined,
     };
-
-    if (takeAwayTime) {
-        newOrderData.takeAwayTime = takeAwayTime;
-    }
-
-    const newRemoteOrder = await addRemoteOrder(newOrderData, restaurantId);
+    
+    // Note: The original `addRemoteOrder` created two documents. The unified `createOrder`
+    // now only creates one in the `orders` collection, which is the correct behavior.
+    const newOrder = await createOrder(orderData, restaurantId);
 
     const correctionForId = formData.get('correctionFor') as string;
     const correctionType = formData.get('correctionType') as 'Dine-in' | 'Remote';
 
-    if (correctionForId && correctionType) {
+    if (correctionForId) {
         await deleteOrder(correctionForId, correctionType, restaurantId);
     }
 
     revalidatePath('/admin/online-orders');
     revalidatePath('/admin/take-away');
-    revalidatePath('/kitchen', 'layout');
-    revalidatePath('/admin', 'layout');
+    revalidatePath('/kitchen');
     revalidatePath('/admin/sales-history');
-    revalidatePath('/admin/sales');
 
-    return newRemoteOrder;
+    // Since `createOrder` returns an `Order`, we must cast it to `RemoteOrder`
+    // because the caller (`remote-order-form`) expects a `RemoteOrder`.
+    // The structure is compatible.
+    return newOrder as unknown as RemoteOrder;
 }
 
 type CreateUserState = {
@@ -766,7 +768,7 @@ export async function deleteOrderAction(orderId: string, orderType: 'Dine-in' | 
     }
 }
 
-export async function updateOrderDetailsAction(orderId: string, orderType: Order['orderType'] | RemoteOrder['orderType'], formData: FormData) {
+export async function updateOrderDetailsAction(orderId: string, orderType: Order['orderType'], formData: FormData) {
     const customerName = formData.get('customerName') as string;
     const customerPhone = formData.get('customerPhone') as string;
     const restaurantId = formData.get('restaurantId') as string;
@@ -982,3 +984,5 @@ export async function removeMenuCategoryAction(formData: FormData) {
 
 
     
+
+

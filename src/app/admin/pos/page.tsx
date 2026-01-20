@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, useTransition } from 'react';
 import type { MenuItem, RestaurantSettings, OrderItem, Order, Branch, Table, RemoteOrder, CustomerDetails, AddonOption } from '@/lib/definitions';
 import { useRestaurantData } from '@/lib/client-data';
 import { useAuth } from '../auth-provider';
@@ -17,14 +17,14 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
-import { LoaderCircle, PlusCircle, MinusCircle, Trash2, User, Phone, Hash, CreditCard, Banknote, QrCode, Utensils, Search, Globe, ShoppingBag, Home, Clock, XCircle, CheckCircle, Pencil, Building2, Grid3x3, Maximize, Minimize, CaseUpper, Delete, X, IceCream, Beef, Wine, Leaf, CircleDot, Badge } from 'lucide-react';
+import { LoaderCircle, PlusCircle, MinusCircle, Trash2, User, Phone, Hash, CreditCard, Banknote, QrCode, Utensils, Search, Globe, ShoppingBag, Home, Clock, XCircle, CheckCircle, Pencil, Building2, Grid3x3, Maximize, Minimize, CaseUpper, Delete, X, IceCream, Beef, Wine, Leaf, CircleDot } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OrderStatusBadge } from '@/components/order-status-badge';
 import { formatDistanceInTimezone } from '@/lib/format-date';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { updateOrderStatusAction } from '@/lib/actions';
+import { createOrderAction, updateOrderStatusAction } from "@/lib/actions";
 import { Textarea } from '@/components/ui/textarea';
 import dynamic from 'next/dynamic';
 import { AddonDialog } from '@/components/addon-dialog';
@@ -228,12 +228,12 @@ function POSCart({
     };
 
     return (
-        <Card className="flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-lg border-gray-200 dark:border-gray-700 h-full">
-            <CardHeader className="border-b border-gray-200 dark:border-gray-700">
+        <div className="grid grid-rows-[auto_auto_1fr_auto] bg-white dark:bg-gray-800 rounded-2xl shadow-lg border-gray-200 dark:border-gray-700 h-full">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex justify-between items-center">
-                    <CardTitle className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                         {orderToUpdate ? 'Edit Order' : 'New Order'}
-                    </CardTitle>
+                    </h2>
                     {orderToUpdate && (
                         <Button variant="outline" size="sm" onClick={onClearEdit} className="bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-700">
                             <PlusCircle className="h-4 w-4 mr-1" />
@@ -241,155 +241,157 @@ function POSCart({
                         </Button>
                     )}
                 </div>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col p-4 min-h-0">
-                <div className="flex-shrink-0">
-                    <RadioGroup
-                        value={orderType}
-                        onValueChange={(value) => !orderToUpdate && setOrderType(value as any)}
-                        className="grid grid-cols-3 gap-4"
+            </div>
+
+            <div className="p-4 space-y-4 border-b border-gray-200 dark:border-gray-700">
+                <RadioGroup
+                    value={orderType}
+                    onValueChange={(value) => !orderToUpdate && setOrderType(value as any)}
+                    className="grid grid-cols-3 gap-4"
+                >
+                    <Label
+                        htmlFor="dine-in"
+                        className={cn(
+                            "border rounded-md p-2 flex flex-col items-center justify-center gap-1 text-center text-sm h-16 transition-colors",
+                            !orderToUpdate && "cursor-pointer hover:bg-pink-50 dark:hover:bg-gray-700",
+                            orderType === 'Dine-in' && "bg-pink-100 text-pink-600 border-pink-300 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-700",
+                            !!orderToUpdate && orderType !== 'Dine-in' && "cursor-not-allowed opacity-50"
+                        )}
                     >
-                        <Label
-                            htmlFor="dine-in"
-                            className={cn(
-                                "border rounded-md p-2 flex flex-col items-center justify-center gap-1 text-center text-sm h-16 transition-colors",
-                                !orderToUpdate && "cursor-pointer hover:bg-pink-50",
-                                orderType === 'Dine-in' && "bg-pink-100 text-pink-600 border-pink-300",
-                                !!orderToUpdate && orderType !== 'Dine-in' && "cursor-not-allowed opacity-50"
-                            )}
-                        >
-                            <RadioGroupItem value="Dine-in" id="dine-in" className="sr-only" disabled={!!orderToUpdate} />
-                            <Utensils className="h-5 w-5" />
-                            Dine-in
-                        </Label>
-                        <Label
-                            htmlFor="take-away"
-                            className={cn(
-                                "border rounded-md p-2 flex flex-col items-center justify-center gap-1 text-center text-sm h-16 transition-colors",
-                                !orderToUpdate && "cursor-pointer hover:bg-pink-50",
-                                orderType === 'Take-away' && "bg-pink-100 text-pink-600 border-pink-300",
-                                !!orderToUpdate && orderType !== 'Take-away' && "cursor-not-allowed opacity-50"
-                            )}
-                        >
-                            <RadioGroupItem value="Take-away" id="take-away" className="sr-only" disabled={!!orderToUpdate} />
-                            <ShoppingBag className="h-5 w-5" />
-                            Take-away
-                        </Label>
-                        <Label
-                            htmlFor="online"
-                            className={cn(
-                                "border rounded-md p-2 flex flex-col items-center justify-center gap-1 text-center text-sm h-16 transition-colors",
-                                !orderToUpdate && "cursor-pointer hover:bg-pink-50",
-                                orderType === 'Online' && "bg-pink-100 text-pink-600 border-pink-300",
-                                !!orderToUpdate && orderType !== 'Online' && "cursor-not-allowed opacity-50"
-                            )}
-                        >
-                            <RadioGroupItem value="Online" id="online" className="sr-only" disabled={!!orderToUpdate} />
-                            <Globe className="h-5 w-5" />
-                            Online
-                        </Label>
-                    </RadioGroup>
-                    <div className='py-4 space-y-2'>
-                        {orderType === 'Dine-in' && (
+                        <RadioGroupItem value="Dine-in" id="dine-in" className="sr-only" disabled={!!orderToUpdate} />
+                        <Utensils className="h-5 w-5" />
+                        Dine-in
+                    </Label>
+                    <Label
+                        htmlFor="take-away"
+                        className={cn(
+                            "border rounded-md p-2 flex flex-col items-center justify-center gap-1 text-center text-sm h-16 transition-colors",
+                            !orderToUpdate && "cursor-pointer hover:bg-pink-50 dark:hover:bg-gray-700",
+                            orderType === 'Take-away' && "bg-pink-100 text-pink-600 border-pink-300 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-700",
+                            !!orderToUpdate && orderType !== 'Take-away' && "cursor-not-allowed opacity-50"
+                        )}
+                    >
+                        <RadioGroupItem value="Take-away" id="take-away" className="sr-only" disabled={!!orderToUpdate} />
+                        <ShoppingBag className="h-5 w-5" />
+                        Take-away
+                    </Label>
+                    <Label
+                        htmlFor="online"
+                        className={cn(
+                            "border rounded-md p-2 flex flex-col items-center justify-center gap-1 text-center text-sm h-16 transition-colors",
+                            !orderToUpdate && "cursor-pointer hover:bg-pink-50 dark:hover:bg-gray-700",
+                            orderType === 'Online' && "bg-pink-100 text-pink-600 border-pink-300 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-700",
+                            !!orderToUpdate && orderType !== 'Online' && "cursor-not-allowed opacity-50"
+                        )}
+                    >
+                        <RadioGroupItem value="Online" id="online" className="sr-only" disabled={!!orderToUpdate} />
+                        <Globe className="h-5 w-5" />
+                        Online
+                    </Label>
+                </RadioGroup>
+                <div className='py-4 space-y-2'>
+                    {orderType === 'Dine-in' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="tableId-select">Table</Label>
+                            <Select value={tableId} onValueChange={setTableId}>
+                                <SelectTrigger id="tableId-select">
+                                    <SelectValue placeholder="Select a table" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {tables.map(table => (
+                                        <SelectItem key={table.id} value={table.id}>
+                                            Table {table.number}{table.floor ? ` (${table.floor})` : ''}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                    <div className="space-y-2">
+                        <Label htmlFor="customerName">Customer Name</Label>
+                        <Input id="customerName" value={customerName} onDoubleClick={onInputDoubleClick} onChange={(e) => setCustomerName(e.target.value)} placeholder="John Doe" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="customerPhone">Customer Phone</Label>
+                        <Input id="customerPhone" type="tel" value={customerPhone} onDoubleClick={onInputDoubleClick} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="555-1234" />
+                    </div>
+
+                    {orderType === 'Take-away' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="takeAwayTime">Pickup Time (Optional)</Label>
+                            <Input
+                                id="takeAwayTime"
+                                name="takeAwayTime"
+                                type="time"
+                                value={takeAwayTime}
+                                onDoubleClick={onInputDoubleClick}
+                                onChange={(e) => setTakeAwayTime(e.target.value)}
+                            />
+                        </div>
+                    )}
+
+                    {orderType === 'Online' && (
+                        <>
                             <div className="space-y-2">
-                                <Label htmlFor="tableId-select">Table</Label>
-                                <Select value={tableId} onValueChange={setTableId}>
-                                    <SelectTrigger id="tableId-select">
-                                        <SelectValue placeholder="Select a table" />
+                                <Label htmlFor="address">Address</Label>
+                                <Textarea id="address" value={address} onDoubleClick={onInputDoubleClick} onChange={(e) => setAddress(e.target.value)} placeholder="Delivery Address" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="platform">Platform</Label>
+                                <Select value={platform} onValueChange={setPlatform}>
+                                    <SelectTrigger id="platform">
+                                        <SelectValue placeholder="Select platform" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {tables.map(table => (
-                                            <SelectItem key={table.id} value={table.id}>
-                                                Table {table.number}{table.floor ? ` (${table.floor})` : ''}
-                                            </SelectItem>
-                                        ))}
+                                        {(settings.onlineOrderPlatforms || []).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
-                        )}
-                        <div className="space-y-2">
-                            <Label htmlFor="customerName">Customer Name</Label>
-                            <Input id="customerName" value={customerName} onDoubleClick={onInputDoubleClick} onChange={(e) => setCustomerName(e.target.value)} placeholder="John Doe" />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="customerPhone">Customer Phone</Label>
-                            <Input id="customerPhone" type="tel" value={customerPhone} onDoubleClick={onInputDoubleClick} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="555-1234" />
-                        </div>
-
-                        {orderType === 'Take-away' && (
-                            <div className="space-y-2">
-                                <Label htmlFor="takeAwayTime">Pickup Time (Optional)</Label>
-                                <Input
-                                    id="takeAwayTime"
-                                    name="takeAwayTime"
-                                    type="time"
-                                    value={takeAwayTime}
-                                    onDoubleClick={onInputDoubleClick}
-                                    onChange={(e) => setTakeAwayTime(e.target.value)}
-                                />
-                            </div>
-                        )}
-
-                        {orderType === 'Online' && (
-                            <>
-                                <div className="space-y-2">
-                                    <Label htmlFor="address">Address</Label>
-                                    <Textarea id="address" value={address} onDoubleClick={onInputDoubleClick} onChange={(e) => setAddress(e.target.value)} placeholder="Delivery Address" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="platform">Platform</Label>
-                                    <Select value={platform} onValueChange={setPlatform}>
-                                        <SelectTrigger id="platform">
-                                            <SelectValue placeholder="Select platform" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {(settings.onlineOrderPlatforms || []).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </>
-                        )}
-                    </div>
+                        </>
+                    )}
                 </div>
-                <ScrollArea className="flex-grow my-2 pr-2 -mr-4">
+            </div>
+
+
+            <ScrollArea className="flex-1 p-4">
+                <div className="space-y-4">
                     {cart.length === 0 ? (
                         <p className="text-muted-foreground text-center pt-10">Select items to start an order.</p>
                     ) : (
-                        <div className="space-y-4">
-                            {cart.map((item, index) => (
-                                <div key={item.orderItemId ?? index} className="space-y-2">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex-1">
-                                            <p className="font-semibold text-sm line-clamp-1">{item.name}</p>
-                                            <p className="font-semibold text-sm text-pink-600">{currencySymbol}{(item.price * item.quantity).toFixed(currencyDecimalPlaces)}</p>
-                                        </div>
-                                        <div className="flex items-center gap-2 bg-pink-100 text-pink-600 rounded-full p-1">
-                                            <button onClick={() => onUpdateQuantity(item.orderItemId, item.quantity - 1)} className="hover:text-pink-800">
-                                                <MinusCircle className="h-5 w-5" />
-                                            </button>
-                                            <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
-                                            <button onClick={() => onUpdateQuantity(item.orderItemId, item.quantity + 1)} className="hover:text-pink-800">
-                                                <PlusCircle className="h-5 w-5" />
-                                            </button>
-                                        </div>
-                                        <button onClick={() => onUpdateQuantity(item.orderItemId, 0)} className="hover:text-destructive">
-                                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        cart.map((item, index) => (
+                            <div key={item.orderItemId ?? index} className="space-y-2">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex-1">
+                                        <p className="font-semibold text-sm line-clamp-1">{item.name}</p>
+                                        <p className="font-semibold text-sm text-pink-600">{currencySymbol}{(item.price * item.quantity).toFixed(currencyDecimalPlaces)}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 bg-pink-100 text-pink-600 rounded-full p-1">
+                                        <button onClick={() => onUpdateQuantity(item.orderItemId, item.quantity - 1)} className="hover:text-pink-800">
+                                            <MinusCircle className="h-5 w-5" />
+                                        </button>
+                                        <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
+                                        <button onClick={() => onUpdateQuantity(item.orderItemId, item.quantity + 1)} className="hover:text-pink-800">
+                                            <PlusCircle className="h-5 w-5" />
                                         </button>
                                     </div>
-                                    <Textarea
-                                        placeholder="Add special instructions for this item..."
-                                        className="text-xs h-12"
-                                        value={item.notes || ''}
-                                        onDoubleClick={onInputDoubleClick}
-                                        onChange={(e) => onItemNoteChange(item.orderItemId, e.target.value)}
-                                    />
+                                    <button onClick={() => onUpdateQuantity(item.orderItemId, 0)} className="hover:text-destructive">
+                                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                    </button>
                                 </div>
-                            ))}
-                        </div>
+                                <Textarea
+                                    placeholder="Add special instructions for this item..."
+                                    className="text-xs h-12"
+                                    value={item.notes || ''}
+                                    onDoubleClick={onInputDoubleClick}
+                                    onChange={(e) => onItemNoteChange(item.orderItemId, e.target.value)}
+                                />
+                            </div>
+                        ))
                     )}
-                </ScrollArea>
-            </CardContent>
-            <CardFooter className="flex-col !p-4 !pt-0 border-t border-gray-200 dark:border-gray-700 mt-auto bg-gray-50 dark:bg-gray-900 rounded-b-2xl flex-shrink-0">
+                </div>
+            </ScrollArea>
+
+            <div className="p-4 border-t border-gray-200 dark:bg-gray-900 rounded-b-2xl">
                 <div className="w-full space-y-2 py-4">
                     <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Subtotal</span>
@@ -440,12 +442,12 @@ function POSCart({
                 <Button className="w-full mt-4 bg-pink-600 hover:bg-pink-700" size="lg" onClick={handlePlaceOrder} disabled={cart.length === 0 || isSubmitting}>
                     {isSubmitting ? <LoaderCircle className="animate-spin" /> : (orderToUpdate ? 'Update Order' : 'Place Order')}
                 </Button>
-            </CardFooter>
-        </Card>
+            </div>
+        </div>
     );
 }
 
-function ActiveOrderCard({ order, settings, onUpdate, onEdit, restaurantId }: { order: CombinedOrderWithTable, settings: RestaurantSettings | null, onUpdate: () => void, onEdit: (order: CombinedOrderWithTable) => void, restaurantId: string }) {
+function ActiveOrderCard({ order, settings, onUpdate, onEdit, restaurantId, startTransition }: { order: CombinedOrderWithTable, settings: RestaurantSettings | null, onUpdate: () => void, onEdit: (order: CombinedOrderWithTable) => void, restaurantId: string, startTransition: React.TransitionStartFunction }) {
 
     const getOrderTitle = (order: CombinedOrderWithTable) => {
         switch (order.orderType) {
@@ -475,38 +477,40 @@ function ActiveOrderCard({ order, settings, onUpdate, onEdit, restaurantId }: { 
     const { toast } = useToast();
 
 
-    const handleUpdateStatus = async (status: 'preparing' | 'ready' | 'completed' | 'cancelled') => {
-        try {
-            const formData = new FormData();
-            formData.append('status', status);
-            formData.append('restaurantId', restaurantId);
-            await updateOrderStatusAction(order.id, formData);
+    const handleUpdateStatus = (status: 'preparing' | 'ready' | 'completed' | 'cancelled') => {
+        startTransition(async () => {
+            try {
+                const formData = new FormData();
+                formData.append('status', status);
+                formData.append('restaurantId', restaurantId);
+                await updateOrderStatusAction(order.id, formData);
 
-            if (status === 'cancelled') {
+                if (status === 'cancelled') {
+                    toast({
+                        title: "Order Cancelled",
+                        description: `Order #${order.invoiceNumber || order.id.slice(-6)} has been cancelled.`,
+                        variant: "destructive"
+                    });
+                } else {
+                    toast({
+                        title: "Status Updated",
+                        description: `Order marked as ${status}.`
+                    });
+                }
+
+                // Wait a bit for the database to update, then refresh
+                setTimeout(() => {
+                    onUpdate();
+                }, 500);
+            } catch (error) {
+                console.error('Failed to update order status:', error);
                 toast({
-                    title: "Order Cancelled",
-                    description: `Order #${order.invoiceNumber || order.id.slice(-6)} has been cancelled.`,
-                    variant: "destructive"
-                });
-            } else {
-                toast({
-                    title: "Status Updated",
-                    description: `Order marked as ${status}.`
+                    variant: 'destructive',
+                    title: "Error",
+                    description: "Failed to update order status."
                 });
             }
-
-            // Wait a bit for the database to update, then refresh
-            setTimeout(() => {
-                onUpdate();
-            }, 500);
-        } catch (error) {
-            console.error('Failed to update order status:', error);
-            toast({
-                variant: 'destructive',
-                title: "Error",
-                description: "Failed to update order status."
-            });
-        }
+        });
     }
 
     const nextStatus = order.status === 'received' ? 'preparing' : order.status === 'preparing' ? 'ready' : undefined;
@@ -599,26 +603,33 @@ function ActiveOrderCard({ order, settings, onUpdate, onEdit, restaurantId }: { 
 }
 
 // On-screen keyboard component
-const OnScreenKeyboard = ({ onKeyPress, onClose, inputType = 'text' }: { onKeyPress: (key: string) => void; onClose: () => void; inputType?: 'text' | 'number' | 'email' | 'tel' }) => {
+const OnScreenKeyboard = ({ onClose, inputType = 'text' }: { onClose: () => void; inputType?: 'text' | 'number' | 'email' | 'tel' }) => {
     const [isShift, setIsShift] = React.useState(false);
 
-    const textLayout = [
-        ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
-        ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
-        ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
-        ['Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'Backspace'],
-        ['@', 'Space', '.']
-    ];
+    const handleKeyPress = (key: string) => {
+        const target = keyboardConfig.target;
+        if (!target) return;
 
-    const numberLayout = [
-        ['1', '2', '3'],
-        ['4', '5', '6'],
-        ['7', '8', '9'],
-        ['.', '0', 'Backspace']
-    ];
+        const currentValue = target.value || '';
+        let newValue;
 
-    const isNumeric = inputType === 'number' || inputType === 'tel';
-    const layout = isNumeric ? numberLayout : textLayout;
+        if (key === 'Backspace') {
+            newValue = currentValue.slice(0, -1);
+        } else {
+            newValue = currentValue + key;
+        }
+
+        const prototype = Object.getPrototypeOf(target);
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+
+        nativeInputValueSetter?.call(target, newValue);
+
+        const event = new Event('input', { bubbles: true, cancelable: true });
+        target.dispatchEvent(event);
+
+        target.focus();
+        target.setSelectionRange(newValue.length, newValue.length);
+    };
 
     const handleKeyClick = (key: string) => {
         if (key === 'Shift') {
@@ -626,17 +637,94 @@ const OnScreenKeyboard = ({ onKeyPress, onClose, inputType = 'text' }: { onKeyPr
             return;
         }
         if (key === 'Space') {
-            onKeyPress(' ');
+            handleKeyPress(' ');
+            if (isShift) setIsShift(false);
             return;
         }
         if (key === 'Backspace') {
-            onKeyPress('Backspace');
+            handleKeyPress('Backspace');
+            if (isShift) setIsShift(false);
             return;
         }
 
-        onKeyPress(isShift ? key.toUpperCase() : key.toLowerCase());
+        handleKeyPress(isShift ? key.toUpperCase() : key.toLowerCase());
         if (isShift) setIsShift(false);
     };
+
+    const isNumeric = inputType === 'number' || inputType === 'tel';
+
+    const KeyButton = ({ children, onClick, className, ...props }: { children: React.ReactNode, onClick: () => void, className?: string, style?: React.CSSProperties }) => (
+        <Button
+            type="button"
+            variant="outline"
+            className={cn("h-12 text-lg font-semibold bg-white/80 dark:bg-gray-800/80 shadow-sm transition-transform active:scale-95", className)}
+            onClick={onClick}
+            {...props}
+        >
+            {children}
+        </Button>
+    );
+
+    const AlphanumericLayout = () => (
+        <div className="flex justify-center items-start gap-4">
+            {/* Letter Section */}
+            <div className="flex flex-col gap-1.5">
+                {[['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'], ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'], ['z', 'x', 'c', 'v', 'b', 'n', 'm']].map((row, rowIndex) => (
+                    <div key={`letter-row-${rowIndex}`} className="flex justify-center gap-1.5">
+                        {row.map((key) => (
+                            <KeyButton key={key} onClick={() => handleKeyClick(key)} className="w-12">
+                                {isShift ? key.toUpperCase() : key.toLowerCase()}
+                            </KeyButton>
+                        ))}
+                    </div>
+                ))}
+                <div className="flex justify-center gap-1.5">
+                    <KeyButton onClick={() => handleKeyClick('Shift')} className="px-4 flex-grow"><CaseUpper /></KeyButton>
+                    <KeyButton onClick={() => handleKeyClick('@')} className="w-12">@</KeyButton>
+                    <KeyButton onClick={() => handleKeyClick('Space')} className="px-4 flex-grow min-w-[200px]">Space</KeyButton>
+                    <KeyButton onClick={() => handleKeyClick('.')} className="w-12">.</KeyButton>
+                    <KeyButton onClick={() => handleKeyClick('Backspace')} className="px-4 flex-grow"><Delete /></KeyButton>
+                </div>
+            </div>
+
+            <Separator orientation="vertical" className="h-auto self-stretch" />
+
+            {/* Number Section */}
+            <div className="flex flex-col gap-1.5">
+                 {[['7', '8', '9'], ['4', '5', '6'], ['1', '2', '3']].map((row, rowIndex) => (
+                     <div key={`num-row-${rowIndex}`} className="flex justify-center gap-1.5">
+                        {row.map((key) => (
+                            <KeyButton key={key} onClick={() => handleKeyClick(key)} className="w-12 h-12">
+                                {key}
+                            </KeyButton>
+                        ))}
+                    </div>
+                ))}
+                 <div className="flex justify-center gap-1.5">
+                    <KeyButton onClick={() => handleKeyClick('0')} className="flex-grow h-12">0</KeyButton>
+                </div>
+            </div>
+        </div>
+    );
+
+    const NumericLayout = () => (
+        <div className="space-y-1.5 w-fit mx-auto">
+            {[['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9']].map((row, rowIndex) => (
+                <div key={rowIndex} className="flex justify-center gap-1.5">
+                    {row.map((key) => (
+                        <KeyButton key={key} onClick={() => handleKeyClick(key)} className="w-20 h-16 text-2xl">
+                            {key}
+                        </KeyButton>
+                    ))}
+                </div>
+            ))}
+            <div className="flex justify-center gap-1.5">
+                 <KeyButton onClick={() => handleKeyClick('.')} className="w-20 h-16 text-2xl">.</KeyButton>
+                 <KeyButton onClick={() => handleKeyClick('0')} className="w-20 h-16 text-2xl">0</KeyButton>
+                 <KeyButton onClick={() => handleKeyClick('Backspace')} className="w-20 h-16 text-2xl"><Delete /></KeyButton>
+            </div>
+        </div>
+    );
 
     return (
         <div className="fixed bottom-0 left-0 right-0 bg-gray-200/95 dark:bg-gray-900/95 backdrop-blur-sm p-2 z-[100] shadow-lg rounded-t-lg border-t dark:border-gray-700">
@@ -645,30 +733,8 @@ const OnScreenKeyboard = ({ onKeyPress, onClose, inputType = 'text' }: { onKeyPr
                     <X className="h-5 w-5" />
                 </Button>
             </div>
-            <div className="space-y-1.5 p-1">
-                {layout.map((row, rowIndex) => (
-                    <div key={rowIndex} className="flex justify-center gap-1.5">
-                        {row.map((key) => {
-                            const isSpecialKey = ['Shift', 'Backspace', 'Space'].includes(key);
-                            return (
-                                <Button
-                                    key={key}
-                                    variant="outline"
-                                    className={cn(
-                                        "h-12 text-lg font-semibold bg-white/80 dark:bg-gray-800/80 shadow-sm transition-transform active:scale-95",
-                                        isSpecialKey && 'px-4 flex-grow',
-                                        key === 'Space' && 'min-w-[200px] max-w-[400px]',
-                                        !isSpecialKey && 'w-12',
-                                        isNumeric && 'w-20 h-16 text-2xl',
-                                    )}
-                                    onClick={() => handleKeyClick(key)}
-                                >
-                                    {key === 'Backspace' ? <Delete /> : key === 'Shift' ? <CaseUpper /> : isShift ? key.toUpperCase() : key.toLowerCase()}
-                                </Button>
-                            )
-                        })}
-                    </div>
-                ))}
+            <div className="p-1 flex justify-center">
+                {isNumeric ? <NumericLayout /> : <AlphanumericLayout />}
             </div>
         </div>
     );
@@ -684,14 +750,12 @@ export default function POSPage() {
         getTables,
         restaurantId,
         getActiveOrders,
-        getRemoteOrders,
         updateFullOrder,
         getMainBranch,
-        createOrder,
-        addRemoteOrder,
         getTableById,
     } = useRestaurantData();
 
+    const [isPending, startTransition] = useTransition();
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [tables, setTables] = useState<Table[]>([]);
     const [branches, setBranches] = useState<Branch[]>([]);
@@ -713,7 +777,6 @@ export default function POSPage() {
     const [orderNotes, setOrderNotes] = useState('');
     const [discount, setDiscount] = useState(0);
     const [activeOrders, setActiveOrders] = useState<CombinedOrderWithTable[]>([]);
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
     const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
     const [floorFilter, setFloorFilter] = useState<string>('');
@@ -778,31 +841,23 @@ export default function POSPage() {
     const refreshActiveOrders = useCallback(async () => {
         if (!selectedBranchId || !restaurantId) return;
         try {
-            const [fetchedActiveDineIn, fetchedActiveRemote] = await Promise.all([
-                getActiveOrders(selectedBranchId),
-                getRemoteOrders(selectedBranchId)
-            ]);
-
-            const activeDineInWithTables: OrderWithTable[] = await Promise.all(fetchedActiveDineIn.map(async (order) => {
-                const table = order.tableId ? await getTableById(order.tableId, restaurantId) : undefined;
+            const fetchedActiveOrders = await getActiveOrders(selectedBranchId);
+    
+            const activeOrdersWithTables: OrderWithTable[] = await Promise.all(fetchedActiveOrders.map(async (order) => {
+                const table = order.tableId ? await getTableById(order.tableId) : undefined;
                 return { ...order, table };
             }));
-
-            // Filter out cancelled and completed orders
-            const filteredDineIn = activeDineInWithTables.filter(order =>
+    
+            const filteredActiveOrders = activeOrdersWithTables.filter(order =>
                 order.status !== 'cancelled' && order.status !== 'completed'
             );
-            const filteredRemote = fetchedActiveRemote.filter(order =>
-                !('status' in order) || (order.status !== 'cancelled' && order.status !== 'completed')
-            );
-
-            const allActive: CombinedOrderWithTable[] = [...filteredDineIn, ...filteredRemote];
-            setActiveOrders(allActive);
-
+    
+            setActiveOrders(filteredActiveOrders);
+    
         } catch (error) {
             console.error("Failed to refresh active orders:", error);
         }
-    }, [selectedBranchId, restaurantId, getActiveOrders, getRemoteOrders, getTableById]);
+    }, [selectedBranchId, restaurantId, getActiveOrders, getTableById]);
 
 
     useEffect(() => {
@@ -958,73 +1013,72 @@ export default function POSPage() {
             .reduce((sum, item) => sum + item.quantity, 0);
     };
 
-    const handlePlaceOrder = async (discountValue: number) => {
+    const handlePlaceOrder = (discountValue: number) => {
         if (!selectedBranchId || !user || !restaurantId) {
             toast({ variant: 'destructive', title: "Error", description: "Branch not selected or user not found." });
             return;
         }
 
-        if (isSubmitting) {
-            return; // Prevent double submission
+        if (isPending) {
+            return;
         }
 
-        setIsSubmitting(true);
-        try {
-            if (orderToUpdate) {
-                await updateFullOrder(orderToUpdate.id, orderToUpdate.orderType as any, {
-                    items: cart,
-                    notes: orderNotes,
-                    customerName: customerName || 'Customer',
-                    customerPhone: customerPhone || 'N/A',
-                    tableId: orderType === 'Dine-in' ? tableId : undefined,
-                    address: orderType === 'Online' ? address : undefined,
-                    platform: orderType === 'Online' ? platform : undefined,
-                    takeAwayTime: orderType === 'Take-away' ? takeAwayTime : undefined,
-                    discount: discountValue,
-                }, restaurantId);
-                toast({ title: "Success", description: "Order updated successfully." });
-                handleClearEdit();
-            } else {
-                if (orderType === 'Dine-in') {
-                    if (!tableId) {
-                        toast({ variant: 'destructive', title: "Error", description: "Table is required for Dine-in orders." });
-                        setIsSubmitting(false);
-                        return;
-                    }
-                    const selectedTable = tables.find(t => t.id === tableId);
-                    await createOrder({
-                        tableId,
-                        branchId: selectedBranchId,
-                        customerName: customerName || `Table ${selectedTable?.number || ''}`,
+        startTransition(async () => {
+            try {
+                if (orderToUpdate) {
+                    await updateFullOrder(orderToUpdate.id, orderToUpdate.orderType as any, {
+                        items: cart,
+                        notes: orderNotes,
+                        customerName: customerName || 'Customer',
                         customerPhone: customerPhone || 'N/A',
-                        items: cart,
-                        orderType: 'Dine-in',
-                        notes: orderNotes,
-                        createdByName: user.username,
-                        discount: discountValue,
-                    }, restaurantId);
-                } else {
-                    await addRemoteOrder({
-                        orderType,
-                        branchId: selectedBranchId,
-                        customerDetails: { name: customerName || 'Customer', phone: customerPhone || 'N/A', address, platform },
-                        items: cart,
-                        notes: orderNotes,
-                        createdByName: user.username,
+                        tableId: orderType === 'Dine-in' ? tableId : undefined,
+                        address: orderType === 'Online' ? address : undefined,
+                        platform: orderType === 'Online' ? platform : undefined,
                         takeAwayTime: orderType === 'Take-away' ? takeAwayTime : undefined,
                         discount: discountValue,
-                    }, restaurantId);
+                    });
+                    toast({ title: "Success", description: "Order updated successfully." });
+                    handleClearEdit();
+                } else {
+                    const orderPayload: any = {
+                        branchId: selectedBranchId,
+                        customerName: customerName || 'Customer',
+                        customerPhone: customerPhone || 'N/A',
+                        items: cart,
+                        orderType: orderType,
+                        notes: orderNotes,
+                        createdByName: user.username,
+                        discount: discountValue,
+                    };
+                    if (orderType === 'Dine-in') {
+                        if (!tableId) {
+                            toast({ variant: 'destructive', title: "Error", description: "Table is required for Dine-in orders." });
+                            return;
+                        }
+                        const selectedTable = tables.find(t => t.id === tableId);
+                        orderPayload.tableId = tableId;
+                        if (!orderPayload.customerName) {
+                            orderPayload.customerName = `Table ${selectedTable?.number || ''}`;
+                        }
+                    }
+                    if (orderType === 'Take-away') {
+                        orderPayload.takeAwayTime = takeAwayTime;
+                    }
+                    if (orderType === 'Online') {
+                        orderPayload.customerDetails = { name: customerName, phone: customerPhone, address, platform };
+                    }
+
+                    await createOrderAction(orderPayload, restaurantId);
+                    toast({ title: "Success", description: "Order placed successfully." });
+                    handleClearEdit();
                 }
-                toast({ title: "Success", description: "Order placed successfully." });
-                handleClearEdit();
+                refreshActiveOrders();
+            } catch (error: any) {
+                toast({ variant: 'destructive', title: "Order Failed", description: error.message || "Could not place order." });
             }
-            refreshActiveOrders();
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: "Order Failed", description: error.message || "Could not place order." });
-        } finally {
-            setIsSubmitting(false);
-        }
+        });
     };
+
 
     const handleTableSelectFromLayout = (table: Table) => {
         setOrderType('Dine-in');
@@ -1067,44 +1121,6 @@ export default function POSPage() {
                 inputType: (target.type as any) || 'text',
             });
         }
-    };
-
-    const handleKeyPress = (key: string) => {
-        const target = keyboardConfig.target;
-        if (!target) return;
-
-        const { value, selectionStart, selectionEnd } = target;
-        const start = selectionStart ?? value.length;
-        const end = selectionEnd ?? value.length;
-
-        let newValue;
-        let newCursorPos;
-
-        if (key === 'Backspace') {
-            if (start === end && start > 0) {
-                newValue = value.substring(0, start - 1) + value.substring(end);
-                newCursorPos = start - 1;
-            } else {
-                newValue = value.substring(0, start) + value.substring(end);
-                newCursorPos = start;
-            }
-        } else {
-            newValue = value.substring(0, start) + key + value.substring(end);
-            newCursorPos = start + key.length;
-        }
-
-        // This is a common React pattern for programmatically updating input values
-        // and ensuring that React's state management and event handlers are triggered.
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-            window.HTMLInputElement.prototype,
-            'value'
-        )?.set;
-        nativeInputValueSetter?.call(target, newValue);
-
-        target.setSelectionRange(newCursorPos, newCursorPos);
-
-        const event = new Event('input', { bubbles: true, cancelable: true });
-        target.dispatchEvent(event);
     };
 
     if (isLoading) {
@@ -1256,7 +1272,7 @@ export default function POSPage() {
                                 ) : (
                                     <div className="flex-1 overflow-y-auto -mr-4 pr-4 min-h-0">
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
-                                            {activeOrders.map((order) => <ActiveOrderCard key={order.id} order={order} settings={settings} onUpdate={refreshActiveOrders} onEdit={handleEditOrder} restaurantId={restaurantId} />)}
+                                            {activeOrders.map((order) => <ActiveOrderCard key={order.id} order={order} settings={settings} onUpdate={refreshActiveOrders} onEdit={handleEditOrder} restaurantId={restaurantId} startTransition={startTransition} />)}
                                         </div>
                                     </div>
                                 )}
@@ -1265,47 +1281,45 @@ export default function POSPage() {
                     </Tabs>
                 </div>
                 <div className="col-span-1 border-l border-gray-200 dark:border-gray-700 overflow-hidden min-h-0">
-                    <div className="p-4 h-full overflow-y-auto">
-                        <POSCart
-                            cart={cart}
-                            settings={settings}
-                            onUpdateQuantity={handleUpdateQuantity}
-                            onPlaceOrder={handlePlaceOrder}
-                            tables={tables}
-                            orderType={orderType}
-                            setOrderType={setOrderType}
-                            customerName={customerName}
-                            setCustomerName={setCustomerName}
-                            customerPhone={customerPhone}
-                            setCustomerPhone={setCustomerPhone}
-                            tableId={tableId}
-                            setTableId={setTableId}
-                            address={address}
-                            setAddress={setAddress}
-                            platform={platform}
-                            setPlatform={setPlatform}
-                            takeAwayTime={takeAwayTime}
-                            setTakeAwayTime={setTakeAwayTime}
-                            orderToUpdate={orderToUpdate}
-                            onClearEdit={handleClearEdit}
-                            orderNotes={orderNotes}
-                            setOrderNotes={setOrderNotes}
-                            onItemNoteChange={handleItemNoteChange}
-                            onInputDoubleClick={handleInputDoubleClick}
-                            discount={discount}
-                            setDiscount={setDiscount}
-                            isSubmitting={isSubmitting}
-                        />
-                    </div>
+                    <POSCart
+                        cart={cart}
+                        settings={settings}
+                        onUpdateQuantity={handleUpdateQuantity}
+                        onPlaceOrder={handlePlaceOrder}
+                        tables={tables}
+                        orderType={orderType}
+                        setOrderType={setOrderType}
+                        customerName={customerName}
+                        setCustomerName={setCustomerName}
+                        customerPhone={customerPhone}
+                        setCustomerPhone={setCustomerPhone}
+                        tableId={tableId}
+                        setTableId={setTableId}
+                        address={address}
+                        setAddress={setAddress}
+                        platform={platform}
+                        setPlatform={setPlatform}
+                        takeAwayTime={takeAwayTime}
+                        setTakeAwayTime={setTakeAwayTime}
+                        orderToUpdate={orderToUpdate}
+                        onClearEdit={handleClearEdit}
+                        orderNotes={orderNotes}
+                        setOrderNotes={setOrderNotes}
+                        onItemNoteChange={handleItemNoteChange}
+                        onInputDoubleClick={handleInputDoubleClick}
+                        discount={discount}
+                        setDiscount={setDiscount}
+                        isSubmitting={isPending}
+                    />
                 </div>
             </div>
             {keyboardConfig.visible && (
                 <OnScreenKeyboard
-                    inputType={keyboardConfig.inputType}
-                    onKeyPress={handleKeyPress}
                     onClose={() => setKeyboardConfig({ visible: false, target: null })}
+                    inputType={keyboardConfig.inputType}
                 />
             )}
         </div>
     );
 }
+

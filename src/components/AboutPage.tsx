@@ -5,6 +5,7 @@ import imgScan11 from "../assets/daca942be80c946208617dc9f1a38f8d2626ebc9.png";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { ResponsiveNavbar } from "./ResponsiveNavbar";
+import Logo from '@/components/logo';
 
 interface AboutPageProps {
   onNavigateToHome: () => void;
@@ -66,22 +67,7 @@ function UtensilsIcon() {
 /* ================ MOBILE LAYOUT COMPONENTS (From src copy) ================ */
 
 function MobileLogo() {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex h-[18.793px] items-center justify-center w-[13.318px]">
-        <div className="flex-none rotate-[351.687deg] skew-x-[343.047deg]">
-          <div className="h-[17.503px] relative w-[10.559px]">
-            <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 10.5594 17.503">
-              <path d={svgPaths.p3188aa80} fill="#9E090F" />
-            </svg>
-          </div>
-        </div>
-      </div>
-      <div className="font-['Mulish',sans-serif] font-bold text-[18px] text-[#9e090f]">
-        D<span className="text-black">ineEzee</span>
-      </div>
-    </div>
-  );
+  return <Logo className="h-6 w-auto text-[#9e090f]" />;
 }
 
 function MobileHeader({
@@ -183,17 +169,7 @@ function DesktopHeader({
   return (
     <header className="absolute left-[105px] right-[105px] top-[35px] flex items-center justify-between z-10">
       {/* Logo */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center justify-center h-[15.256px] w-[18.848px] rotate-[348.136deg] skew-x-[7.001deg]">
-          <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 18.8479 15.2561">
-            <path d={svgPaths.p3188aa80} fill="#9E090F" />
-          </svg>
-        </div>
-        <div className="font-['Mulish:Bold',sans-serif] font-bold text-[18px]">
-          <span className="text-[#9e090f]">D</span>
-          <span className="text-black">ineEzee</span>
-        </div>
-      </div>
+      <Logo className="h-6 w-auto text-[#9e090f]" />
 
       <nav className="flex items-center gap-[60px]">
         <button onClick={onNavigateToHome} className="font-bold text-[18px] text-[#171717] hover:text-[#9e090f] transition-colors">

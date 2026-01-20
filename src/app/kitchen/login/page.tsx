@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -7,6 +8,7 @@ import svgPaths from "@/imports/svg-ygbblntbv8";
 import imgImage2 from "@/assets/kitchen-login-illustration.png";
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Home } from 'lucide-react';
 
 function Wrapper({ children }: React.PropsWithChildren<{}>) {
     return (
@@ -104,6 +106,9 @@ export default function KitchenLoginPage() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
         >
+            <Link href="/" className="absolute top-6 left-6 z-20 p-3 bg-white/20 rounded-full hover:bg-white/40 transition-colors">
+                <Home className="w-6 h-6 text-white" />
+            </Link>
             {/* Illustration Section - Hidden on mobile, LEFT side on desktop */}
             <motion.div
                 className="absolute lg:left-0 lg:right-1/2 lg:top-0 lg:bottom-0 hidden lg:flex items-center justify-center overflow-hidden"

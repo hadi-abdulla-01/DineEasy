@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import type { MenuItem, OrderItem, RemoteOrder, RestaurantSettings, Order } from '@/lib/definitions';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { addRemoteOrderAction } from '@/lib/actions';
+import { createRemoteOrderAction } from '@/lib/actions';
 import { Invoice } from '@/components/ui/invoice';
 import { RemoteOrderCartSheet } from './remote-order-cart-sheet';
 import { MenuGrid } from './menu-grid';
@@ -116,7 +117,7 @@ export function RemoteOrderForm({ menu: initialMenu, orderType, onItemsUpdate, c
     formData.append('branchId', branchId);
     formData.append('restaurantId', restaurantId);
 
-    const newOrder = await addRemoteOrderAction(formData);
+    const newOrder = await createRemoteOrderAction(formData);
 
     if (newOrder) {
       toast({

@@ -1,9 +1,8 @@
 import { motion } from "motion/react";
-import svgPaths from "../imports/svg-xk929g7nkl";
 import imgFlatChineseNewYearReunionDinnerIllustration1 from "../assets/e469a5ef4a653f0f58194891b580d935bd7fc2ba.png";
 import Link from "next/link";
-import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { ResponsiveNavbar } from "./ResponsiveNavbar";
+import Logo from '@/components/logo';
 
 interface HomePageProps {
   onNavigateToAbout: () => void;
@@ -11,8 +10,6 @@ interface HomePageProps {
 }
 
 /* ================ MOBILE/TABLET COMPONENTS ================ */
-
-import { ResponsiveNavbar } from "./ResponsiveNavbar";
 
 function MobileHeroContent() {
   return (
@@ -77,27 +74,6 @@ function MobileHeroImage() {
 
 /* ================ DESKTOP COMPONENTS (ORIGINAL) ================ */
 
-function DesktopLogo() {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center justify-center h-[15.256px] w-[18.848px] rotate-[348.136deg] skew-x-[7.001deg]">
-        <svg
-          className="block size-full"
-          fill="none"
-          preserveAspectRatio="none"
-          viewBox="0 0 18.8479 15.2561"
-        >
-          <path d={svgPaths.p372f1e00} fill="#9E090F" />
-        </svg>
-      </div>
-      <div className="font-['Mulish:Bold',sans-serif] font-bold text-[18px]">
-        <span className="text-[#9e090f]">D</span>
-        <span className="text-black">ineEzee</span>
-      </div>
-    </div>
-  );
-}
-
 function DesktopHeader({
   onNavigateToAbout,
   onNavigateToContact,
@@ -107,7 +83,7 @@ function DesktopHeader({
 }) {
   return (
     <header className="absolute left-[105px] right-[105px] top-[35px] flex items-center justify-between z-10">
-      <DesktopLogo />
+      <Logo className="h-6 w-auto text-[#9e090f]" />
 
       <nav className="flex items-center gap-[60px]">
         <button className="font-['Mulish:Bold',sans-serif] font-bold text-[18px] text-[#9e090f]">

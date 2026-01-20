@@ -6,6 +6,8 @@ import svgPaths from "../imports/svg-6hzyqt81bp";
 import imgImage1 from "@/assets/admin-login-illustration.png";
 import { useAuth } from "@/app/admin/auth-provider";
 import { signInWithEmail } from "@/lib/auth";
+import Link from 'next/link';
+import { Home } from 'lucide-react';
 
 interface AdminLoginPageProps {
   onNavigateToKitchen: () => void;
@@ -133,6 +135,9 @@ export default function AdminLoginPage({ onNavigateToKitchen }: AdminLoginPagePr
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
     >
+      <Link href="/" className="absolute top-6 left-6 z-20 p-3 bg-white/20 rounded-full hover:bg-white/40 transition-colors">
+          <Home className="w-6 h-6 text-white" />
+      </Link>
       {/* Illustration Section - Hidden on mobile, RIGHT side on desktop */}
       <motion.div
         className="absolute lg:left-1/2 lg:right-0 lg:top-0 lg:bottom-0 hidden lg:flex items-center justify-center overflow-hidden"

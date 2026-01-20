@@ -38,7 +38,6 @@ export default function SalesReportPage() {
   const [mainBranch, setMainBranch] = useState<Branch | null>(null);
   const [date, setDate] = useState<DateRange | undefined>(undefined);
   const [branchFilter, setBranchFilter] = useState('all');
-  const reportRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
@@ -150,32 +149,7 @@ export default function SalesReportPage() {
   }, [filteredOrders, date]);
 
   const handlePrintReport = () => {
-    const printWindow = window.open('', '_blank', 'height=800,width=1000');
-    if (printWindow && reportRef.current) {
-      const styles = Array.from(document.styleSheets)
-        .map(styleSheet => {
-          try {
-            return Array.from(styleSheet.cssRules)
-              .map(rule => rule.cssText)
-              .join('');
-          } catch (e) {
-            console.log('Access to stylesheet %s is denied. Skipping.', styleSheet.href);
-            return '';
-          }
-        })
-        .join('');
-
-      printWindow.document.write('<html><head><title>Sales Report</title>');
-      printWindow.document.write(`<style>${styles}</style></head><body>`);
-      printWindow.document.write(reportRef.current.innerHTML);
-      printWindow.document.write('</body></html>');
-      printWindow.document.close();
-
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
-    }
+    window.print();
   };
 
   if (isLoading || !settings || !user) {
@@ -195,7 +169,7 @@ export default function SalesReportPage() {
 
   return (
     <div className="space-y-8">
-      <Card>
+      <Card className="print:hidden">
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-4">
           <div>
             <CardTitle className="font-headline">Sales Report</CardTitle>
@@ -255,8 +229,8 @@ export default function SalesReportPage() {
         </CardHeader>
       </Card>
 
-      <div ref={reportRef}>
-        <div className="grid gap-4 md:grid-cols-3">
+      <div>
+        <div className="grid gap-4 md:grid-cols-3 print:hidden">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -363,4 +337,3 @@ export default function SalesReportPage() {
     </div>
   );
 }
-

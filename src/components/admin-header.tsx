@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ThemeToggle } from '@/components/theme-toggle';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 interface AdminHeaderProps {
   isSidebarOpen: boolean;
@@ -43,7 +44,7 @@ export default function AdminHeader({ isSidebarOpen, setIsSidebarOpen }: AdminHe
   };
 
   return (
-    <header className="bg-white dark:bg-gray-900 shadow-sm sticky top-0 z-50 transition-colors">
+    <header className={cn("bg-white dark:bg-gray-900 shadow-sm sticky top-0 z-50 transition-colors", "print:hidden")}>
       <div className="flex items-center justify-between px-4 lg:px-6 h-16">
         {/* Left: Mobile Menu + Logo/User */}
         <div className="flex items-center gap-4">

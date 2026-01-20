@@ -32,9 +32,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     {!isPosPage && <AdminSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />}
                     <main className={cn(
                         "flex-1 overflow-y-auto",
-                        !isPosPage && "p-4 lg:p-8"
+                        !isPosPage && "p-4 lg:p-8",
+                        "print:p-0 print:m-0"
                     )}>
-                        <div className={cn(!isPosPage && "max-w-7xl mx-auto")}>
+                        <div className={cn(
+                            !isPosPage && "max-w-7xl mx-auto",
+                            "print:max-w-none"
+                        )}>
                             {children}
                         </div>
                     </main>

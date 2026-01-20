@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/app/admin/auth-provider';
 import type { NavMenuKey } from '@/lib/definitions';
 import { isSuperAdmin } from '@/lib/auth-utils';
+import Logo from '@/components/logo';
 
 interface AdminSidebarProps {
     isOpen: boolean;
@@ -79,9 +80,9 @@ export default function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
     return (
         <>
             {isOpen && (
-                <div 
+                <div
                     onClick={() => setIsOpen(false)}
-                    className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+                    className="fixed inset-0 z-30 bg-black/50 lg:hidden print:hidden"
                 />
             )}
             <aside
@@ -89,6 +90,7 @@ export default function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
                     `fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white dark:bg-gray-800
                     transform transition-transform duration-300 ease-in-out
                     shadow-lg lg:shadow-none border-r border-gray-100 dark:border-gray-700`,
+                    "print:hidden",
                     isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
                     'mt-16 lg:mt-0'
                 )}
@@ -135,11 +137,8 @@ export default function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
 
                     {/* Footer Logo */}
                     <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center justify-center gap-2 p-3 bg-white dark:bg-gray-700 rounded-lg border dark:border-gray-600">
-                            <div className="w-8 h-8 bg-gray-900 dark:bg-gray-200 rounded-full flex items-center justify-center">
-                                <span className="text-white dark:text-gray-900 font-bold text-sm">N</span>
-                            </div>
-                            <span className="font-semibold text-gray-900 dark:text-gray-100">DineEZee</span>
+                        <div className="flex items-center justify-center p-3 bg-white dark:bg-gray-700 rounded-lg border dark:border-gray-600">
+                            <Logo className="h-6 w-auto text-[#CB1E1D] dark:text-white" />
                         </div>
                     </div>
                 </nav>

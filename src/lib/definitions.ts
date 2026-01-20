@@ -129,12 +129,20 @@ export type AppliedTax = {
     amount: number;
 }
 
+export type CustomerDetails = {
+    name: string;
+    phone: string;
+    address: string;
+    platform: string;
+};
+
 export type Order = {
     id: string;
     invoiceNumber?: string;
-    tableId: string;
+    tableId?: string; // Optional for remote orders
     customerName: string;
     customerPhone: string;
+    customerDetails?: CustomerDetails; // For remote orders
     items: OrderItem[];
     status: OrderStatus;
     subtotal: number;
@@ -149,32 +157,6 @@ export type Order = {
     takeAwayTime?: string;
     branchId: string;
     createdByName?: string;
-};
-
-export type CustomerDetails = {
-    name: string;
-    phone: string;
-    address: string;
-    platform: string;
-};
-
-export type RemoteOrder = {
-    id: string;
-    invoiceNumber?: string;
-    orderType: 'Online' | 'Take-away';
-    customerDetails: CustomerDetails;
-    items: OrderItem[];
-    subtotal: number;
-    discount?: number;
-    taxes: AppliedTax[];
-    totalTaxAmount: number;
-    total: number;
-    createdAt: string;
-    paymentMethod?: 'cash' | 'card';
-    branchId: string;
-    createdByName?: string;
-    takeAwayTime?: string;
-    notes?: string;
 };
 
 export type UserRole = 'Admin' | 'Manager' | 'Server' | 'Kitchen';

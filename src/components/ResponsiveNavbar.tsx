@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
-import svgPaths from "../imports/svg-xk929g7nkl"; // Using HomePage paths as base
+import Logo from '@/components/logo';
 
 interface ResponsiveNavbarProps {
     onNavigateToHome?: () => void;
@@ -11,21 +11,7 @@ interface ResponsiveNavbarProps {
 
 function NavbarLogo() {
     return (
-        <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center h-6 w-5">
-                <svg
-                    className="block size-full"
-                    fill="none"
-                    preserveAspectRatio="none"
-                    viewBox="0 0 13.0569 16.6654"
-                >
-                    <path d={svgPaths.p372f1e00} fill="#9E090F" />
-                </svg>
-            </div>
-            <p className="font-['Mulish:Bold',sans-serif] text-[17px] md:text-[19.5px] leading-none text-[#9e090f] font-bold">
-                D<span className="text-black font-bold">ineEzee</span>
-            </p>
-        </div>
+        <Logo className="h-6 w-auto text-[#9e090f]" />
     );
 }
 
@@ -38,50 +24,55 @@ export function ResponsiveNavbar({
 
     return (
         <header className="w-full bg-[#ffce46] px-4 py-6 md:px-8 z-50 relative">
-            <div className="max-w-7xl mx-auto flex items-center justify-between">
-                <NavbarLogo />
-
-                {/* Tablet Navigation (Visible md:flex, Hidden on Mobile) */}
-                <nav className="hidden md:flex items-center gap-8">
+            <div className="max-w-7xl mx-auto">
+                {/* Mobile: Centered Logo with Absolute Hamburger */}
+                <div className="md:hidden relative flex items-center justify-center">
+                    <NavbarLogo />
                     <button
-                        onClick={onNavigateToHome}
-                        className={`font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none transition-colors font-bold ${onNavigateToHome ? "text-[#171717] hover:text-[#9e090f]" : "text-[#9e090f]"
-                            }`}
+                        className="absolute right-0 p-2 text-black hover:text-[#9e090f] transition-colors z-50"
+                        onClick={() => setIsOpen(!isOpen)}
+                        aria-label="Toggle menu"
                     >
-                        Home
+                        {isOpen ? <X size={24} /> : <Menu size={24} />}
                     </button>
-                    <button
-                        onClick={onNavigateToAbout}
-                        className={`font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none transition-colors font-bold ${onNavigateToAbout ? "text-[#171717] hover:text-[#9e090f]" : "text-[#9e090f]"
-                            }`}
-                    >
-                        About us
-                    </button>
-                    <button
-                        onClick={onNavigateToContact}
-                        className={`font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none transition-colors font-bold ${onNavigateToContact ? "text-[#171717] hover:text-[#9e090f]" : "text-[#9e090f]"
-                            }`}
-                    >
-                        Contact
-                    </button>
-                </nav>
-
-                {/* Tablet Sign In Button */}
-                <div className="hidden md:block">
-                    {/* Using Yellow text for Tablet to match HomePage design, or White to match others? User asked specifically for "hamburger menu" sign in to be white. Tablet is 'navbar' style. Let's use White for consistency if allowed, or stick to the mixed style. I'll use White for better contrast on Red. */}
-                    <Link href="/login?role=admin" className="bg-[#9e090f] text-white font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none px-6 py-2 md:px-7 md:py-2 rounded-full hover:bg-[#8a0810] transition-all font-bold">
-                        Sign In
-                    </Link>
                 </div>
 
-                {/* Mobile Hamburger Button */}
-                <button
-                    className="md:hidden p-2 text-black hover:text-[#9e090f] transition-colors z-50"
-                    onClick={() => setIsOpen(!isOpen)}
-                    aria-label="Toggle menu"
-                >
-                    {isOpen ? <X size={24} /> : <Menu size={24} />}
-                </button>
+                {/* Tablet/Desktop: Normal Flex Layout */}
+                <div className="hidden md:flex items-center justify-between">
+                    <NavbarLogo />
+
+                    {/* Tablet Navigation (Visible md:flex, Hidden on Mobile) */}
+                    <nav className="hidden md:flex items-center gap-8">
+                        <button
+                            onClick={onNavigateToHome}
+                            className={`font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none transition-colors font-bold ${onNavigateToHome ? "text-[#171717] hover:text-[#9e090f]" : "text-[#9e090f]"
+                                }`}
+                        >
+                            Home
+                        </button>
+                        <button
+                            onClick={onNavigateToAbout}
+                            className={`font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none transition-colors font-bold ${onNavigateToAbout ? "text-[#171717] hover:text-[#9e090f]" : "text-[#9e090f]"
+                                }`}
+                        >
+                            About us
+                        </button>
+                        <button
+                            onClick={onNavigateToContact}
+                            className={`font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none transition-colors font-bold ${onNavigateToContact ? "text-[#171717] hover:text-[#9e090f]" : "text-[#9e090f]"
+                                }`}
+                        >
+                            Contact
+                        </button>
+                    </nav>
+
+                    {/* Tablet Sign In Button */}
+                    <div className="hidden md:block">
+                        <Link href="/login?role=admin" className="bg-[#9e090f] text-white font-['Mulish:Bold',sans-serif] text-[15px] md:text-[17px] leading-none px-6 py-2 md:px-7 md:py-2 rounded-full hover:bg-[#8a0810] transition-all font-bold">
+                            Sign In
+                        </Link>
+                    </div>
+                </div>
             </div>
 
             {/* Mobile Menu Dropdown */}

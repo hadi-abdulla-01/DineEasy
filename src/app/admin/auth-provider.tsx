@@ -1,7 +1,7 @@
 
 'use client';
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode, useCallback, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { KitchenUser } from '@/lib/definitions';
 import { LoaderCircle } from 'lucide-react';
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   }, [pathname, router]);
 
-  const login = (loggedInUser: KitchenUser) => {
+  const login = useCallback((loggedInUser: KitchenUser) => {
     sessionStorage.setItem('dineEasyUser', JSON.stringify(loggedInUser));
     setUser(loggedInUser);
 
@@ -78,24 +78,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       router.replace('/admin');
     }
-  };
+  }, [router]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null);
     sessionStorage.removeItem('dineEasyUser');
     router.push('/login?role=admin');
-  };
+  }, [router]);
 
-  const refreshUser = async () => {
-    if (user?.id && user.restaurantId) {
-      const refreshedUser = await getKitchenUserById(user.id, user.restaurantId);
-      if (refreshedUser) {
-        login(refreshedUser);
+  const refreshUser = useCallback(async () => {
+    const storedUser = sessionStorage.getItem('dineEasyUser');
+    if (storedUser) {
+      const currentUser: KitchenUser = JSON.parse(storedUser);
+      if (currentUser?.id && currentUser.restaurantId) {
+        const refreshedUser = await getKitchenUserById(currentUser.id, currentUser.restaurantId);
+        if (refreshedUser) {
+          login(refreshedUser);
+        }
       }
     }
-  };
+  }, [login]);
 
   const isAuthenticated = !!user;
+
+  const authContextValue = useMemo(() => ({
+    isAuthenticated,
+    user,
+    login,
+    logout,
+    refreshUser
+  }), [isAuthenticated, user, login, logout, refreshUser]);
+
 
   // Show a loading screen only when trying to access a protected route without being authenticated yet.
   if (isLoading && isProtectedRoute(pathname)) {
@@ -110,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, refreshUser }}>
+    <AuthContext.Provider value={authContextValue}>
       {children}
     </AuthContext.Provider>
   );

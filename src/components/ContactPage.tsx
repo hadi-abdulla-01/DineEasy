@@ -1,115 +1,16 @@
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
-import svgPaths from "../imports/svg-lrnqheam3z";
-import { Mail, Phone, MapPin, Send, Facebook, Instagram, Twitter, Menu, X } from "lucide-react";
+import { Mail, Phone, MapPin, Send, Facebook, Instagram, Twitter } from "lucide-react";
 import { ResponsiveNavbar } from "./ResponsiveNavbar";
+import Logo from '@/components/logo';
 
 interface ContactPageProps {
   onNavigateToHome: () => void;
   onNavigateToAbout: () => void;
 }
 
-/* ================ ICONS (Shared/Mobile) ================ */
-
-function MobileLogo() {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center justify-center h-[17px] w-[17px] rotate-[344.98deg]">
-        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 17 17">
-          <path d={svgPaths.p191d3c00} fill="#9E090F" />
-        </svg>
-      </div>
-      <div className="font-['Mulish:Bold',sans-serif] font-bold text-[18px]">
-        <span className="text-[#9e090f]">D</span>
-        <span className="text-black">ineEzee</span>
-      </div>
-    </div>
-  );
-}
-
 /* ================ MOBILE COMPONENTS ================ */
-
-function MobileHeader({
-  onNavigateToHome,
-  onNavigateToAbout,
-}: {
-  onNavigateToHome: () => void;
-  onNavigateToAbout: () => void;
-}) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  return (
-    <nav className="relative w-full px-4 py-6 md:px-8 bg-[#ffce46]">
-      <div className="flex items-center justify-between max-w-7xl mx-auto">
-        {/* Tablet Layout (md:flex) - Visible on Tablet, Hidden on Mobile */}
-        <div className="hidden md:flex items-center justify-between gap-8 relative w-full">
-          <div className="flex items-center gap-2">
-            <MobileLogo />
-          </div>
-
-          <div className="flex items-center gap-8">
-            <button onClick={onNavigateToHome} className="font-['Mulish',sans-serif] font-bold text-[18px] text-black hover:text-[#9e090f] transition-colors">
-              Home
-            </button>
-            <button onClick={onNavigateToAbout} className="font-['Mulish',sans-serif] font-bold text-[18px] text-black hover:text-[#9e090f] transition-colors">
-              About us
-            </button>
-            <button className="font-['Mulish',sans-serif] font-bold text-[18px] text-[#9e090f]">
-              Contact
-            </button>
-          </div>
-
-          <div className="flex items-center">
-            <Link href="/login?role=admin" className="bg-[#9e090f] text-[#ffce46] font-['Mulish',sans-serif] font-bold text-[18px] px-7 py-2 rounded-[25px] hover:bg-[#7a0709] transition-colors">
-              Sign In
-            </Link>
-          </div>
-        </div>
-
-        {/* Mobile Layout (md:hidden) */}
-        <div className="md:hidden flex items-center justify-between w-full">
-          <MobileLogo />
-
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden z-50 p-2 text-black hover:text-[#9e090f] transition-colors"
-            aria-label="Toggle menu"
-          >
-            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile Menu Dropdown */}
-      {isMenuOpen && (
-        <div className="md:hidden mt-4 flex flex-col gap-4 pb-4">
-          <button
-            onClick={() => { onNavigateToHome(); setIsMenuOpen(false); }}
-            className="text-black text-lg py-2 hover:text-[#9e090f] transition-colors text-left border-b border-black/10 font-bold"
-          >
-            Home
-          </button>
-          <button
-            onClick={() => { onNavigateToAbout(); setIsMenuOpen(false); }}
-            className="text-black text-lg py-2 hover:text-[#9e090f] transition-colors text-left border-b border-black/10 font-bold"
-          >
-            About us
-          </button>
-          <button
-            onClick={() => setIsMenuOpen(false)}
-            className="text-[#9e090f] text-lg py-2 hover:opacity-80 transition-opacity text-left border-b border-black/10 font-bold"
-          >
-            Contact
-          </button>
-          <Link href="/login?role=admin" className="bg-[#9e090f] text-[#ffce46] px-7 py-2 rounded-[25px] mt-2 text-center font-bold">
-            Sign In
-          </Link>
-        </div>
-      )}
-    </nav>
-  );
-}
 
 function MobileContactInfo() {
   return (
@@ -171,7 +72,7 @@ function MobileContactForm() {
 
       if (res.ok) {
         setStatus('success');
-        setFormData({ name: '', email: '', message: '' });
+        setFormData({ name: '', email: '', message: '', company: '' });
         alert('Message sent successfully!');
       } else {
         setStatus('error');
@@ -262,7 +163,8 @@ function DesktopContactForm() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    message: ''
+    message: '',
+    company: ''
   });
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
 
@@ -281,7 +183,7 @@ function DesktopContactForm() {
 
       if (res.ok) {
         setStatus('success');
-        setFormData({ name: '', email: '', message: '' });
+        setFormData({ name: '', email: '', message: '', company: '' });
         alert('Message sent successfully!');
       } else {
         setStatus('error');
@@ -374,24 +276,6 @@ function DesktopContactForm() {
   );
 }
 
-/* ================ DESKTOP COMPONENTS (Original) ================ */
-
-function DesktopLogo() {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center justify-center h-[17px] w-[17px] rotate-[344.98deg]">
-        <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 17 17">
-          <path d={svgPaths.p191d3c00} fill="#9E090F" />
-        </svg>
-      </div>
-      <div className="font-['Mulish:Bold',sans-serif] font-bold text-[18px]">
-        <span className="text-[#9e090f]">D</span>
-        <span className="text-black">ineEzee</span>
-      </div>
-    </div>
-  );
-}
-
 function DesktopHeader({
   onNavigateToHome,
   onNavigateToAbout,
@@ -401,7 +285,7 @@ function DesktopHeader({
 }) {
   return (
     <header className="absolute left-[105px] right-[105px] top-[35px] flex items-center justify-between z-10">
-      <DesktopLogo />
+      <Logo className="h-6 w-auto text-[#9e090f]" />
 
       <nav className="flex items-center gap-[60px]">
         <button
