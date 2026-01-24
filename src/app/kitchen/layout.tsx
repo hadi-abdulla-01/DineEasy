@@ -1,6 +1,7 @@
 
 'use client';
 
+import { AuthProvider } from "@/app/admin/auth-provider";
 import { useAuth } from "@/app/admin/auth-provider";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
@@ -8,6 +9,7 @@ import { useEffect, useState } from "react";
 import AdminHeader from "@/components/admin-header";
 import AdminSidebar from "@/components/admin-sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
+import { FirebaseClientProvider } from "@/firebase/client-provider";
 
 function KitchenDashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -35,7 +37,7 @@ function KitchenDashboardLayout({ children }: { children: ReactNode }) {
 function LayoutWrapper({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
-  if (pathname.startsWith('/kitchen/login')) {
+  if (pathname.startsWith('/login')) {
     return <>{children}</>;
   }
 
@@ -46,8 +48,12 @@ function LayoutWrapper({ children }: { children: ReactNode }) {
 
 export default function KitchenLayout({ children }: { children: ReactNode }) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-      <LayoutWrapper>{children}</LayoutWrapper>
-    </ThemeProvider>
+    <FirebaseClientProvider>
+      <AuthProvider>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+          <LayoutWrapper>{children}</LayoutWrapper>
+        </ThemeProvider>
+      </AuthProvider>
+    </FirebaseClientProvider>
   );
 }

@@ -274,37 +274,6 @@ dineezee/
 
 ---
 
-## � Mobile App
-
-### Flutter App Setup
-
-1. **Navigate to mobile directory**
-   ```bash
-   cd dine_easy_mobile
-   ```
-
-2. **Install dependencies**
-   ```bash
-   flutter pub get
-   ```
-
-3. **Configure Firebase**
-   - Add `google-services.json` (Android)
-   - Add `GoogleService-Info.plist` (iOS)
-
-4. **Run the app**
-   ```bash
-   flutter run
-   ```
-
-### Mobile App Features
-- Kitchen order notifications
-- Real-time order updates
-- Push notifications
-- Offline support with Hive
-
----
-
 ## 🚀 Deployment
 
 ### Vercel Deployment (Recommended)

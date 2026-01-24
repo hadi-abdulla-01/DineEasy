@@ -49,6 +49,7 @@ export async function signInWithEmail(email: string, password: string): Promise<
                         kitchen: { view: true },
                         sales: { view: true },
                         salesHistory: { view: true, edit: true, delete: true },
+                        menuPerformance: { view: true },
                         onlineOrders: { view: true, create: true },
                         takeAway: { view: true, create: true },
                         userManagement: { view: true, create: true, edit: true, delete: true },

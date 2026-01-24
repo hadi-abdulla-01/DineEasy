@@ -10,6 +10,31 @@ export type MealSession = {
     isActive: boolean;
 };
 
+export type PrintSize = 'a4' | 'thermal80mm' | 'custom';
+
+export type PrintSettings = {
+    invoicePrintSize: PrintSize;
+    invoiceCustomWidth?: number;
+    kitchenTicketPrintSize: PrintSize;
+    kitchenTicketCustomWidth?: number;
+    salesReportPrintSize?: PrintSize;
+    salesReportCustomWidth?: number;
+    invoiceFooterText?: string;
+    invoiceTitle?: string;
+    showInvoiceTitle?: boolean;
+    showInvoiceFooter?: boolean;
+    showRestaurantAddress?: boolean;
+    showCustomerDetails?: boolean;
+    itemHeaderFontSize?: number;
+    itemBodyFontSize?: number;
+    showLogoInInvoice?: boolean;
+    showDineEzeeWatermark?: boolean;
+    invoiceLogo?: string;
+    restaurantPrintLogo?: string;
+    showThankYouMessage?: boolean;
+    invoiceThankYouMessage?: string;
+};
+
 export type RestaurantSettings = {
     restaurantName: string;
     restaurantAddress: string;
@@ -17,6 +42,8 @@ export type RestaurantSettings = {
     taxes: Tax[];
     currencyDecimalPlaces: number;
     timezone?: string; // IANA timezone identifier (e.g., 'Asia/Kolkata', 'UTC')
+    taxName?: string; // e.g. "GSTIN", "VAT ID"
+    taxNumber?: string; // The actual tax number
     qrCodeColor?: string;
     qrCodeBackgroundColor?: string;
     qrCodeLogo?: string;
@@ -31,10 +58,6 @@ export type RestaurantSettings = {
         enableOnScreenKeyboard?: boolean;
     };
     mealSessions?: MealSession[];
-    manualSessionOverride?: {
-        enabled: boolean;
-        sessionId: string | null; // null when disabled or no session selected
-    };
     menuCategories?: string[]; // Food categories like Meals, Snacks, Beverages, etc.
     multiFloorEnabled?: boolean;
     floors?: string[];
@@ -124,8 +147,9 @@ export type OrderStatus = 'received' | 'preparing' | 'ready' | 'completed' | 'ca
 export type OrderType = 'Dine-in' | 'Online' | 'Take-away';
 
 export type AppliedTax = {
+    id: string;
     name: string;
-    rate: number;
+    rate: number; // as a percentage
     amount: number;
 }
 
@@ -142,7 +166,6 @@ export type Order = {
     tableId?: string; // Optional for remote orders
     customerName: string;
     customerPhone: string;
-    customerDetails?: CustomerDetails; // For remote orders
     items: OrderItem[];
     status: OrderStatus;
     subtotal: number;
@@ -157,11 +180,16 @@ export type Order = {
     takeAwayTime?: string;
     branchId: string;
     createdByName?: string;
+    table?: Table;
+};
+
+export type RemoteOrder = Omit<Order, 'tableId' | 'customerName' | 'customerPhone'> & {
+    customerDetails: CustomerDetails;
 };
 
 export type UserRole = 'Admin' | 'Manager' | 'Server' | 'Kitchen';
 
-export type NavMenuKey = 'dashboard' | 'tableOrder' | 'tables' | 'menu' | 'kitchen' | 'sales' | 'salesHistory' | 'onlineOrders' | 'takeAway' | 'userManagement' | 'settings' | 'pos';
+export type NavMenuKey = 'dashboard' | 'pos' | 'tableOrder' | 'tables' | 'menu' | 'kitchen' | 'sales' | 'salesHistory' | 'onlineOrders' | 'takeAway' | 'userManagement' | 'settings' | 'menuPerformance' | 'employeePerformance' | 'peakHours';
 
 export type UserPermission = {
     view?: boolean;
@@ -188,6 +216,22 @@ export type KitchenUser = {
     permissions?: UserPermissions;
 };
 
+
+export type ActivityLog = {
+    id: string;
+    userId: string;
+    username: string;
+    action: string;
+    details: string;
+    timestamp: string;
+};
+
+export type Tax = {
+    id: string;
+    name: string;
+    rate: number;
+};
+
 export type InvoiceSettings = {
     useUnifiedNumbering: boolean;
     unified: {
@@ -206,28 +250,4 @@ export type InvoiceSettings = {
         prefix: string;
         nextNumber: number;
     };
-};
-
-export type Tax = {
-    id: string;
-    name: string;
-    rate: number; // as a percentage
-}
-
-export type PrintSize = 'a4' | 'thermal80mm' | 'custom';
-
-export type PrintSettings = {
-    invoicePrintSize: PrintSize;
-    invoiceCustomWidth?: number;
-    kitchenTicketPrintSize: PrintSize;
-    kitchenTicketCustomWidth?: number;
-};
-
-export type ActivityLog = {
-    id: string;
-    userId: string;
-    username: string;
-    action: string;
-    details: string;
-    timestamp: string;
 };

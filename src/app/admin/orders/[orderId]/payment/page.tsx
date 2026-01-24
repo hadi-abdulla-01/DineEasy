@@ -1,4 +1,5 @@
 
+
 'use client';
 import { updateOrderStatusAction } from "@/lib/actions";
 import { useEffect, useState } from "react";
@@ -41,7 +42,6 @@ export default function PaymentPage() {
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
     const [cashReceived, setCashReceived] = useState<number | string>(0);
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const params = useParams();
     const searchParams = useSearchParams();
     const orderId = params.orderId as string;
@@ -71,10 +71,6 @@ export default function PaymentPage() {
         }
     }, [orderId, getOrderById, getSettings, getTableById]);
 
-    const handleDenominationClick = (amount: number) => {
-        setCashReceived(prev => (Number(prev) || 0) + amount);
-    };
-
     if (!order || !settings) {
         return (
             <div className="flex h-screen items-center justify-center">
@@ -93,36 +89,6 @@ export default function PaymentPage() {
         : 0;
 
     const currencySymbol = settings.currencySymbol || '$';
-
-    const handleCompleteOrder = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-
-        const formData = new FormData(e.currentTarget);
-
-        // Add required fields
-        formData.append('status', 'completed');
-        formData.append('restaurantId', restaurantId);
-
-        console.log('[PaymentPage] Completing order:', order.id, 'with restaurantId:', restaurantId);
-
-        try {
-            const result = await updateOrderStatusAction(order.id, formData);
-            console.log('[PaymentPage] Order completed successfully', result);
-            // If we get here, the redirect didn't happen, so do it manually
-            if (!result || result.message) {
-                console.log('[PaymentPage] Manual redirect to:', redirectTo);
-                window.location.href = redirectTo;
-            }
-        } catch (error: any) {
-            // Next.js redirect() throws a special error - don't catch it
-            if (error?.digest?.startsWith('NEXT_REDIRECT')) {
-                throw error;
-            }
-            console.error('[PaymentPage] Error completing order:', error);
-            setIsSubmitting(false);
-        }
-    };
 
     return (
         <div className="grid gap-8 md:grid-cols-2">
@@ -164,8 +130,10 @@ export default function PaymentPage() {
             </Card>
 
             <Card>
-                <form onSubmit={handleCompleteOrder}>
+                <form action={updateOrderStatusAction}>
+                    <input type="hidden" name="orderId" value={order.id} />
                     <input type="hidden" name="redirectTo" value={redirectTo} />
+                    <input type="hidden" name="restaurantId" value={restaurantId} />
                     <CardHeader>
                         <CardTitle className="font-headline">Process Payment</CardTitle>
                         <CardDescription>Select a payment method and finalize the order.</CardDescription>
@@ -194,28 +162,6 @@ export default function PaymentPage() {
                         {paymentMode === 'cash' && (
                             <div className="space-y-4 rounded-lg border bg-muted/50 p-4">
                                 <h4 className="font-semibold">Cash Payment</h4>
-                                <div className="flex flex-wrap gap-2 pt-2">
-                                    {settings.posSettings?.cashDenominations?.sort((a, b) => a - b).map(denom => (
-                                        <Button
-                                            key={denom}
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleDenominationClick(denom)}
-                                        >
-                                            {currencySymbol}{denom}
-                                        </Button>
-                                    ))}
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setCashReceived(order.total.toFixed(currencyDecimalPlaces))}
-                                    >
-                                        Exact Amount
-                                    </Button>
-                                </div>
-                                <Separator />
                                 <div className="space-y-2">
                                     <Label htmlFor="cashReceived">Cash Received</Label>
                                     <div className="relative">
@@ -239,11 +185,7 @@ export default function PaymentPage() {
                         )}
                     </CardContent>
                     <CardFooter>
-                        <Button type="submit" className="w-full" disabled={order.status === 'completed' || order.status === 'cancelled' || isSubmitting}>
-                            {isSubmitting ? 'Processing...' : (order.status === 'completed' || order.status === 'cancelled'
-                                ? `Order Already ${order.status}`
-                                : 'Finalize & Complete Order')}
-                        </Button>
+                        <CompleteButton order={order} />
                     </CardFooter>
                 </form>
             </Card>

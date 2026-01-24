@@ -43,8 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isProtected = isProtectedRoute(pathname);
     // Check if user is on any login page
     const isOnLoginPage = pathname.startsWith('/login') ||
-      pathname.startsWith('/admin/login') ||
-      pathname.startsWith('/kitchen/login');
+      pathname.startsWith('/login');
 
     if (isProtected) {
       if (!currentUser) {

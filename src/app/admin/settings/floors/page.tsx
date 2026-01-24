@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -43,11 +42,15 @@ export default function FloorSettingsPage() {
         if (branchId) {
             getBranchById(branchId).then(b => {
                 setBranch(b);
-                setMultiFloorEnabled(b?.multiFloorEnabled || false);
-                setFloors(b?.floors || []);
-                setDefaultFloor(b?.defaultFloor || (b?.floors && b.floors.length > 0 ? b.floors[0] : ''));
+                if (b) {
+                    setMultiFloorEnabled(b?.multiFloorEnabled || false);
+                    setFloors(b?.floors || []);
+                    setDefaultFloor(b?.defaultFloor || (b?.floors && b.floors.length > 0 ? b.floors[0] : ''));
+                }
                 setIsLoading(false);
             });
+        } else {
+            setIsLoading(false);
         }
     }, [branchId, getBranchById]);
 
@@ -84,7 +87,7 @@ export default function FloorSettingsPage() {
         }
     };
 
-    if (isLoading || !branch) {
+    if (isLoading) {
         return (
             <Card>
                 <CardHeader>
@@ -97,6 +100,29 @@ export default function FloorSettingsPage() {
                 </CardContent>
             </Card>
         );
+    }
+
+    if (!branch) {
+         return (
+            <Card>
+               <CardHeader>
+                   <CardTitle className="font-headline">Floor Management</CardTitle>
+                   <CardDescription>Could not load settings for the selected branch.</CardDescription>
+               </CardHeader>
+               <CardContent>
+                   <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed text-center">
+                       <p className="text-muted-foreground">
+                           Please select a valid branch from the main settings page.
+                       </p>
+                   </div>
+               </CardContent>
+               <CardFooter>
+                   <Button variant="outline" asChild>
+                       <Link href="/admin/settings">Back to Settings</Link>
+                   </Button>
+               </CardFooter>
+           </Card>
+        )
     }
 
     return (

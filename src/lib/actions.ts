@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { z } from 'zod';
@@ -40,6 +39,7 @@ import {
     getKitchenUserById,
     getBranchById,
     updateTable,
+    updateOrder,
 } from './data';
 
 
@@ -184,27 +184,24 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
 }
 
 
-export async function updateOrderStatusAction(orderId: string, formData: FormData) {
+export async function updateOrderStatusAction(formData: FormData) {
     const status = formData.get('status') as OrderStatus;
+    const orderId = formData.get('orderId') as string;
     const paymentMethod = formData.get('paymentMethod') as Order['paymentMethod'];
     const restaurantId = formData.get('restaurantId') as string;
     const redirectTo = formData.get('redirectTo') as string | null;
 
-    console.log('[updateOrderStatusAction] Called with:', { orderId, status, paymentMethod, restaurantId, redirectTo });
-
-    if (!status) {
-        return { message: 'Status is required.' };
+    if (!status || !orderId) {
+        return { success: false, message: 'Status and Order ID are required.' };
     }
+
     try {
         const order = await getOrderById(orderId, restaurantId);
         if (!order) {
-            console.log('[updateOrderStatusAction] Order not found:', orderId);
-            return { message: 'Order not found.' };
+            return { success: false, message: 'Order not found.' };
         }
 
-        console.log('[updateOrderStatusAction] Updating order status to:', status);
         const updatedOrder = await updateOrderStatus(orderId, status, paymentMethod, restaurantId);
-        console.log('[updateOrderStatusAction] Order updated:', updatedOrder?.status);
 
         if (updatedOrder && (status === 'completed' || status === 'cancelled')) {
             if (updatedOrder.orderType === 'Dine-in' && updatedOrder.tableId) {
@@ -215,22 +212,19 @@ export async function updateOrderStatusAction(orderId: string, formData: FormDat
                 }
             }
         }
-        
-        if (status === 'completed') {
-            const redirectUrl = redirectTo || '/admin/kitchen';
-            console.log(`[updateOrderStatusAction] Redirecting to ${redirectUrl}`);
-            redirect(redirectUrl);
-        }
 
     } catch (error: any) {
-        // Re-throw redirect errors so Next.js can handle them
-        if (error.message === 'NEXT_REDIRECT' || error.digest?.startsWith('NEXT_REDIRECT')) {
-            throw error;
-        }
         console.error('[updateOrderStatusAction] Error:', error);
-        return { message: 'Database Error: Failed to Update Order Status.' };
+        return { success: false, message: 'Database Error: Failed to Update Order Status.' };
     }
+
+    if (status === 'completed' && redirectTo) {
+        redirect(redirectTo);
+    }
+    
+    return { success: true };
 }
+
 
 export async function updateKitchenOrderStatusAction(orderId: string, formData: FormData) {
     const status = formData.get('status') as OrderStatus;
@@ -242,8 +236,6 @@ export async function updateKitchenOrderStatusAction(orderId: string, formData: 
 
     try {
         await updateOrderStatus(orderId, status, undefined, restaurantId);
-        revalidatePath('/kitchen', 'layout');
-        revalidatePath('/admin/kitchen', 'page');
     } catch (error) {
         return { message: 'Database Error: Failed to update order status in kitchen.' };
     }
@@ -253,8 +245,6 @@ export async function updateKitchenOrderStatusAction(orderId: string, formData: 
 export async function updateOrderItemStatusAction(orderId: string, orderItemId: string, isReady: boolean, restaurantId?: string) {
     try {
         await updateOrderItemStatus(orderId, orderItemId, isReady, restaurantId);
-        revalidatePath('/kitchen', 'layout');
-        revalidatePath('/admin/kitchen', 'page');
     } catch (error) {
         return { message: 'Database Error: Failed to Update Item Status.' };
     }
@@ -263,9 +253,6 @@ export async function updateOrderItemStatusAction(orderId: string, orderItemId: 
 export async function cancelOrderItemAction(orderId: string, orderItemId: string, restaurantId?: string) {
     try {
         await cancelOrderItem(orderId, orderItemId, restaurantId);
-        revalidatePath('/kitchen', 'layout');
-        revalidatePath('/admin/kitchen', 'page');
-        revalidatePath(`/order/[tableId]/status/[orderId]`, 'page');
     } catch (error) {
         return { message: 'Database Error: Failed to cancel item.' };
     }
@@ -280,7 +267,6 @@ export async function createTableAction(formData: FormData) {
     if (tableNumber && branchId) {
         await createTable(tableNumber, branchId, restaurantId, floor);
         revalidatePath('/admin/tables');
-        revalidatePath('/admin');
     }
 }
 
@@ -338,8 +324,6 @@ export async function addMenuItemAction(formData: FormData) {
 
         const newItem = await addMenuItem(newItemData, restaurantId);
         revalidatePath('/admin/menu');
-        revalidatePath('/order', 'layout');
-        revalidatePath('/admin/user-management');
         return newItem;
     }
     return undefined;
@@ -402,9 +386,6 @@ export async function updateMenuItemAction(itemId: string, formData: FormData) {
     try {
         await updateMenuItem(itemId, updateData, restaurantId);
         revalidatePath('/admin/menu');
-        revalidatePath(`/admin/menu/${itemId}/edit`);
-        revalidatePath('/order', 'layout');
-        revalidatePath('/admin/user-management');
     } catch (error) {
         return { message: 'Database Error: Failed to update item.' };
     }
@@ -414,13 +395,11 @@ export async function updateMenuItemAction(itemId: string, formData: FormData) {
 export async function toggleMenuItemAvailabilityAction(itemId: string, isAvailable: boolean, restaurantId?: string) {
     await toggleMenuItemAvailability(itemId, isAvailable, restaurantId);
     revalidatePath('/admin/menu');
-    revalidatePath('/order', 'layout');
 }
 
 export async function toggleMenuItemAddonAction(itemId: string, isAddon: boolean, restaurantId?: string) {
     await toggleMenuItemAddon(itemId, isAddon, restaurantId);
     revalidatePath('/admin/menu');
-    revalidatePath(`/admin/menu/${itemId}/edit`);
 }
 
 export async function updateTableStatusAction(tableId: string, status: Table['status'], restaurantId?: string) {
@@ -429,9 +408,6 @@ export async function updateTableStatusAction(tableId: string, status: Table['st
         if (status === 'available') {
             await cancelOrdersForTable(tableId, restaurantId);
         }
-        revalidatePath('/admin');
-        revalidatePath('/admin/tables');
-        revalidatePath('/kitchen');
     } catch (error) {
         return { message: 'Database Error: Failed to Update Table Status.' };
     }
@@ -439,7 +415,6 @@ export async function updateTableStatusAction(tableId: string, status: Table['st
 
 export async function createOrderAction(orderData: any, restaurantId: string) {
   const newOrder = await createOrder(orderData, restaurantId);
-  // Revalidations removed to prevent full page reloads on POS screen
   return newOrder;
 }
 
@@ -486,7 +461,6 @@ export async function createRemoteOrderAction(formData: FormData): Promise<Remot
     revalidatePath('/admin/online-orders');
     revalidatePath('/admin/take-away');
     revalidatePath('/kitchen');
-    revalidatePath('/admin/sales-history');
 
     // Since `createOrder` returns an `Order`, we must cast it to `RemoteOrder`
     // because the caller (`remote-order-form`) expects a `RemoteOrder`.
@@ -667,7 +641,6 @@ export async function deleteKitchenUserAction(userId: string, deletedBy: string 
 export async function updateTablePositionAction(tableId: string, position: { x: number; y: number }, restaurantId?: string) {
     try {
         await updateTablePosition(tableId, position, restaurantId);
-        revalidatePath('/admin');
     } catch (error) {
         console.error("Failed to update table position:", error);
         return { message: 'Database Error: Failed to update table position.' };
@@ -685,6 +658,8 @@ export async function updateSettingsAction(formData: FormData) {
     if (formData.has('restaurantAddress')) newSettings.restaurantAddress = formData.get('restaurantAddress') as string;
 
     // Branch-Specific or Global Fallback Settings
+    if (formData.has('taxName')) newSettings.taxName = formData.get('taxName') as string;
+    if (formData.has('taxNumber')) newSettings.taxNumber = formData.get('taxNumber') as string;
     if (formData.has('currencySymbol')) newSettings.currencySymbol = formData.get('currencySymbol') as string;
     if (formData.has('currencyDecimalPlaces')) newSettings.currencyDecimalPlaces = Number(formData.get('currencyDecimalPlaces'));
     if (formData.has('timezone')) newSettings.timezone = formData.get('timezone') as string;
@@ -762,13 +737,12 @@ export async function deleteOrderAction(orderId: string, orderType: 'Dine-in' | 
     try {
         await deleteOrder(orderId, orderType, restaurantId);
         revalidatePath('/admin/sales-history');
-        revalidatePath('/admin/sales');
     } catch (error) {
         return { message: 'Database Error: Failed to delete order.' };
     }
 }
 
-export async function updateOrderDetailsAction(orderId: string, orderType: Order['orderType'], formData: FormData) {
+export async function updateOrderDetailsAction(orderId: string, orderType: Order['orderType'] | RemoteOrder['orderType'], formData: FormData) {
     const customerName = formData.get('customerName') as string;
     const customerPhone = formData.get('customerPhone') as string;
     const restaurantId = formData.get('restaurantId') as string;
@@ -798,7 +772,6 @@ export async function deleteTableAction(tableId: string, restaurantId?: string) 
 export async function updateTableFloorAction(tableId: string, floor: string, restaurantId?: string) {
     try {
         await updateTable(tableId, { floor }, restaurantId);
-        revalidatePath('/admin/tables');
     } catch (error) {
         console.error('Error updating table floor:', error);
         return { message: 'Database Error: Failed to update table floor.' };
@@ -852,11 +825,7 @@ export async function addMealSessionAction(formData: FormData) {
             displayMessage,
             isActive,
         }, restaurantId);
-        // Revalidate all pages that might use meal sessions
-        revalidatePath('/', 'layout'); // Revalidate entire app
         revalidatePath('/admin/settings/sessions');
-        revalidatePath('/admin/menu');
-        revalidatePath('/order', 'layout');
     } catch (error) {
         return { message: 'Database Error: Failed to add session.' };
     }
@@ -887,11 +856,7 @@ export async function updateMealSessionAction(formData: FormData) {
             isActive,
         }, restaurantId);
 
-        // Revalidate all pages that might use meal sessions
-        revalidatePath('/', 'layout'); // Revalidate entire app
         revalidatePath('/admin/settings/sessions');
-        revalidatePath('/admin/menu');
-        revalidatePath('/order', 'layout');
     } catch (error) {
         return { message: 'Database Error: Failed to update session.' };
     }
@@ -900,11 +865,7 @@ export async function updateMealSessionAction(formData: FormData) {
 export async function deleteMealSessionAction(branchId: string, sessionId: string, restaurantId?: string) {
     try {
         await deleteMealSession(branchId, sessionId, restaurantId);
-        // Revalidate all pages that might use meal sessions
-        revalidatePath('/', 'layout'); // Revalidate entire app
         revalidatePath('/admin/settings/sessions');
-        revalidatePath('/admin/menu');
-        revalidatePath('/order', 'layout');
     } catch (error) {
         return { message: 'Database Error: Failed to delete session.' };
     }
@@ -927,9 +888,7 @@ export async function updateManualSessionOverrideAction(formData: FormData) {
                 sessionId: enabled ? sessionId : null,
             },
         }, restaurantId);
-        revalidatePath('/admin/settings');
         revalidatePath('/admin/settings/sessions');
-        revalidatePath('/order', 'layout');
     } catch (error) {
         return { message: 'Database Error: Failed to update manual session override.' };
     }
@@ -981,8 +940,54 @@ export async function removeMenuCategoryAction(formData: FormData) {
     }
 }
 
+export async function changeOrderTableAction(formData: FormData) {
+    const orderId = formData.get('orderId') as string;
+    const newTableId = formData.get('newTableId') as string;
+    const restaurantId = formData.get('restaurantId') as string;
 
+    if (!orderId || !newTableId || !restaurantId) {
+        return { message: 'Missing required data to change table.' };
+    }
 
+    try {
+        const order = await getOrderById(orderId, restaurantId);
+        if (!order || !order.tableId) {
+            return { message: 'Order not found or it is not a dine-in order.' };
+        }
+
+        const oldTableId = order.tableId;
+
+        if (oldTableId === newTableId) {
+            return { message: 'Order is already at this table.' };
+        }
+
+        // 1. Update the order's tableId.
+        await updateOrder(orderId, { tableId: newTableId }, restaurantId);
+
+        // 2. Update status of the new table to 'occupied'
+        await updateTableStatus(newTableId, 'occupied', restaurantId);
+
+        // 3. Check if the old table has any other active orders
+        const otherOrdersOnOldTable = await getOrdersByTableId(oldTableId, restaurantId);
+        
+        // The order has been moved, so it shouldn't be considered when checking the old table's status.
+        const activeOrdersOnOldTable = otherOrdersOnOldTable.filter(
+            o => o.id !== orderId && o.status !== 'completed' && o.status !== 'cancelled'
+        );
+
+        if (activeOrdersOnOldTable.length === 0) {
+            await updateTableStatus(oldTableId, 'available', restaurantId);
+        }
+
+    } catch (error) {
+        console.error("Failed to change order table:", error);
+        return { message: 'Database Error: Failed to change table.' };
+    }
+}
     
 
 
+
+
+
+    

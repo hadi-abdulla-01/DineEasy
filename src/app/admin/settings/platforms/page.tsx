@@ -40,8 +40,10 @@ export default function PlatformSettingsPage() {
                 setPlatforms(b?.onlineOrderPlatforms || []);
                 setIsLoading(false);
             });
+        } else {
+            setIsLoading(false);
         }
-    }, [branchId]);
+    }, [branchId, getBranchById]);
 
     const handleFormAction = async (formData: FormData) => {
         const platformsString = JSON.stringify(platforms);
@@ -67,8 +69,8 @@ export default function PlatformSettingsPage() {
     const removePlatform = (platformToRemove: string) => {
         setPlatforms(platforms.filter(p => p !== platformToRemove));
     };
-
-    if (isLoading || !branch) {
+    
+    if (isLoading) {
         return (
              <Card>
                 <CardHeader>
@@ -81,6 +83,29 @@ export default function PlatformSettingsPage() {
                 </CardContent>
             </Card>
         );
+    }
+
+    if (!branch) {
+         return (
+            <Card>
+               <CardHeader>
+                   <CardTitle className="font-headline">Platform Management</CardTitle>
+                   <CardDescription>Could not load settings for the selected branch.</CardDescription>
+               </CardHeader>
+               <CardContent>
+                   <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed text-center">
+                       <p className="text-muted-foreground">
+                           Please select a valid branch from the main settings page.
+                       </p>
+                   </div>
+               </CardContent>
+               <CardFooter>
+                   <Button variant="outline" asChild>
+                       <Link href="/admin/settings">Back to Settings</Link>
+                   </Button>
+               </CardFooter>
+           </Card>
+        )
     }
 
     return (

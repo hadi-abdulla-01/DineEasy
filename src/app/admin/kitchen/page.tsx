@@ -1,107 +1,95 @@
 
+
 'use client';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { OrderStatusBadge } from "@/components/order-status-badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import type { Order, OrderItem, OrderStatus, RestaurantSettings, Table, Branch } from "@/lib/definitions";
-import { updateOrderStatusAction, cancelOrderItemAction } from "@/lib/actions";
-import { Clock, User, Phone, ShoppingBasket, Utensils, CheckCircle, MessageSquare, XCircle, Trash2, Printer, CreditCard } from "lucide-react";
+import { updateOrderStatusAction, cancelOrderItemAction, changeOrderTableAction } from "@/lib/actions";
+import { Clock, User, Phone, ShoppingBasket, Utensils, CheckCircle, MessageSquare, XCircle, Trash2, Printer, CreditCard, Move } from "lucide-react";
 import { formatDistanceInTimezone } from "@/lib/format-date";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Invoice } from "@/components/ui/invoice";
 import Link from "next/link";
 import { useAuth } from "../auth-provider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRestaurantData } from "@/lib/client-data";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
+import { ChangeTableDialog } from '@/components/change-table-dialog';
+import { getClientFirebase } from '@/firebase/client';
+import { collection, onSnapshot, query, where, type DocumentSnapshot } from 'firebase/firestore';
 
-type OrderWithTable = Order & { table?: Table };
 
-function PrintInvoiceButton({ order, settings }: { order: OrderWithTable, settings: RestaurantSettings | null }) {
+function PrintInvoiceButton({ order, settings }: { order: Order, settings: RestaurantSettings | null }) {
+    const componentRef = useRef<HTMLDivElement>(null);
+
     const handlePrint = () => {
+        const content = componentRef.current;
+        if (!content || !settings) return;
         const printWindow = window.open('', '', 'height=800,width=600');
-        if (printWindow && settings) {
-            const invoiceElement = document.createElement('div');
-            const ReactDOMServer = require('react-dom/server');
-            invoiceElement.innerHTML = ReactDOMServer.renderToString(<Invoice order={order} settings={settings} />);
+        if (printWindow) {
+            const printSize = settings.printSettings?.invoicePrintSize || 'a4';
+            const bodyStyle = printSize === 'a4' ? 'padding: 20px;' : 'padding: 0;';
 
-            printWindow.document.write('<html><head><title>Invoice</title></head><body style="padding: 20px;">');
-            printWindow.document.body.innerHTML = invoiceElement.innerHTML;
+            printWindow.document.write('<html><head><title>Invoice</title>');
+
+            const styles = Array.from(document.styleSheets).map(sheet => {
+                try {
+                    if (sheet.href) {
+                        return `<link rel="stylesheet" href="${sheet.href}">`;
+                    }
+                    if (sheet.cssRules) {
+                        return `<style>${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}</style>`;
+                    }
+                } catch (e) {
+                    console.warn('Could not copy stylesheet for printing:', e);
+                }
+                return '';
+            }).join('\n');
+
+            printWindow.document.head.innerHTML += styles;
+            printWindow.document.write(`</head><body style="${bodyStyle}">`);
+            printWindow.document.write(content.innerHTML);
             printWindow.document.write('</body></html>');
             printWindow.document.close();
             setTimeout(() => {
+                printWindow.focus();
                 printWindow.print();
                 printWindow.close();
-            }, 250);
+            }, 500);
         }
     };
-    return (
-        <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={handlePrint}
-        >
-            <Printer className="mr-2 h-4 w-4" />
-            Print Invoice
-        </Button>
-    )
-}
 
-function FinalizePaymentForm({ order, restaurantId }: { order: OrderWithTable, restaurantId: string }) {
-    const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('card');
-
-    const completeOrderAction = async (formData: FormData) => {
-        formData.append('paymentMethod', paymentMethod);
-        formData.append('status', 'completed');
-        formData.append('redirectTo', '/admin/kitchen');
-        await updateOrderStatusAction(order.id, formData);
-    }
-    
     return (
-        <form action={completeOrderAction} className="w-full space-y-3">
-             <input type="hidden" name="restaurantId" value={restaurantId} />
-             <div>
-                <Label className="text-sm font-medium">Payment Method</Label>
-                 <RadioGroup
-                    value={paymentMethod}
-                    onValueChange={(value: 'cash' | 'card') => setPaymentMethod(value)}
-                    className="mt-2 grid grid-cols-2 gap-2"
-                >
-                    <Label htmlFor={`cash-${order.id}`} className="flex items-center gap-2 rounded-md border p-2 cursor-pointer hover:bg-accent [&:has([data-state=checked])]:border-primary">
-                        <RadioGroupItem value="cash" id={`cash-${order.id}`} />
-                        Cash
-                    </Label>
-                    <Label htmlFor={`card-${order.id}`} className="flex items-center gap-2 rounded-md border p-2 cursor-pointer hover:bg-accent [&:has([data-state=checked])]:border-primary">
-                        <RadioGroupItem value="card" id={`card-${order.id}`} />
-                        Card/Other
-                    </Label>
-                </RadioGroup>
+        <>
+            <div className="hidden">
+                <div ref={componentRef}>
+                    {settings && <Invoice order={order} settings={settings} />}
+                </div>
             </div>
-            <Button type="submit" size="sm" className="w-full">
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Complete Order
+            <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={handlePrint}
+            >
+                <Printer className="mr-2 h-4 w-4" />
+                Print Invoice
             </Button>
-        </form>
+        </>
     );
 }
 
-function UpdateStatusButton({ order, currentStatus, restaurantId }: { order: OrderWithTable; currentStatus: OrderStatus, restaurantId: string }) {
+function UpdateStatusButton({ order, currentStatus, restaurantId }: { order: Order; currentStatus: OrderStatus, restaurantId: string }) {
     const nextStatusMap: Partial<Record<OrderStatus, OrderStatus>> = {
         received: 'preparing',
         preparing: 'ready',
     };
 
     const nextStatus = nextStatusMap[currentStatus];
-    const updateStatus = async (formData: FormData) => {
-        await updateOrderStatusAction(order.id, formData);
-    };
-
     const allItemsReady = order.items.filter(i => i.status !== 'cancelled').every(item => item.isReady);
 
     const isPreparingButton = currentStatus === 'received';
@@ -110,12 +98,24 @@ function UpdateStatusButton({ order, currentStatus, restaurantId }: { order: Ord
     const isButtonDisabled = isReadyButton && !allItemsReady;
 
     if (currentStatus === 'ready') {
-        return <FinalizePaymentForm order={order} restaurantId={restaurantId} />;
+        return (
+            <Button
+                asChild
+                size="sm"
+                className="w-full"
+            >
+                <Link href={`/admin/orders/${order.id}/payment?redirectTo=/admin/kitchen`}>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Payment
+                </Link>
+            </Button>
+        );
     }
 
     return (
-        <form action={updateStatus} className="flex flex-col gap-2 w-full">
+        <form action={updateOrderStatusAction} className="flex flex-col gap-2 w-full">
             <input type="hidden" name="restaurantId" value={restaurantId} />
+            <input type="hidden" name="orderId" value={order.id} />
             {nextStatus && (
                 <Button
                     type="submit"
@@ -159,16 +159,33 @@ function CancelItemButton({ orderId, orderItemId, restaurantId }: { orderId: str
     );
 }
 
+function docToObj<T>(doc: DocumentSnapshot): T {
+    const data = doc.data();
+    if (data) {
+        // Convert Firestore Timestamps to ISO strings
+        for (const key in data) {
+            if (data[key]?.toDate && typeof data[key].toDate === 'function') {
+                data[key] = data[key].toDate().toISOString();
+            }
+        }
+    }
+    return {
+        id: doc.id,
+        ...data,
+    } as T;
+}
 
 export default function AdminKitchenPage() {
     const { user } = useAuth();
-    const { getActiveOrders, getSettings, getTableById, getBranches, getMainBranch, restaurantId } = useRestaurantData();
-    const [orders, setOrders] = useState<OrderWithTable[]>([]);
+    const { getBranches, getMainBranch, restaurantId, getSettings } = useRestaurantData();
+    const [orders, setOrders] = useState<Order[]>([]);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [allBranches, setAllBranches] = useState<Branch[]>([]);
+    const [allTables, setAllTables] = useState<Table[]>([]);
     const [mainBranch, setMainBranch] = useState<Branch | null>(null);
     const [selectedBranchId, setSelectedBranchId] = useState<string | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
+    const [orderToChangeTable, setOrderToChangeTable] = useState<Order | null>(null);
 
     const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
 
@@ -176,24 +193,6 @@ export default function AdminKitchenPage() {
         sessionStorage.setItem('kitchenViewBranchId', branchId);
         setSelectedBranchId(branchId);
     };
-
-    const fetchOrders = useCallback(async (branchId: string, isInitialFetch: boolean) => {
-        if (isInitialFetch) {
-            setIsLoading(true);
-        }
-        const activeOrders = await getActiveOrders(branchId);
-        const ordersWithTableData: OrderWithTable[] = await Promise.all(activeOrders.map(async (order) => {
-            let table;
-            if (order.orderType === 'Dine-in' && order.tableId) {
-                table = await getTableById(order.tableId);
-            }
-            return { ...order, table };
-        }));
-        setOrders(ordersWithTableData);
-        if (isInitialFetch) {
-            setIsLoading(false);
-        }
-    }, [getActiveOrders, getTableById]);
 
     useEffect(() => {
         async function fetchInitialData() {
@@ -206,13 +205,10 @@ export default function AdminKitchenPage() {
             let initialBranchId: string | undefined;
 
             if (isGlobalAdmin) {
-                // Global Admin: Respect saved preference or default to Main Branch
                 initialBranchId = savedBranchId || fetchedMainBranch?.id;
-
                 const branches = await getBranches();
                 setAllBranches(branches);
             } else {
-                // Branch Admin: Enforce specific branch, ignoring any stale session storage
                 initialBranchId = user.branchId;
             }
 
@@ -223,17 +219,70 @@ export default function AdminKitchenPage() {
         fetchInitialData();
     }, [user, isGlobalAdmin, getMainBranch, getBranches]);
 
+    // Real-time listener for tables
+    useEffect(() => {
+        if (!selectedBranchId || !restaurantId) return;
+
+        const { firestore } = getClientFirebase();
+        const tablesRef = collection(firestore, `restaurants/${restaurantId}/tables`);
+        const q = query(tablesRef, where('branchId', '==', selectedBranchId));
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const tablesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Table));
+            setAllTables(tablesData);
+        }, (error) => {
+            console.error("Error fetching tables in real-time:", error);
+        });
+
+        return () => unsubscribe();
+    }, [selectedBranchId, restaurantId]);
+
+    // Real-time listener for orders
+    useEffect(() => {
+        if (!selectedBranchId || !restaurantId) return;
+
+        setIsLoading(true);
+        const { firestore } = getClientFirebase();
+        const ordersRef = collection(firestore, `restaurants/${restaurantId}/orders`);
+        const q = query(ordersRef,
+            where('branchId', '==', selectedBranchId),
+            where('status', 'in', ['received', 'preparing', 'ready'])
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const activeOrders = snapshot.docs.map(doc => docToObj<Order>(doc));
+
+            const ordersWithTableData: Order[] = activeOrders.map(order => {
+                let table;
+                if (order.orderType === 'Dine-in' && order.tableId) {
+                    table = allTables.find(t => t.id === order.tableId);
+                }
+                return { ...order, table };
+            });
+
+            setOrders(ordersWithTableData.sort((a, b) => {
+                const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                if (isNaN(timeA) || isNaN(timeB)) return 0;
+                return timeA - timeB;
+            }));
+            setIsLoading(false);
+        }, (error) => {
+            console.error("Error fetching kitchen orders:", error);
+            setIsLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [selectedBranchId, restaurantId, allTables]); // Rerun when tables update
+
     useEffect(() => {
         if (selectedBranchId) {
             getSettings(selectedBranchId).then(setSettings);
-            fetchOrders(selectedBranchId, true); // Initial fetch with loading state
-            const interval = setInterval(() => fetchOrders(selectedBranchId, false), 5000); // Subsequent fetches without loading state
-            return () => clearInterval(interval);
         }
-    }, [selectedBranchId, fetchOrders, getSettings]);
+    }, [selectedBranchId, getSettings]);
 
 
-    const getOrderTitle = (order: OrderWithTable) => {
+    const getOrderTitle = (order: Order) => {
         switch (order.orderType) {
             case 'Dine-in':
                 return order.table ? `Table ${order.table.number}` : 'Dine-in';
@@ -400,11 +449,26 @@ export default function AdminKitchenPage() {
                                 {order.status !== 'completed' && order.status !== 'cancelled' && (
                                     <PrintInvoiceButton order={order} settings={settings} />
                                 )}
+                                {order.orderType === 'Dine-in' && order.status !== 'completed' && order.status !== 'cancelled' && (
+                                    <Button variant="outline" size="sm" className="w-full" onClick={() => setOrderToChangeTable(order)}>
+                                        <Move className="mr-2 h-4 w-4" /> Change Table
+                                    </Button>
+                                )}
                                 <UpdateStatusButton order={order} currentStatus={order.status} restaurantId={restaurantId} />
                             </CardFooter>
                         </Card>
                     ))}
                 </div>
+            )}
+            {orderToChangeTable && (
+                <ChangeTableDialog
+                    order={orderToChangeTable}
+                    tables={allTables}
+                    isOpen={!!orderToChangeTable}
+                    onOpenChange={(isOpen) => { if (!isOpen) setOrderToChangeTable(null); }}
+                    restaurantId={restaurantId}
+                    onTableChanged={() => { }}
+                />
             )}
         </>
     );

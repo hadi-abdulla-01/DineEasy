@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -86,12 +87,14 @@ export default function SuperAdminPanel() {
                 branchId: '', // Will be set after restaurant creation
                 permissions: {
                     dashboard: { view: true },
+                    pos: { view: true },
                     tableOrder: { view: true },
                     tables: { view: true, create: true, edit: true, delete: true },
                     menu: { view: true, create: true, edit: true, delete: true },
                     kitchen: { view: true },
                     sales: { view: true },
                     salesHistory: { view: true, edit: true, delete: true },
+                    menuPerformance: { view: true },
                     onlineOrders: { view: true, create: true },
                     takeAway: { view: true, create: true },
                     userManagement: { view: true, create: true, edit: true, delete: true },
@@ -119,12 +122,14 @@ export default function SuperAdminPanel() {
                     firebaseUid: authResult.user?.firebaseUid || '',
                     permissions: {
                         dashboard: { view: true },
+                        pos: { view: true },
                         tableOrder: { view: true },
                         tables: { view: true, create: true, edit: true, delete: true },
                         menu: { view: true, create: true, edit: true, delete: true },
                         kitchen: { view: true },
                         sales: { view: true },
                         salesHistory: { view: true, edit: true, delete: true },
+                        menuPerformance: { view: true },
                         onlineOrders: { view: true, create: true },
                         takeAway: { view: true, create: true },
                         userManagement: { view: true, create: true, edit: true, delete: true },

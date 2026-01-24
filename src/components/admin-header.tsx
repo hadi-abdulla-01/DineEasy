@@ -35,7 +35,7 @@ export default function AdminHeader({ isSidebarOpen, setIsSidebarOpen }: AdminHe
 
   const handleLogout = () => {
     logout();
-    router.push('/admin/login');
+    router.push('/login?role=admin');
   };
 
   const getUserRole = () => {
@@ -79,7 +79,7 @@ export default function AdminHeader({ isSidebarOpen, setIsSidebarOpen }: AdminHe
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user?.username || 'User'}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{getUserRole()}</p>
                 </div>
-                 <Link href={`/admin/profile/edit`} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <Link href={`/admin/profile/edit`} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                   <User size={16} />
                   <span>My Profile</span>
                 </Link>

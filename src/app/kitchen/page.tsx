@@ -20,42 +20,85 @@ import { Badge } from "@/components/ui/badge";
 
 type OrderWithTable = Order & { table?: Table };
 
-function KitchenTicket({ order, settings, visibleItems }: { order: OrderWithTable, settings: RestaurantSettings | null, visibleItems: OrderItem[] }) {
-    // This is a simplified kitchen ticket for printing
+function KitchenTicket({ order, settings, visibleItems, printSize }: { order: OrderWithTable, settings: RestaurantSettings | null, visibleItems: OrderItem[], printSize?: string }) {
+    // Adjust font sizes based on print format
+    const isA4 = printSize === 'a4';
+    const isThermal = printSize === 'thermal80mm';
+
+    const titleSize = isA4 ? 'text-4xl' : isThermal ? 'text-xl' : 'text-2xl';
+    const textSize = isA4 ? 'text-xl' : isThermal ? 'text-sm' : 'text-base';
+    const itemSize = isA4 ? 'text-2xl' : isThermal ? 'text-base' : 'text-lg';
+    const padding = isA4 ? 'p-8' : 'p-3';
+
     return (
-        <div className="p-4 font-mono text-sm">
-            <div className="text-center font-bold text-lg mb-2">KITCHEN TICKET</div>
-            <div className="mb-2">
-                <div>Order #: {order.invoiceNumber || order.id.slice(-4)}</div>
-                <div>{order.orderType} - {order.table ? `Table ${order.table.number}` : order.customerName}</div>
+        <div className={`${padding} font-mono ${textSize} w-full h-full`}>
+            <div className={`text-center font-bold ${titleSize} mb-4 uppercase tracking-wide`}>KITCHEN TICKET</div>
+            <div className="mb-4 space-y-1">
+                <div className="font-bold text-2xl">Order #: {order.invoiceNumber || order.id.slice(-4)}</div>
+                <div className="font-semibold">{order.orderType} - {order.table ? `Table ${order.table.number}` : order.customerName}</div>
                 <div>Time: {new Date().toLocaleTimeString()}</div>
             </div>
-            <div className="border-b border-black mb-2"></div>
-            <div className="space-y-2">
+            <div className="border-b-4 border-black mb-4"></div>
+            <div className="space-y-3">
                 {visibleItems.map(item => (
-                    <div key={item.orderItemId} className="flex justify-between">
-                        <span>{item.quantity}x {item.name}</span>
+                    <div key={item.orderItemId} className="flex justify-between items-start">
+                        <span className={`font-bold ${itemSize} flex-1`}>{item.quantity}x {item.name}</span>
                     </div>
                 ))}
             </div>
             {order.notes && (
-                <div className="mt-4 border-t border-black pt-2">
-                    <strong>Notes:</strong> {order.notes}
+                <div className="mt-6 border-t-4 border-black pt-4">
+                    <strong className="text-2xl">Notes:</strong>
+                    <div className="mt-2 text-xl">{order.notes}</div>
                 </div>
             )}
         </div>
-
     );
 }
 
 function PrintTicketButton({ order, settings, visibleItems }: { order: OrderWithTable, settings: RestaurantSettings | null, visibleItems: OrderItem[] }) {
     const handlePrint = () => {
-        const printWindow = window.open('', '', 'height=600,width=400');
-        if (printWindow && settings) {
-            const ReactDOMServer = require('react-dom/server');
-            const ticketHtml = ReactDOMServer.renderToString(<KitchenTicket order={order} settings={settings} visibleItems={visibleItems} />);
+        if (!settings) return;
 
-            printWindow.document.write('<html><head><title>Kitchen Ticket</title></head><body style="padding: 0; margin: 0;">');
+        const printSize = settings.printSettings?.kitchenTicketPrintSize || 'thermal80mm';
+        const customWidth = settings.printSettings?.kitchenTicketCustomWidth || 80;
+
+        // Determine window size and body styling based on print size
+        let windowWidth = 400;
+        let bodyStyle = 'padding: 0; margin: 0;';
+
+        if (printSize === 'a4') {
+            windowWidth = 800;
+            bodyStyle = 'padding: 20px; margin: 0;';
+        } else if (printSize === 'thermal80mm') {
+            windowWidth = 300;
+            bodyStyle = 'padding: 0; margin: 0; width: 80mm;';
+        } else if (printSize === 'custom') {
+            windowWidth = Math.max(300, customWidth * 3.78); // Convert mm to pixels (approximate)
+            bodyStyle = `padding: 0; margin: 0; width: ${customWidth}mm;`;
+        }
+
+        const printWindow = window.open('', '', `height=600,width=${windowWidth}`);
+        if (printWindow) {
+            const ReactDOMServer = require('react-dom/server');
+            const ticketHtml = ReactDOMServer.renderToString(<KitchenTicket order={order} settings={settings} visibleItems={visibleItems} printSize={printSize} />);
+
+            printWindow.document.write('<html><head><title>Kitchen Ticket</title>');
+            printWindow.document.write('<style>');
+            printWindow.document.write('* { margin: 0; padding: 0; box-sizing: border-box; }');
+            printWindow.document.write('html, body { width: 100%; height: 100%; }');
+            printWindow.document.write('body { font-family: monospace; display: flex; flex-direction: column; }');
+            printWindow.document.write('@media print {');
+            if (printSize === 'thermal80mm') {
+                printWindow.document.write('@page { size: 80mm auto; margin: 0; }');
+            } else if (printSize === 'custom') {
+                printWindow.document.write(`@page { size: ${customWidth}mm auto; margin: 0; }`);
+            } else {
+                printWindow.document.write('@page { size: A4; margin: 5mm; }');
+            }
+            printWindow.document.write('}');
+            printWindow.document.write('</style>');
+            printWindow.document.write(`</head><body style="${bodyStyle}">`);
             printWindow.document.body.innerHTML = ticketHtml;
             printWindow.document.write('</body></html>');
             printWindow.document.close();
@@ -279,7 +322,7 @@ export default function KitchenPage() {
                                 <OrderStatusBadge status={order.status} />
                             </div>
                             <div className="text-xs text-muted-foreground flex items-center gap-2 pt-1">
-                               <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1">
                                     <Clock className="h-3 w-3" />
                                     <span>{formatDistanceInTimezone(order.createdAt, settings.timezone)}</span>
                                 </div>

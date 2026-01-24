@@ -1,6 +1,6 @@
 
 'use client';
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { RemoteOrder, RestaurantSettings } from "@/lib/definitions";
 import { getRemoteOrders, getSettings } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -110,6 +110,8 @@ export default function OnlineOrderHistoryPage() {
     const [selectedOrder, setSelectedOrder] = useState<RemoteOrder | null>(null);
     const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
+    const [orderToPrint, setOrderToPrint] = useState<RemoteOrder | null>(null);
+    const invoiceRef = useRef<HTMLDivElement>(null);
 
     const fetchPreviousOrders = async () => {
         if (!user) return;
@@ -124,23 +126,47 @@ export default function OnlineOrderHistoryPage() {
         }
     }, [user]);
 
-    const printInvoice = (order: RemoteOrder) => {
-        const printWindow = window.open('', '', 'height=800,width=600');
-        if (printWindow && settings) {
-          const invoiceElement = document.createElement('div');
-          const ReactDOMServer = require('react-dom/server');
-          invoiceElement.innerHTML = ReactDOMServer.renderToString(<Invoice order={order} settings={settings} />);
-    
-          printWindow.document.write('<html><head><title>Invoice</title>');
-          printWindow.document.write('</head><body>');
-          printWindow.document.body.innerHTML = invoiceElement.innerHTML;
-          printWindow.document.write('</body></html>');
-          printWindow.document.close();
-           setTimeout(() => {
-                printWindow.print();
-                printWindow.close();
-            }, 250);
+     useEffect(() => {
+        if (orderToPrint && invoiceRef.current && settings) {
+            const content = invoiceRef.current;
+            const printWindow = window.open('', '', 'height=800,width=600');
+            if (printWindow) {
+                const printSize = settings.printSettings?.invoicePrintSize || 'a4';
+                const bodyStyle = printSize === 'a4' ? 'padding: 20px;' : 'padding: 0;';
+
+                printWindow.document.write('<html><head><title>Invoice</title>');
+
+                const styles = Array.from(document.styleSheets).map(sheet => {
+                    try {
+                        if (sheet.href) {
+                            return `<link rel="stylesheet" href="${sheet.href}">`;
+                        }
+                        if (sheet.cssRules) {
+                            return `<style>${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}</style>`;
+                        }
+                    } catch (e) {
+                        console.warn('Could not copy stylesheet for printing:', e);
+                    }
+                    return '';
+                }).join('\n');
+
+                printWindow.document.head.innerHTML += styles;
+                printWindow.document.write(`</head><body style="${bodyStyle}">`);
+                printWindow.document.write(content.innerHTML);
+                printWindow.document.write('</body></html>');
+                printWindow.document.close();
+                setTimeout(() => {
+                    printWindow.focus();
+                    printWindow.print();
+                    printWindow.close();
+                }, 500);
+            }
+            setOrderToPrint(null);
         }
+    }, [orderToPrint, settings]);
+
+    const handlePrint = (order: RemoteOrder) => {
+        setOrderToPrint(order);
     };
 
     const handleViewDetails = (order: RemoteOrder) => {
@@ -160,10 +186,15 @@ export default function OnlineOrderHistoryPage() {
                     <CardDescription>View details and print invoices from past online orders for your branch.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <PreviousOrdersList orders={previousOrders} onPrint={printInvoice} onViewDetails={handleViewDetails} settings={settings} />
+                    <PreviousOrdersList orders={previousOrders} onPrint={handlePrint} onViewDetails={handleViewDetails} settings={settings} />
                 </CardContent>
             </Card>
             <OrderDetailsDialog order={selectedOrder} isOpen={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen} settings={settings} />
+            <div className="hidden">
+                <div ref={invoiceRef}>
+                    {orderToPrint && settings && <Invoice order={orderToPrint} settings={settings} />}
+                </div>
+            </div>
         </>
     )
 }

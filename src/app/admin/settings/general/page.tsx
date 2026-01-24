@@ -34,15 +34,19 @@ export default function GeneralSettingsPage() {
     const [branch, setBranch] = useState<Branch | null>(null);
     const [taxes, setTaxes] = useState<Tax[]>([]);
     const { toast } = useToast();
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         if (branchId) {
             getBranchById(branchId).then(b => {
                 setBranch(b);
                 setTaxes(b?.taxes || []);
+                setIsLoading(false);
             });
+        } else {
+            setIsLoading(false);
         }
-    }, [branchId]);
+    }, [branchId, getBranchById]);
 
     const handleFormAction = async (formData: FormData) => {
         const newFormData = new FormData();
@@ -70,8 +74,8 @@ export default function GeneralSettingsPage() {
     const handleRemoveTax = (id: string) => {
         setTaxes(taxes.filter(tax => tax.id !== id));
     };
-
-    if (!branch) {
+    
+    if (isLoading) {
         return (
             <Card>
                 <CardHeader>
@@ -85,6 +89,29 @@ export default function GeneralSettingsPage() {
                 </CardContent>
             </Card>
         );
+    }
+    
+    if (!branch) {
+        return (
+            <Card>
+               <CardHeader>
+                   <CardTitle className="font-headline">General Settings</CardTitle>
+                   <CardDescription>Could not load settings for the selected branch.</CardDescription>
+               </CardHeader>
+               <CardContent>
+                   <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed text-center">
+                       <p className="text-muted-foreground">
+                           Please select a valid branch from the main settings page.
+                       </p>
+                   </div>
+               </CardContent>
+               <CardFooter>
+                   <Button variant="outline" asChild>
+                       <Link href="/admin/settings">Back to Settings</Link>
+                   </Button>
+               </CardFooter>
+           </Card>
+        )
     }
 
     return (
@@ -106,6 +133,18 @@ export default function GeneralSettingsPage() {
                         <Label htmlFor="restaurantAddress">Branch Address</Label>
                         <Textarea id="restaurantAddress" name="restaurantAddress" defaultValue={branch.restaurantAddress} />
                     </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="taxName">Tax Label Name</Label>
+                            <Input id="taxName" name="taxName" defaultValue={branch.taxName || ''} placeholder="e.g., GSTIN, VAT ID" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="taxNumber">Tax Number</Label>
+                            <Input id="taxNumber" name="taxNumber" defaultValue={branch.taxNumber || ''} placeholder="Your business tax number" />
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="currencySymbol">Currency Symbol</Label>

@@ -14,6 +14,9 @@ import {
     Users,
     Settings,
     Monitor,
+    TrendingUp,
+    Star,
+    Clock,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -52,6 +55,9 @@ export default function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
             items: [
                 { key: 'sales' as NavMenuKey, icon: BarChart3, label: 'Sales Report', href: '/admin/sales' },
                 { key: 'salesHistory' as NavMenuKey, icon: History, label: 'Sales History', href: '/admin/sales-history' },
+                { key: 'menuPerformance' as NavMenuKey, icon: TrendingUp, label: 'Menu Performance', href: '/admin/reports/menu-performance' },
+                { key: 'employeePerformance' as NavMenuKey, icon: Star, label: 'Employee Performance', href: '/admin/reports/employee-performance' },
+                { key: 'peakHours' as NavMenuKey, icon: Clock, label: 'Peak Hours', href: '/admin/reports/peak-hours' },
             ]
         },
         {
@@ -109,7 +115,7 @@ export default function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
                                     </p>
                                     <div className="space-y-1">
                                         {visibleGroupItems.map((item) => {
-                                            const isActive = pathname === item.href;
+                                            const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
                                             return (
                                                 <Link
                                                     key={item.label}

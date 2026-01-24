@@ -77,6 +77,7 @@ async function seedInitialAdminUser(restaurantId: string) {
                     kitchen: { view: true },
                     sales: { view: true },
                     salesHistory: { view: true, edit: true, delete: true },
+                    menuPerformance: { view: true },
                     onlineOrders: { view: true, create: true },
                     takeAway: { view: true, create: true },
                     userManagement: { view: true, create: true, edit: true, delete: true },
@@ -149,6 +150,8 @@ export async function getSettings(branchId?: string, restaurantId: string = 'din
         currencySymbol: '$',
         taxes: [],
         currencyDecimalPlaces: 2,
+        taxName: '',
+        taxNumber: '',
         qrCodeColor: '#000000',
         qrCodeBackgroundColor: '#FFFFFF',
         onlineOrderPlatforms: [],
@@ -162,6 +165,21 @@ export async function getSettings(branchId?: string, restaurantId: string = 'din
             dineIn: { prefix: 'DI-', nextNumber: 1 },
             online: { prefix: 'ON-', nextNumber: 1 },
             takeAway: { prefix: 'TA-', nextNumber: 1 },
+        },
+        printSettings: {
+            invoicePrintSize: 'a4',
+            invoiceCustomWidth: 80,
+            kitchenTicketPrintSize: 'thermal80mm',
+            kitchenTicketCustomWidth: 80,
+            salesReportPrintSize: 'a4',
+            salesReportCustomWidth: 210,
+            invoiceHeaderText: '',
+            invoiceFooterText: '',
+            invoiceTitle: 'Invoice',
+            showRestaurantAddress: true,
+            showCustomerDetails: true,
+            itemHeaderFontSize: 10,
+            itemBodyFontSize: 9,
         },
         posSettings: {
             cashDenominations: [10, 20, 50, 100]
@@ -178,8 +196,8 @@ export async function getSettings(branchId?: string, restaurantId: string = 'din
         ...globalSettings,
         // Deep merge nested objects to prevent them from being completely overwritten
         invoiceSettings: { ...defaultSettings.invoiceSettings, ...(globalSettings.invoiceSettings || {}) },
+        printSettings: { ...defaultSettings.printSettings, ...(globalSettings.printSettings || {}) },
         posSettings: { ...defaultSettings.posSettings, ...(globalSettings.posSettings || {}) },
-        printSettings: globalSettings.printSettings || defaultSettings.printSettings,
         manualSessionOverride: globalSettings.manualSessionOverride ?? defaultSettings.manualSessionOverride,
     };
 
@@ -204,8 +222,8 @@ export async function getSettings(branchId?: string, restaurantId: string = 'din
         ...branchData,
         // Deep merge nested objects again, with branch settings having the highest priority
         invoiceSettings: { ...baseSettings.invoiceSettings, ...(branchData.invoiceSettings || {}) },
+        printSettings: { ...baseSettings.printSettings, ...(branchData.printSettings || {}) },
         posSettings: { ...baseSettings.posSettings, ...(branchData.posSettings || {}) },
-        printSettings: branchData.printSettings || baseSettings.printSettings,
         manualSessionOverride: branchData.manualSessionOverride ?? baseSettings.manualSessionOverride,
         mealSessions: branchData.mealSessions || baseSettings.mealSessions,
         menuCategories: branchData.menuCategories || baseSettings.menuCategories,
@@ -661,6 +679,11 @@ export async function addItemsToOrder(orderId: string, items: OrderItem[], notes
     return undefined;
 }
 
+export async function updateOrder(orderId: string, data: Partial<Omit<Order, 'id'>>, restaurantId: string = 'dineeasee-restaurant'): Promise<void> {
+    const orderRef = doc(getFirestoreInstance(), `restaurants/${restaurantId}/orders`, orderId);
+    await updateDoc(orderRef, data);
+}
+
 export async function updateOrderStatus(orderId: string, status: OrderStatus, paymentMethod?: Order['paymentMethod'], restaurantId: string = 'dineeasee-restaurant'): Promise<Order | undefined> {
     const orderRef = doc(getFirestoreInstance(), `restaurants/${restaurantId}/orders`, orderId);
     const updateData: Partial<Order> = { status };
@@ -938,23 +961,33 @@ export async function updateOrderDetails(orderId: string, orderType: Order['orde
 export async function getCurrentSession(branchId: string, restaurantId: string = 'dineeasee-restaurant'): Promise<MealSession | null> {
     const settings = await getSettings(branchId, restaurantId);
     if (!settings.mealSessions || settings.mealSessions.length === 0) return null;
+
     if (settings.manualSessionOverride?.enabled && settings.manualSessionOverride.sessionId) {
         return settings.mealSessions.find(s => s.id === settings.manualSessionOverride!.sessionId) || null;
     }
+
     const { toZonedTime } = await import('date-fns-tz');
     const zonedNow = toZonedTime(new Date(), settings.timezone || 'UTC');
     const currentMinutes = zonedNow.getHours() * 60 + zonedNow.getMinutes();
+
     return settings.mealSessions.find(session => {
-        if (!session.isActive) return false;
+        if (!session.isActive || !session.startTime || !session.endTime) {
+            return false;
+        }
         const [startHour, startMin] = session.startTime.split(':').map(Number);
         const [endHour, endMin] = session.endTime.split(':').map(Number);
         const startMinutes = startHour * 60 + startMin;
         const endMinutes = endHour * 60 + endMin;
-        return endMinutes < startMinutes
-            ? currentMinutes >= startMinutes || currentMinutes < endMinutes
-            : currentMinutes >= startMinutes && currentMinutes < endMinutes;
+
+        // Handle overnight sessions
+        if (endMinutes < startMinutes) {
+            return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+        } else {
+            return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+        }
     }) || null;
 }
+
 
 export async function addMealSession(branchId: string, sessionData: Omit<MealSession, 'id'>, restaurantId: string = 'dineeasee-restaurant'): Promise<MealSession> {
     const settings = await getSettings(branchId, restaurantId);
@@ -1031,10 +1064,13 @@ export async function getActivityLogsByUser(userId: string, restaurantId: string
 }
 
 // Ensure initial data is seeded on startup
-seedInitialData('dineeasee-restaurant').catch(console.error);
+// seedInitialData('dineeasee-restaurant').catch(console.error);
 
 
 
 
 
     
+
+
+

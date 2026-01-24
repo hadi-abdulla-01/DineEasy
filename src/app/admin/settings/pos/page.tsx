@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -41,10 +40,14 @@ export default function PosSettingsPage() {
         if(branchId) {
             getBranchById(branchId).then(b => {
                 setBranch(b);
-                setDenominations(b?.posSettings?.cashDenominations || []);
-                setEnableOnScreenKeyboard(b?.posSettings?.enableOnScreenKeyboard || false);
+                if (b) {
+                    setDenominations(b?.posSettings?.cashDenominations || []);
+                    setEnableOnScreenKeyboard(b?.posSettings?.enableOnScreenKeyboard || false);
+                }
                 setIsLoading(false);
             });
+        } else {
+            setIsLoading(false);
         }
     }, [branchId, getBranchById]);
 
@@ -76,8 +79,8 @@ export default function PosSettingsPage() {
     const removeDenomination = (denominationToRemove: number) => {
         setDenominations(denominations.filter(d => d !== denominationToRemove));
     };
-
-    if (isLoading || !branch) {
+    
+    if (isLoading) {
         return (
              <Card>
                 <CardHeader>
@@ -90,6 +93,29 @@ export default function PosSettingsPage() {
                 </CardContent>
             </Card>
         );
+    }
+    
+    if (!branch) {
+         return (
+            <Card>
+               <CardHeader>
+                   <CardTitle className="font-headline">POS Settings</CardTitle>
+                   <CardDescription>Could not load settings for the selected branch.</CardDescription>
+               </CardHeader>
+               <CardContent>
+                   <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed text-center">
+                       <p className="text-muted-foreground">
+                           Please select a valid branch from the main settings page.
+                       </p>
+                   </div>
+               </CardContent>
+               <CardFooter>
+                   <Button variant="outline" asChild>
+                       <Link href="/admin/settings">Back to Settings</Link>
+                   </Button>
+               </CardFooter>
+           </Card>
+        )
     }
 
     return (

@@ -9,16 +9,23 @@ import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
  * @returns Formatted date string in the specified timezone
  */
 export function formatInTimezone(
-    dateString: string | Date,
+    dateString: string | Date | null | undefined,
     formatStr: string,
     timezone?: string
 ): string {
+    if (!dateString) {
+        return '...';
+    }
+
     if (!timezone) {
         timezone = 'UTC'; // Default to UTC if no timezone specified
     }
 
     try {
         const date = typeof dateString === 'string' ? parseISO(dateString) : dateString;
+        if (isNaN(date.getTime())) {
+            return 'Invalid Date';
+        }
         return formatInTimeZone(date, timezone, formatStr);
     } catch (error) {
         console.error('Error formatting date:', error);
@@ -33,11 +40,19 @@ export function formatInTimezone(
  * @returns Formatted relative time string
  */
 export function formatDistanceInTimezone(
-    dateString: string | Date,
+    dateString: string | Date | null | undefined,
     timezone?: string
 ): string {
+    if (!dateString) {
+        return 'a few seconds ago';
+    }
+
     try {
         const date = typeof dateString === 'string' ? parseISO(dateString) : dateString;
+
+        if (isNaN(date.getTime())) {
+            return 'Invalid date';
+        }
 
         // Convert to the target timezone for accurate relative time
         const zonedDate = timezone ? toZonedTime(date, timezone) : date;

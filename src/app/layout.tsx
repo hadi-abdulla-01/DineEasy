@@ -6,8 +6,6 @@ import './globals.css';
 import { Noto_Sans, Mulish, Outfit, Poppins } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import { getSettings } from '@/lib/data';
-import { FirebaseClientProvider } from '@/firebase/client-provider';
-import { AuthProvider } from './admin/auth-provider';
 
 const noto = Noto_Sans({ subsets: ['latin'], variable: '--font-sans' });
 const mulish = Mulish({ subsets: ['latin'], variable: '--font-mulish', weight: ['400', '500', '700'] });
@@ -30,11 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={cn("font-sans antialiased", noto.variable, mulish.variable, outfit.variable, poppins.variable)}>
-        <FirebaseClientProvider>
-          <AuthProvider>
-            {children}
-          </AuthProvider>
-        </FirebaseClientProvider>
+        {children}
         <Toaster />
       </body>
     </html>

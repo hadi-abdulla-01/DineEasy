@@ -57,8 +57,10 @@ export default function InvoiceSettingsPage() {
                 }
                 setIsLoading(false);
             });
+        } else {
+            setIsLoading(false);
         }
-    }, [branchId]);
+    }, [branchId, getBranchById]);
 
     const handleFormAction = async (formData: FormData) => {
         const newFormData = new FormData();
@@ -85,8 +87,42 @@ export default function InvoiceSettingsPage() {
         });
     };
     
-    if (isLoading || !branch) {
-        return <div>Loading invoice settings...</div>;
+    if (isLoading) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="font-headline">Invoice & Numbering</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed">
+                        <p className="text-muted-foreground">Loading settings...</p>
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    }
+    
+    if (!branch) {
+         return (
+            <Card>
+               <CardHeader>
+                   <CardTitle className="font-headline">Invoice & Numbering</CardTitle>
+                   <CardDescription>Could not load settings for the selected branch.</CardDescription>
+               </CardHeader>
+               <CardContent>
+                   <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed text-center">
+                       <p className="text-muted-foreground">
+                           Please select a valid branch from the main settings page.
+                       </p>
+                   </div>
+               </CardContent>
+               <CardFooter>
+                   <Button variant="outline" asChild>
+                       <Link href="/admin/settings">Back to Settings</Link>
+                   </Button>
+               </CardFooter>
+           </Card>
+        )
     }
 
     return (

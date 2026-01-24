@@ -3,7 +3,7 @@
 'use client';
 
 import type { MenuItem, OrderItem, RemoteOrder, RestaurantSettings, Order } from '@/lib/definitions';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
@@ -27,6 +27,8 @@ export function RemoteOrderForm({ menu: initialMenu, orderType, onItemsUpdate, c
   const [lastOrder, setLastOrder] = React.useState<RemoteOrder | null>(null);
   const { restaurantId } = useRestaurantData();
   const { toast } = useToast();
+  const invoiceRef = useRef<HTMLDivElement>(null);
+
 
   useEffect(() => {
     setMenu(initialMenu);
@@ -88,21 +90,39 @@ export function RemoteOrderForm({ menu: initialMenu, orderType, onItemsUpdate, c
   const unavailableMenu = filteredMenu.filter(item => !item.isAvailable);
 
   const printInvoice = (order: RemoteOrder) => {
-    const printWindow = window.open('', '', 'height=800,width=600');
-    if (printWindow && settings) {
-      const invoiceElement = document.createElement('div');
-      // A bit of a hack to render React component to string for printing
-      const ReactDOMServer = require('react-dom/server');
-      invoiceElement.innerHTML = ReactDOMServer.renderToString(<Invoice order={order} settings={settings} />);
+    const content = invoiceRef.current;
+    if (!content || !settings) return;
 
-      printWindow.document.write('<html><head><title>Invoice</title></head><body>');
-      printWindow.document.body.innerHTML = invoiceElement.innerHTML;
-      printWindow.document.write('</body></html>');
-      printWindow.document.close();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 250);
+    const printWindow = window.open('', '', 'height=800,width=600');
+    if (printWindow) {
+        const printSize = settings.printSettings?.invoicePrintSize || 'a4';
+        const bodyStyle = printSize === 'a4' ? 'padding: 20px;' : 'padding: 0;';
+        printWindow.document.write('<html><head><title>Invoice</title>');
+
+        const styles = Array.from(document.styleSheets).map(sheet => {
+            try {
+                if (sheet.href) {
+                    return `<link rel="stylesheet" href="${sheet.href}">`;
+                }
+                if (sheet.cssRules) {
+                    return `<style>${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}</style>`;
+                }
+            } catch (e) {
+                console.warn('Could not copy stylesheet for printing:', e);
+            }
+            return '';
+        }).join('\n');
+        
+        printWindow.document.head.innerHTML += styles;
+        printWindow.document.write(`</head><body style="${bodyStyle}">`);
+        printWindow.document.write(content.innerHTML);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+            printWindow.close();
+        }, 500);
     }
   };
 
@@ -160,7 +180,11 @@ export function RemoteOrderForm({ menu: initialMenu, orderType, onItemsUpdate, c
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
+      <div className="hidden">
+        <div ref={invoiceRef}>
+            {lastOrder && settings && <Invoice order={lastOrder} settings={settings} />}
+        </div>
+      </div>
       <div>
         <div className="flex justify-between items-center mb-6">
           <h2 className="font-headline text-3xl font-bold">Menu</h2>

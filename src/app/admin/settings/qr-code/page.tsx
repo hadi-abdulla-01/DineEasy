@@ -1,4 +1,3 @@
-
 'use client';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -13,6 +12,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { useRestaurantData } from '@/lib/client-data';
+import { Separator } from '@/components/ui/separator';
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -28,26 +28,40 @@ export default function QRCodeSettingsPage() {
     const branchId = searchParams.get('branchId');
     const { getBranchById, restaurantId } = useRestaurantData();
     const [branch, setBranch] = useState<Branch | null>(null);
-    const [logoPreview, setLogoPreview] = useState<string | null>(null);
+    const [qrCodeLogoPreview, setQrCodeLogoPreview] = useState<string | null>(null);
+    const [restaurantPrintLogoPreview, setRestaurantPrintLogoPreview] = useState<string | null>(null);
     const { toast } = useToast();
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         if(branchId) {
             getBranchById(branchId).then(b => {
                 setBranch(b);
-                if (b?.qrCodeLogo) {
-                    setLogoPreview(b.qrCodeLogo);
+                if (b) {
+                    setQrCodeLogoPreview(b.qrCodeLogo || null);
+                    setRestaurantPrintLogoPreview(b.printSettings?.restaurantPrintLogo || null);
                 }
+                setIsLoading(false);
             });
+        } else {
+            setIsLoading(false);
         }
-    }, [branchId]);
+    }, [branchId, getBranchById]);
 
     const handleFormAction = async (formData: FormData) => {
-        if (logoPreview) {
-            formData.append('qrCodeLogo', logoPreview);
+        if (qrCodeLogoPreview) {
+            formData.append('qrCodeLogo', qrCodeLogoPreview);
         } else {
             formData.append('qrCodeLogo', 'null'); // Indicate removal
         }
+
+        const currentPrintSettings = branch?.printSettings || {};
+        const newPrintSettings = {
+            ...currentPrintSettings,
+            restaurantPrintLogo: restaurantPrintLogoPreview,
+        };
+        formData.append('printSettings', JSON.stringify(newPrintSettings));
+
         formData.append('restaurantId', restaurantId);
 
         await updateSettingsAction(formData);
@@ -56,8 +70,19 @@ export default function QRCodeSettingsPage() {
             description: "Your QR code settings have been updated.",
         });
     };
-
-    if (!branch) {
+    
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string | null>>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setter(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+    
+    if (isLoading) {
         return (
              <Card>
                 <CardHeader>
@@ -72,6 +97,29 @@ export default function QRCodeSettingsPage() {
         );
     }
     
+    if (!branch) {
+         return (
+            <Card>
+               <CardHeader>
+                   <CardTitle className="font-headline">QR Code Customization</CardTitle>
+                   <CardDescription>Could not load settings for the selected branch.</CardDescription>
+               </CardHeader>
+               <CardContent>
+                   <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed text-center">
+                       <p className="text-muted-foreground">
+                           Please select a valid branch from the main settings page.
+                       </p>
+                   </div>
+               </CardContent>
+               <CardFooter>
+                   <Button variant="outline" asChild>
+                       <Link href="/admin/settings">Back to Settings</Link>
+                   </Button>
+               </CardFooter>
+           </Card>
+        )
+    }
+    
     return (
         <form action={handleFormAction}>
             <input type="hidden" name="branchId" value={branch.id} />
@@ -79,7 +127,7 @@ export default function QRCodeSettingsPage() {
                 <CardHeader>
                     <CardTitle className="font-headline">QR Code Customization for {branch.name}</CardTitle>
                     <CardDescription>
-                        Customize the appearance of the QR codes for this branch.
+                        Customize the appearance of the QR codes for this branch, and the logo for printed materials.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -125,25 +173,35 @@ export default function QRCodeSettingsPage() {
                             </div>
                         </div>
                     </div>
+                    
+                    <Separator />
                      <div className="space-y-2">
-                        <Label htmlFor="logo">QR Code Logo</Label>
-                        <Input id="logo" name="logoFile" type="file" accept="image/*" onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                                const reader = new FileReader();
-                                reader.onloadend = () => {
-                                setLogoPreview(reader.result as string);
-                                };
-                                reader.readAsDataURL(file);
-                            }
-                        }} />
+                        <Label htmlFor="print-logo">Restaurant Logo (for Printing)</Label>
+                        <Input id="print-logo" type="file" accept="image/*" onChange={(e) => handleFileChange(e, setRestaurantPrintLogoPreview)} />
+                        <p className="text-xs text-muted-foreground">Upload a logo to display *above* the QR code on printed materials.</p>
+                        {restaurantPrintLogoPreview && (
+                            <div className="mt-4 flex flex-col items-start gap-2">
+                                <div className="relative w-32 h-32 border rounded-md p-2">
+                                    <Image src={restaurantPrintLogoPreview} alt="Restaurant Logo Preview" fill objectFit="contain" />
+                                </div>
+                                <Button variant="link" size="sm" className="text-destructive h-auto p-0" type="button" onClick={() => setRestaurantPrintLogoPreview(null)}>
+                                    Remove Logo
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <Separator />
+                     <div className="space-y-2">
+                        <Label htmlFor="logo">QR Code Logo (Embedded)</Label>
+                        <Input id="logo" name="logoFile" type="file" accept="image/*" onChange={(e) => handleFileChange(e, setQrCodeLogoPreview)} />
                         <p className="text-xs text-muted-foreground">Upload a square logo for the center of the QR code. For best results, use a simple PNG with a transparent background.</p>
-                        {logoPreview && (
+                        {qrCodeLogoPreview && (
                             <div className="mt-4 flex flex-col items-center gap-2">
                                 <div className="relative w-24 h-24 border rounded-md p-2">
-                                    <Image src={logoPreview} alt="Logo preview" fill objectFit="contain" />
+                                    <Image src={qrCodeLogoPreview} alt="Logo preview" fill objectFit="contain" />
                                 </div>
-                                <Button variant="link" size="sm" className="text-destructive" type="button" onClick={() => setLogoPreview(null)}>
+                                <Button variant="link" size="sm" className="text-destructive" type="button" onClick={() => setQrCodeLogoPreview(null)}>
                                     Remove Logo
                                 </Button>
                             </div>

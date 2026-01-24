@@ -481,9 +481,10 @@ function ActiveOrderCard({ order, settings, onUpdate, onEdit, restaurantId, star
         startTransition(async () => {
             try {
                 const formData = new FormData();
+                formData.append('orderId', order.id);
                 formData.append('status', status);
                 formData.append('restaurantId', restaurantId);
-                await updateOrderStatusAction(order.id, formData);
+                await updateOrderStatusAction(formData);
 
                 if (status === 'cancelled') {
                     toast({

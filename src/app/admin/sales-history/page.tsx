@@ -1,7 +1,7 @@
 
 
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Order, RemoteOrder, RestaurantSettings, KitchenUser, Branch } from '@/lib/definitions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,8 @@ export default function SalesHistoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [orderToPrint, setOrderToPrint] = useState<CombinedOrder | null>(null);
+  const invoiceRef = useRef<HTMLDivElement>(null);
 
   const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
 
@@ -74,8 +76,46 @@ export default function SalesHistoryPage() {
       setIsLoading(false);
     }
     fetchInitialData();
-    fetchInitialData();
   }, [user, isGlobalAdmin, getMainBranch, getSettings]);
+  
+  useEffect(() => {
+    if (orderToPrint && invoiceRef.current && settings) {
+        const content = invoiceRef.current;
+        const printWindow = window.open('', '', 'height=800,width=600');
+        if (printWindow) {
+            const printSize = settings.printSettings?.invoicePrintSize || 'a4';
+            const bodyStyle = printSize === 'a4' ? 'padding: 20px;' : 'padding: 0;';
+
+            printWindow.document.write('<html><head><title>Invoice</title>');
+
+            const styles = Array.from(document.styleSheets).map(sheet => {
+                try {
+                    if (sheet.href) {
+                        return `<link rel="stylesheet" href="${sheet.href}">`;
+                    }
+                    if (sheet.cssRules) {
+                        return `<style>${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}</style>`;
+                    }
+                } catch (e) {
+                    console.warn('Could not copy stylesheet for printing:', e);
+                }
+                return '';
+            }).join('\n');
+
+            printWindow.document.head.innerHTML += styles;
+            printWindow.document.write(`</head><body style="${bodyStyle}">`);
+            printWindow.document.write(content.innerHTML);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            setTimeout(() => {
+                printWindow.focus();
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+        }
+        setOrderToPrint(null);
+    }
+  }, [orderToPrint, settings]);
 
   const filteredOrders = useMemo(() => {
     if (!searchTerm) {
@@ -96,21 +136,7 @@ export default function SalesHistoryPage() {
   }, [allOrders, searchTerm]);
 
   const handlePrintInvoice = (order: CombinedOrder) => {
-    const printWindow = window.open('', '', 'height=800,width=600');
-    if (printWindow && settings) {
-      const invoiceElement = document.createElement('div');
-      const ReactDOMServer = require('react-dom/server');
-      invoiceElement.innerHTML = ReactDOMServer.renderToString(<Invoice order={order} settings={settings} />);
-
-      printWindow.document.write('<html><head><title>Invoice</title></head><body style="padding: 20px;">');
-      printWindow.document.body.innerHTML = invoiceElement.innerHTML;
-      printWindow.document.write('</body></html>');
-      printWindow.document.close();
-      setTimeout(() => {
-        printWindow.print();
-        window.close();
-      }, 250);
-    }
+    setOrderToPrint(order);
   };
 
   const handleDeleteOrder = async (orderId: string, orderType: 'Dine-in' | 'Remote') => {
@@ -211,7 +237,7 @@ export default function SalesHistoryPage() {
                         {canDelete && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="sm">
+                              <Button variant="destructive" size="sm" disabled={user.role === 'Admin'}>
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete
                               </Button>
@@ -248,6 +274,11 @@ export default function SalesHistoryPage() {
           </div>
         </CardContent>
       </Card>
+      <div className="hidden">
+        <div ref={invoiceRef}>
+            {orderToPrint && settings && <Invoice order={orderToPrint} settings={settings} />}
+        </div>
+      </div>
     </div>
   );
 }

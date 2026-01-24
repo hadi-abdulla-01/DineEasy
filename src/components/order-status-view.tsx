@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Order, OrderStatus, RestaurantSettings } from '@/lib/definitions';
 import { getOrderById } from '@/lib/data';
 import svgPaths from './svg-paths';
@@ -18,6 +19,7 @@ const statusSteps: { status: OrderStatus; label: string }[] = [
 
 export function OrderStatusView({ initialOrder, settings, tableId, restaurantId }: { initialOrder: Order, settings: RestaurantSettings, tableId: string, restaurantId: string }) {
     const [order, setOrder] = useState(initialOrder);
+    const invoiceRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (order.status === 'completed' || order.status === 'cancelled') {
@@ -49,30 +51,44 @@ export function OrderStatusView({ initialOrder, settings, tableId, restaurantId 
         });
 
         return () => unsubscribe();
-    }, [order.id, restaurantId]);
+    }, [order.id, order.status, restaurantId]);
 
     const handlePrint = () => {
-        const ReactDOMServer = require('react-dom/server');
-        const invoiceHtml = ReactDOMServer.renderToString(<Invoice order={order} settings={settings} />);
+        const content = invoiceRef.current;
+        if (!content) return;
 
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
+        const printWindow = window.open('', '', 'height=800,width=600');
+        if (printWindow) {
+            const printSize = settings.printSettings?.invoicePrintSize || 'a4';
+            const bodyStyle = printSize === 'a4' ? 'padding: 20px;' : 'padding: 0;';
 
-        const iframeDoc = iframe.contentDocument;
-        if (iframeDoc) {
-            iframeDoc.open();
-            iframeDoc.write('<html><head><title>Invoice</title></head><body style="padding: 20px;">');
-            iframeDoc.write(invoiceHtml);
-            iframeDoc.write('</body></html>');
-            iframeDoc.close();
+            printWindow.document.write('<html><head><title>Invoice</title>');
 
-            iframe.contentWindow?.focus();
-            iframe.contentWindow?.print();
+            const styles = Array.from(document.styleSheets).map(sheet => {
+                try {
+                    if (sheet.href) {
+                        return `<link rel="stylesheet" href="${sheet.href}">`;
+                    }
+                    if (sheet.cssRules) {
+                        return `<style>${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}</style>`;
+                    }
+                } catch (e) {
+                    console.warn('Could not copy stylesheet for printing:', e);
+                }
+                return '';
+            }).join('\n');
+            
+            printWindow.document.head.innerHTML += styles;
+            printWindow.document.write(`</head><body style="${bodyStyle}">`);
+            printWindow.document.write(content.innerHTML);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            setTimeout(() => {
+                printWindow.focus();
+                printWindow.print();
+                printWindow.close();
+            }, 500);
         }
-        setTimeout(() => {
-            document.body.removeChild(iframe);
-        }, 1000);
     };
 
     const currentStepIndex = statusSteps.findIndex(step => step.status === order.status);
@@ -82,6 +98,11 @@ export function OrderStatusView({ initialOrder, settings, tableId, restaurantId 
 
     return (
         <div className="relative w-full sm:max-w-[393px] min-h-screen bg-[var(--order-status-bg)] sm:rounded-[20px] overflow-hidden shadow-lg" style={{ fontFamily: "'League Spartan', sans-serif" }}>
+            <div className="hidden">
+                <div ref={invoiceRef}>
+                    <Invoice order={order} settings={settings} />
+                </div>
+            </div>
             {/* Yellow Header Background */}
             <div className="absolute inset-0">
                 <svg className="block w-full h-full" fill="none" preserveAspectRatio="none" viewBox="0 0 393 852">
