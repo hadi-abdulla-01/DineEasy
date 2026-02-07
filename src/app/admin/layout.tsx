@@ -14,20 +14,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   // Routes that should not use the dashboard layout
   const simpleLayout =
-    pathname.startsWith('/login') ||
     pathname.startsWith('/admin/superadmin');
 
   return (
     <FirebaseClientProvider>
       <AuthProvider>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-          {simpleLayout ? (
-            children
-          ) : (
-            <RestaurantProvider>
+          <RestaurantProvider>
+            {simpleLayout ? (
+              children
+            ) : (
               <DashboardLayout>{children}</DashboardLayout>
-            </RestaurantProvider>
-          )}
+            )}
+          </RestaurantProvider>
         </ThemeProvider>
       </AuthProvider>
     </FirebaseClientProvider>

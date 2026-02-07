@@ -14,11 +14,12 @@ import type { MenuItem, AddonGroup, AddonOption, RestaurantSettings } from "@/li
 import { placeholderImages } from "@/lib/placeholder-images";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
-import { PlusCircle, Trash2 } from "lucide-react";
+import { PlusCircle, Trash2, LoaderCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useRestaurantData } from "@/lib/client-data";
 import { useAuth } from "@/app/admin/auth-provider";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function EditMenuPage() {
     const params = useParams();
@@ -187,8 +188,29 @@ export default function EditMenuPage() {
         );
     }
 
-    if (!restaurantId || !item) {
-        return <div>Loading...</div>; // Wait for context and item
+    if (!restaurantId || !item || !settings) {
+        return (
+            <div className="space-y-6">
+                <Card>
+                    <CardHeader>
+                        <Skeleton className="h-8 w-64" />
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-24 w-full" />
+                        <div className="grid grid-cols-3 gap-4">
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-10 w-full" />
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader><Skeleton className="h-8 w-48" /></CardHeader>
+                    <CardContent><Skeleton className="h-40 w-full" /></CardContent>
+                </Card>
+            </div>
+        );
     }
 
     // Correctly scope categories to the current restaurant's items and settings

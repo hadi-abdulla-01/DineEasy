@@ -1,4 +1,5 @@
 
+
 'use client';
 import { getMenuItems, getTableById, getActiveOrders, getSettings, getOrderById, getCurrentSession } from "@/lib/data";
 import { OrderForm } from "@/components/order-form";
@@ -7,6 +8,7 @@ import type { Order, MenuItem, MealSession, RestaurantSettings } from "@/lib/def
 import { useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { OrderHeader } from "@/components/order-header";
+import { useAuth } from "@/app/admin/auth-provider";
 
 type CustomerInfo = {
     name: string;
@@ -20,6 +22,8 @@ export default function OrderPage() {
     const tableId = params.tableId as string;
     const addItems = searchParams.get('add_items') === 'true';
     const orderId = searchParams.get('order_id');
+    const { user: loggedInUser } = useAuth();
+    const restaurantIdFromUrl = searchParams.get('restaurantId');
 
     const [table, setTable] = useState<{ id: string, branchId: string, number: number, restaurantId?: string } | null>(null);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
@@ -28,100 +32,88 @@ export default function OrderPage() {
     const [activeOrderForCustomer, setActiveOrderForCustomer] = useState<Order | undefined>(undefined);
     const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        if (!tableId) return;
-
-        const storedCustomerInfo = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
-        if (storedCustomerInfo) {
-            try {
-                const info = JSON.parse(storedCustomerInfo);
-                if (info.phone) {
-                    setCustomerInfo(info);
-                } else {
-                    router.replace(`/order/${tableId}/welcome`);
-                }
-            } catch {
-                router.replace(`/order/${tableId}/welcome`);
-            }
-        } else {
-            router.replace(`/order/${tableId}/welcome`);
-        }
-    }, [tableId, router]);
-
     const [error, setError] = useState<string | null>(null);
+    
+    useEffect(() => {
+        if (!tableId) {
+            setIsLoading(false);
+            return;
+        };
+
+        const isTableDevice = loggedInUser?.role === 'Table' && loggedInUser.assignedTableId === tableId;
+
+        if (isTableDevice) {
+            // For a logged-in table device, bypass welcome screen.
+            setCustomerInfo({ name: `Table ${tableId}`, phone: `table-user-${tableId}` });
+        } else {
+            // Logic for regular QR code customers
+            const storedCustomerInfo = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
+            if (storedCustomerInfo) {
+                try {
+                    const info = JSON.parse(storedCustomerInfo);
+                    if (info.phone) {
+                        setCustomerInfo(info);
+                    } else {
+                        router.replace(`/order/${tableId}/welcome?restaurantId=${restaurantIdFromUrl}`);
+                    }
+                } catch {
+                    router.replace(`/order/${tableId}/welcome?restaurantId=${restaurantIdFromUrl}`);
+                }
+            } else {
+                router.replace(`/order/${tableId}/welcome?restaurantId=${restaurantIdFromUrl}`);
+            }
+        }
+    }, [tableId, loggedInUser, router, restaurantIdFromUrl]);
+
 
     useEffect(() => {
         if (!customerInfo || !tableId) return;
+
+        if (!restaurantIdFromUrl) {
+            setError("This page was loaded without a restaurant context. Please use a valid QR code.");
+            setIsLoading(false);
+            return;
+        }
+
 
         async function fetchData() {
             try {
                 setIsLoading(true);
                 setError(null);
-                const fetchedTable = await getTableById(tableId);
-                console.log(`[OrderPage] Fetched table result for ID ${tableId}:`, fetchedTable);
+                const fetchedTable = await getTableById(tableId, restaurantIdFromUrl);
 
                 if (!fetchedTable || !fetchedTable.branchId) {
-                    console.error(`[OrderPage] Table validation failed. Table: ${JSON.stringify(fetchedTable)}`);
                     setError("Table not found");
                     setIsLoading(false);
                     return;
                 }
-                // Ensure restaurantId is populated in state
+                
+                if (loggedInUser?.role === 'Table') {
+                    setCustomerInfo({ name: `Table ${fetchedTable.number}`, phone: `table-user-${tableId}` });
+                }
+
                 setTable({
                     id: fetchedTable.id,
                     branchId: fetchedTable.branchId,
                     number: fetchedTable.number,
-                    restaurantId: fetchedTable.restaurantId
+                    restaurantId: restaurantIdFromUrl
                 });
 
-                if (!customerInfo) {
-                    setError("Session expired");
-                    setIsLoading(false);
-                    return;
-                }
-                const currentCustomerInfo = customerInfo;
+                const targetRestaurantId = restaurantIdFromUrl;
 
-                // Use the restaurantId found from the table, or fallback to default if not present (logic in data.ts handle defaults)
-                // But generally fetchedTable.restaurantId should be set now.
-                // Use the restaurantId found from the table, or fallback to default if not present (logic in data.ts handle defaults)
-                // But generally fetchedTable.restaurantId should be set now.
-                const targetRestaurantId = fetchedTable.restaurantId || 'dineeasee-restaurant';
-                console.log(`[OrderPage] Using Restaurant ID: ${targetRestaurantId}`);
-
-                console.log("[OrderPage] Starting parallel data fetch...");
-                // Split logic to see what fails
-                // getSettings(fetchedTable.branchId, targetRestaurantId),
-                // getMenuItems(fetchedTable.branchId, targetRestaurantId),
-                // getCurrentSession(fetchedTable.branchId, targetRestaurantId),
-                // getActiveOrders(fetchedTable.branchId, targetRestaurantId)
-
-                const fetchedSettings = await getSettings(fetchedTable.branchId, targetRestaurantId);
-                console.log("[OrderPage] Fetched Settings", fetchedSettings ? "Success" : "Failed");
-
-                const allMenuItems = await getMenuItems(fetchedTable.branchId, targetRestaurantId);
-                console.log("[OrderPage] Fetched Menu Items", allMenuItems?.length);
-
-                const session = await getCurrentSession(fetchedTable.branchId, targetRestaurantId);
-                console.log("[OrderPage] Fetched Session", session ? session.name : "None");
-
-                const activeOrders = await getActiveOrders(fetchedTable.branchId, targetRestaurantId);
-                console.log("[OrderPage] Fetched Active Orders", activeOrders?.length);
-
-                /*
                 const [fetchedSettings, allMenuItems, session, activeOrders] = await Promise.all([
                     getSettings(fetchedTable.branchId, targetRestaurantId),
                     getMenuItems(fetchedTable.branchId, targetRestaurantId),
                     getCurrentSession(fetchedTable.branchId, targetRestaurantId),
                     getActiveOrders(fetchedTable.branchId, targetRestaurantId)
                 ]);
-                */
 
-                const existingOrder = activeOrders.find(order => order.tableId === tableId && order.customerPhone === currentCustomerInfo.phone);
-
-                if (existingOrder && !addItems) {
-                    router.replace(`/order/${tableId}/status/${existingOrder.id}`);
-                    return;
+                if (loggedInUser?.role !== 'Table') {
+                    const existingOrder = activeOrders.find(order => order.tableId === tableId && order.customerPhone === customerInfo.phone);
+                    if (existingOrder && !addItems) {
+                        router.replace(`/order/${tableId}/status/${existingOrder.id}?restaurantId=${restaurantIdFromUrl}`);
+                        return;
+                    }
                 }
 
                 setSettings(fetchedSettings);
@@ -129,10 +121,9 @@ export default function OrderPage() {
 
                 const availableMenuItems = allMenuItems.filter(item => {
                     if (!item.isAvailable) return false;
-                    if (!item.availableSessions || item.availableSessions.length === 0) {
+                    if (!session || !item.availableSessions || item.availableSessions.length === 0) {
                         return true;
                     }
-                    if (!session) return false;
                     return item.availableSessions.includes(session.id);
                 });
                 setMenuItems(availableMenuItems);
@@ -153,7 +144,7 @@ export default function OrderPage() {
 
         fetchData();
 
-    }, [customerInfo, tableId, router, addItems, orderId]);
+    }, [customerInfo, tableId, router, addItems, orderId, loggedInUser, restaurantIdFromUrl]);
 
     if (error) {
         return (

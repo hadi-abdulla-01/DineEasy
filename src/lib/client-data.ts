@@ -1,3 +1,4 @@
+
 /**
  * Client-side data access wrappers
  * These functions use the restaurant context to automatically pass the correct restaurant ID
@@ -14,12 +15,13 @@ import type {
     MenuItem,
     Order,
     RemoteOrder,
-    KitchenUser,
+    AppUser,
     RestaurantSettings,
     Branch,
     ActivityLog,
     Tax,
-    OrderItem
+    OrderItem,
+    Discount
 } from './definitions';
 
 /**
@@ -48,7 +50,7 @@ export function useRestaurantData() {
         deleteMenuItem: (id: string) => serverData.deleteMenuItem(id, restaurantId),
 
         // Orders
-        getOrders: (branchId?: string) => serverData.getOrders(branchId, restaurantId),
+        getOrders: (branchId?: string, dateRange?: { from: Date; to: Date }) => serverData.getOrders(branchId, restaurantId, dateRange),
         getOrderById: (id: string) => serverData.getOrderById(id, restaurantId),
         getOrdersByTableId: (tableId: string) => serverData.getOrdersByTableId(tableId, restaurantId),
         getActiveOrders: (branchId?: string) => serverData.getActiveOrders(branchId, restaurantId),
@@ -62,18 +64,18 @@ export function useRestaurantData() {
         updateFullOrder: (orderId: string, orderType: 'Dine-in' | 'Take-away' | 'Online', updateData: { items: OrderItem[], customerName?: string, customerPhone?: string, tableId?: string, paymentMethod?: 'cash' | 'card' | 'qr', address?: string, platform?: string, takeAwayTime?: string }) => serverData.updateFullOrder(orderId, orderType, updateData, restaurantId),
 
         // Remote Orders
-        getRemoteOrders: (branchId?: string) => serverData.getRemoteOrders(branchId, restaurantId),
+        getRemoteOrders: (branchId?: string, dateRange?: { from: Date; to: Date }) => serverData.getRemoteOrders(branchId, restaurantId, dateRange),
         getRemoteOrderById: (id: string) => serverData.getRemoteOrderById(id, restaurantId),
         addRemoteOrder: (order: any) => serverData.addRemoteOrder(order, restaurantId),
 
-        // Kitchen Users
-        getKitchenUsers: () => serverData.getKitchenUsers(restaurantId),
-        getKitchenUserById: (id: string) => serverData.getKitchenUserById(id, restaurantId),
-        getKitchenUserByUsername: (username: string) => serverData.getKitchenUserByUsername(username, restaurantId),
-        getKitchenUserByEmail: (email: string) => serverData.getKitchenUserByEmail(email, restaurantId),
-        createKitchenUser: (user: Omit<KitchenUser, 'id'>) => serverData.createKitchenUserInFirestore(user, restaurantId),
-        updateKitchenUser: (id: string, user: Partial<KitchenUser>) => serverData.updateKitchenUser(id, user, restaurantId),
-        deleteKitchenUser: (id: string) => serverData.deleteKitchenUser(id, restaurantId),
+        // Users
+        getUsers: () => serverData.getUsers(restaurantId),
+        getUserById: (id: string) => serverData.getUserById(id, restaurantId),
+        getUserByUsername: (username: string) => serverData.getUserByUsername(username, restaurantId),
+        getUserByEmail: (email: string) => serverData.getUserByEmail(email, restaurantId),
+        createUser: (user: Omit<AppUser, 'id'>) => serverData.createUserInFirestore(user, restaurantId),
+        updateUser: (id: string, user: Partial<AppUser>) => serverData.updateUser(id, user, restaurantId),
+        deleteUser: (id: string) => serverData.deleteUser(id, restaurantId),
 
         // Branches
         getBranches: () => serverData.getBranches(restaurantId),
@@ -84,9 +86,12 @@ export function useRestaurantData() {
         deleteBranch: (id: string) => serverData.deleteBranch(id, restaurantId),
 
         // Settings
-        getSettings: (branchId?: string) => serverData.getSettings(branchId, restaurantId),
+        getSettings: (branchId?: string, overrideRestaurantId?: string) => serverData.getSettings(branchId, overrideRestaurantId || restaurantId),
         updateSettings: (branchId: string | undefined, settings: Partial<RestaurantSettings>) =>
             serverData.updateSettings(branchId, settings, restaurantId),
+        
+        // Discounts
+        getDiscounts: (branchId: string) => serverData.getDiscounts(branchId, restaurantId),
 
         // Activity Logs
         logActivity: (userId: string, username: string, action: string, details: string) =>

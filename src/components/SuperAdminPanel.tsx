@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -20,6 +21,8 @@ import {
 import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
 import { createRestaurant, getAllRestaurants, deleteRestaurant } from '@/lib/restaurant-management';
+import Link from 'next/link';
+import type { AppUser } from '@/lib/definitions';
 
 export default function SuperAdminPanel() {
     const { logout } = useAuth();
@@ -55,6 +58,15 @@ export default function SuperAdminPanel() {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleRestaurantIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const sanitizedId = e.target.value
+            .toLowerCase()
+            .replace(/\s+/g, '-') // replace spaces with hyphens
+            .replace(/[^a-z0-9-]/g, '') // remove any other invalid characters
+            .replace(/--+/g, '-'); // collapse multiple hyphens
+        setRestaurantId(sanitizedId);
     };
 
     const handleCreateRestaurant = async (e: React.FormEvent) => {
@@ -258,9 +270,9 @@ export default function SuperAdminPanel() {
                                         <Label htmlFor="restaurantId">Restaurant ID</Label>
                                         <Input
                                             id="restaurantId"
-                                            placeholder="e.g., pizzapalace (lowercase, no spaces)"
+                                            placeholder="e.g., pizza-palace"
                                             value={restaurantId}
-                                            onChange={(e) => setRestaurantId(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                                            onChange={handleRestaurantIdChange}
                                             required
                                         />
                                         <p className="text-xs text-slate-500">
@@ -334,48 +346,53 @@ export default function SuperAdminPanel() {
                         </Card>
                     ) : (
                         restaurants.map((restaurant) => {
-                            // Generate admin email from restaurant ID
                             const adminEmail = `admin@${restaurant.id}.dineezee`;
 
                             return (
-                                <Card key={restaurant.id} className="hover:shadow-lg transition-shadow">
-                                    <CardHeader>
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <CardTitle className="flex items-center gap-2">
-                                                    <Building2 className="w-5 h-5 text-red-600" />
-                                                    {restaurant.name}
-                                                </CardTitle>
-                                                <p className="text-sm text-slate-500 mt-1">Restaurant</p>
+                                <Link href={`/admin/superadmin/restaurants/${restaurant.id}`} key={restaurant.id} className="block rounded-lg transition-all hover:shadow-xl hover:-translate-y-1">
+                                    <Card className="h-full cursor-pointer">
+                                        <CardHeader>
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1">
+                                                    <CardTitle className="flex items-center gap-2">
+                                                        <Building2 className="w-5 h-5 text-red-600" />
+                                                        {restaurant.name}
+                                                    </CardTitle>
+                                                    <p className="text-sm text-slate-500 mt-1">Restaurant</p>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleDeleteRestaurant(restaurant.id);
+                                                    }}
+                                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
                                             </div>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleDeleteRestaurant(restaurant.id)}
-                                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3">
-                                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                            <Mail className="w-4 h-4" />
-                                            <span className="font-mono text-xs">
-                                                {adminEmail}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                            <Users className="w-4 h-4" />
-                                            <span>
-                                                Admin can create branches & users
-                                            </span>
-                                        </div>
-                                        <div className="pt-3 border-t">
-                                            <p className="text-xs text-slate-500">Restaurant ID: {restaurant.id}</p>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3">
+                                            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                                                <Mail className="w-4 h-4" />
+                                                <span className="font-mono text-xs">
+                                                    {adminEmail}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                                                <Users className="w-4 h-4" />
+                                                <span>
+                                                    Admin can create branches & users
+                                                </span>
+                                            </div>
+                                            <div className="pt-3 border-t">
+                                                <p className="text-xs text-slate-500">Restaurant ID: {restaurant.id}</p>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </Link>
                             );
                         })
                     )}

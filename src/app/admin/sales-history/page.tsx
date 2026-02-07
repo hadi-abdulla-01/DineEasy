@@ -2,7 +2,7 @@
 
 'use client';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import type { Order, RemoteOrder, RestaurantSettings, KitchenUser, Branch } from '@/lib/definitions';
+import type { Order, RemoteOrder, RestaurantSettings, AppUser, Branch } from '@/lib/definitions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';

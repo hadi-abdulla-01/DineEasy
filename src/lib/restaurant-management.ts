@@ -7,8 +7,11 @@ import {
     doc,
     setDoc,
     serverTimestamp,
+    getDocs,
+    getDoc,
+    deleteDoc
 } from 'firebase/firestore';
-import type { KitchenUser } from './definitions';
+import type { AppUser } from './definitions';
 
 /**
  * Create a new restaurant (tenant) in the multi-tenant SaaS structure
@@ -17,7 +20,7 @@ import type { KitchenUser } from './definitions';
 export async function createRestaurant(
     restaurantId: string,
     restaurantName: string,
-    adminUser: Omit<KitchenUser, 'id'>
+    adminUser: Omit<AppUser, 'id'>
 ): Promise<{ success: boolean; restaurantId: string; error?: string }> {
     try {
         const firestore = initializeFirebase().firestore;
@@ -97,7 +100,6 @@ export async function getAllRestaurants(): Promise<Array<{
     try {
         const firestore = initializeFirebase().firestore;
         const restaurantsRef = collection(firestore, 'restaurants');
-        const { getDocs } = await import('firebase/firestore');
         const snapshot = await getDocs(restaurantsRef);
 
         return snapshot.docs.map(doc => {
@@ -116,19 +118,41 @@ export async function getAllRestaurants(): Promise<Array<{
 }
 
 /**
+ * Get a single restaurant by its ID
+ */
+export async function getRestaurantById(restaurantId: string): Promise<{ id: string; name: string } | null> {
+    try {
+        const firestore = initializeFirebase().firestore;
+        const restaurantRef = doc(firestore, 'restaurants', restaurantId);
+        const docSnap = await getDoc(restaurantRef);
+
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            return {
+                id: docSnap.id,
+                name: data.name || 'Unnamed Restaurant',
+            };
+        }
+        return null;
+    } catch (error) {
+        console.error('Error getting restaurant by ID:', error);
+        return null;
+    }
+}
+
+/**
  * Delete a restaurant and all its data
  */
 export async function deleteRestaurant(restaurantId: string): Promise<{ success: boolean; error?: string }> {
     try {
         const firestore = initializeFirebase().firestore;
-        const { deleteDoc, getDocs, collection: firestoreCollection } = await import('firebase/firestore');
 
         // 1. Delete all users from Firebase Authentication
         try {
             const { getAdminAuth } = await import('@/firebase/admin');
             const adminAuth = getAdminAuth();
             if (adminAuth) {
-                const usersRef = firestoreCollection(firestore, `restaurants/${restaurantId}/kitchenUsers`);
+                const usersRef = collection(firestore, `restaurants/${restaurantId}/kitchenUsers`);
                 const usersSnapshot = await getDocs(usersRef);
 
                 const authDeletePromises = usersSnapshot.docs.map(async (doc) => {
@@ -153,10 +177,10 @@ export async function deleteRestaurant(restaurantId: string): Promise<{ success:
         const subcollections = ['branches', 'kitchenUsers', 'menuItems', 'orders', 'remoteOrders', 'tables', 'activityLogs'];
 
         for (const subcollection of subcollections) {
-            const subcollectionRef = firestoreCollection(firestore, `restaurants/${restaurantId}/${subcollection}`);
+            const subcollectionRef = collection(firestore, `restaurants/${restaurantId}/${subcollection}`);
             const snapshot = await getDocs(subcollectionRef);
 
-            const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+            const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
             await Promise.all(deletePromises);
         }
 

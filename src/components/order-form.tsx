@@ -294,20 +294,21 @@ function MenuDisplay({ isCustomerFacing, menu, onSelectItem, getQuantity, onAddT
 
 export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existingOrder, currentSession, customerInfo, settings, restaurantId }: { menu: MenuItem[]; tableId: string, isCustomerFacing: boolean, existingOrder?: Order, currentSession?: MealSession | null, customerInfo?: { name: string, phone: string }, settings: RestaurantSettings | null, restaurantId?: string }) {
   const [cart, setCart] = useState<OrderItem[]>([]);
-  // const [settings, setSettings] = useState<RestaurantSettings | null>(null); // Removed local state
   const [table, setTable] = useState<{ id: string, branchId: string } | null>(null);
   const [selectedItemForDetails, setSelectedItemForDetails] = useState<MenuItem | null>(null);
   const [selectedItemForAddons, setSelectedItemForAddons] = useState<MenuItem | null>(null);
 
   useEffect(() => {
     async function fetchData() {
-      const fetchedTable = await getTableById(tableId);
-      if (fetchedTable) {
-        setTable({ id: fetchedTable.id, branchId: fetchedTable.branchId });
-      }
+        if (restaurantId) {
+            const fetchedTable = await getTableById(tableId, restaurantId);
+            if (fetchedTable) {
+                setTable({ id: fetchedTable.id, branchId: fetchedTable.branchId });
+            }
+        }
     }
     fetchData();
-  }, [tableId]);
+  }, [tableId, restaurantId]);
 
 
   const getAddonCombinationId = (selectedAddons?: Record<string, AddonOption>): string => {
@@ -461,7 +462,7 @@ export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existi
         onRemoveFromCart={removeFromCart}
         onNotesChange={handleNoteChangeForCartItem}
         onOrderPlaced={handleOrderPlaced}
-        existingOrderId={existingOrder?.id}
+        existingOrder={existingOrder}
         branchId={table?.branchId}
         settings={settings}
         customerInfo={customerInfo}

@@ -3,7 +3,7 @@
  * These are client-safe helper functions
  */
 
-const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || process.env.SUPER_ADMIN_EMAIL || 'your-email@gmail.com';
+const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'your-email@gmail.com';
 
 /**
  * Generate email format for users

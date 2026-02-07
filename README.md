@@ -97,7 +97,7 @@ A comprehensive, multi-tenant restaurant management platform with QR code orderi
    
    Create a `.env.local` file in the root directory:
    ```env
-   # Firebase Configuration
+   # Firebase Configuration (Client-side)
    NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
    NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
@@ -106,12 +106,11 @@ A comprehensive, multi-tenant restaurant management platform with QR code orderi
    NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
    NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
 
-   # Admin Configuration
-   FIREBASE_ADMIN_PROJECT_ID=your_project_id
-   FIREBASE_ADMIN_CLIENT_EMAIL=your_client_email
-   FIREBASE_ADMIN_PRIVATE_KEY=your_private_key
+   # Firebase Admin Configuration (Server-side)
+   FIREBASE_SERVICE_ACCOUNT_KEY={"type":"service_account", ...}
 
    # App Configuration
+   NEXT_PUBLIC_SUPER_ADMIN_EMAIL=your-super-admin@example.com
    NEXT_PUBLIC_APP_URL=http://localhost:3000
    ```
 
@@ -126,7 +125,7 @@ A comprehensive, multi-tenant restaurant management platform with QR code orderi
 
 ---
 
-## � Environment Setup
+##  Environment Setup
 
 ### Firebase Project Setup
 
@@ -140,12 +139,12 @@ A comprehensive, multi-tenant restaurant management platform with QR code orderi
 2. **Get Firebase Configuration**
    - Go to Project Settings → General
    - Scroll to "Your apps" → Web app
-   - Copy the configuration values to `.env.local`
+   - Copy the configuration values to your `.env.local` file (prefixed with `NEXT_PUBLIC_`).
 
 3. **Set up Firebase Admin SDK**
    - Go to Project Settings → Service Accounts
-   - Generate new private key
-   - Add credentials to `.env.local`
+   - Click "Generate new private key"
+   - Copy the entire contents of the downloaded JSON file and set it as the value for `FIREBASE_SERVICE_ACCOUNT_KEY` in your `.env.local` file. It should be a single line string.
 
 4. **Deploy Cloud Functions**
    ```bash
@@ -247,7 +246,7 @@ dineezee/
 
 ---
 
-## � User Roles
+##  User Roles
 
 ### Super Admin
 - Full system access
@@ -291,7 +290,7 @@ dineezee/
 3. **Set environment variables**
    - Go to Vercel Dashboard
    - Project Settings → Environment Variables
-   - Add all variables from `.env.local`
+   - Add all variables from your `.env.local` file. Make sure to set `NEXT_PUBLIC_SUPER_ADMIN_EMAIL` to your desired super admin email address.
 
 ### Firebase Hosting (Alternative)
 

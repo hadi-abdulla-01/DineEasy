@@ -116,15 +116,19 @@ export default function MenuPerformancePage() {
 
     useEffect(() => {
         async function fetchDataForBranch() {
-            if (!branchFilter) return;
+            if (!branchFilter || !date?.from) return;
             setIsLoading(true);
             
             const targetBranchId = branchFilter === 'all' ? undefined : branchFilter;
+            const dateRange = {
+                from: startOfDay(date.from),
+                to: date.to ? endOfDay(date.to) : endOfDay(date.from),
+            };
 
             const [fetchedSettings, fetchedOrders, fetchedRemoteOrders, fetchedMenuItems] = await Promise.all([
                 getSettings(targetBranchId),
-                getOrders(targetBranchId),
-                getRemoteOrders(targetBranchId),
+                getOrders(targetBranchId, dateRange),
+                getRemoteOrders(targetBranchId, dateRange),
                 getMenuItems(targetBranchId)
             ]);
 
@@ -138,20 +142,12 @@ export default function MenuPerformancePage() {
             setIsLoading(false);
         }
         fetchDataForBranch();
-    }, [branchFilter, getSettings, getOrders, getRemoteOrders, getMenuItems]);
+    }, [branchFilter, date, getSettings, getOrders, getRemoteOrders, getMenuItems]);
 
     const performanceData: PerformanceCategories = useMemo(() => {
         const itemStats: { [key: string]: { name: string, quantity: number, revenue: number } } = {};
         
-        const filteredOrders = allOrders.filter(order => {
-            if (!date?.from) return false;
-            const orderDate = new Date(order.createdAt);
-            const fromDate = startOfDay(date.from);
-            const toDate = date.to ? endOfDay(date.to) : endOfDay(date.from);
-            return orderDate >= fromDate && orderDate <= toDate;
-        });
-
-        filteredOrders.forEach(order => {
+        allOrders.forEach(order => {
             order.items.forEach(item => {
                 if (item.status === 'cancelled') return;
                 
@@ -201,7 +197,7 @@ export default function MenuPerformancePage() {
 
         return categories;
 
-    }, [allOrders, menuItems, date]);
+    }, [allOrders, menuItems]);
 
     if (isLoading || !settings || !user) {
         return (

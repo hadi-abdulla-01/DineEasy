@@ -19,19 +19,62 @@ import type { RestaurantSettings, Branch } from "@/lib/definitions";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "../auth-provider";
 import { useRestaurantData } from "@/lib/client-data";
+import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 
-function MenuItemList({ items, onToggle, settings, restaurantId }: { items: MenuItem[], onToggle: () => void, settings: RestaurantSettings | null, restaurantId: string }) {
+function MenuItemList({ items, setItems, settings, restaurantId }: { items: MenuItem[], setItems: React.Dispatch<React.SetStateAction<MenuItem[]>>, settings: RestaurantSettings | null, restaurantId: string }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
+  const { toast } = useToast();
 
   const handleAvailabilityToggle = async (itemId: string, currentAvailability: boolean) => {
-    await toggleMenuItemAvailabilityAction(itemId, !currentAvailability, restaurantId);
-    onToggle();
+    // Optimistic UI update
+    setItems(prevItems =>
+      prevItems.map(item =>
+        item.id === itemId ? { ...item, isAvailable: !currentAvailability } : item
+      )
+    );
+
+    try {
+      await toggleMenuItemAvailabilityAction(itemId, !currentAvailability, restaurantId);
+    } catch (error) {
+      // Revert on error
+      setItems(prevItems =>
+        prevItems.map(item =>
+          item.id === itemId ? { ...item, isAvailable: currentAvailability } : item
+        )
+      );
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: "Could not update item availability. Please try again.",
+      });
+    }
   }
 
   const handleAddonToggle = async (itemId: string, currentAddonStatus: boolean) => {
-    await toggleMenuItemAddonAction(itemId, !!currentAddonStatus, restaurantId);
-    onToggle();
+    // Optimistic UI update
+    setItems(prevItems =>
+      prevItems.map(item =>
+        item.id === itemId ? { ...item, isAddon: !currentAddonStatus } : item
+      )
+    );
+
+    try {
+      await toggleMenuItemAddonAction(itemId, !currentAddonStatus, restaurantId);
+    } catch (error) {
+      // Revert on error
+      setItems(prevItems =>
+        prevItems.map(item =>
+          item.id === itemId ? { ...item, isAddon: currentAddonStatus } : item
+        )
+      );
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: "Could not update item add-on status.",
+      });
+    }
   }
 
   const filteredItems = items.filter(item => {
@@ -157,9 +200,9 @@ export default function MenuManagementPage() {
   const [branchId, setBranchId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [refetchToggle, setRefetchToggle] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const fetchItemsAndSettings = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (!branchId || !restaurantId) return;
     setError(null);
     try {
@@ -172,41 +215,54 @@ export default function MenuManagementPage() {
     } catch (err) {
       console.error("Failed to fetch menu items and settings:", err);
       setError("Failed to load menu data.");
+    } finally {
+        setIsLoading(false);
     }
   }, [branchId, restaurantId, getMenuItems, getSettings]);
 
 
   useEffect(() => {
-    async function loadData() {
-      if (!user || !restaurantId) return;
+    async function loadInitialBranch() {
+      if (!user || !restaurantId) {
+          setIsLoading(false);
+          return
+      };
+      
+      setIsLoading(true);
       try {
-        let activeBranchId = user.branchId || null; // Use explicit branch if user is branch-locked
+        let activeBranchId = user.branchId || null;
 
         if (!activeBranchId) {
           const mainBranch = await getMainBranch();
           activeBranchId = mainBranch?.id || null;
         }
-
+        
         setBranchId(activeBranchId);
+
+        if (!activeBranchId) {
+            setIsLoading(false); // No branch found, stop loading
+        }
       } catch (err) {
         console.error("Error loading initial data:", err);
         setError("Failed to initialize menu management.");
+        setIsLoading(false);
       }
     }
-    loadData();
+    loadInitialBranch();
   }, [user, restaurantId, getMainBranch]);
 
   useEffect(() => {
     if (branchId) {
-      fetchItemsAndSettings();
+      fetchData();
     }
-  }, [branchId, fetchItemsAndSettings, refetchToggle]);
+  }, [branchId, fetchData]);
 
 
   const categories = settings?.menuCategories || [];
 
   const handleAddMenuItem = async (formData: FormData) => {
     setIsSubmitting(true);
+    setError(null);
     try {
       if (previewImage) {
         formData.append('image', previewImage);
@@ -230,9 +286,9 @@ export default function MenuManagementPage() {
       }
 
       const newItem = await addMenuItemAction(formData);
-
+      
       if (newItem) {
-        setRefetchToggle(prev => !prev);
+        setMenuItems(prev => [...prev, newItem].sort((a, b) => a.name.localeCompare(b.name)));
         formRef.current?.reset();
         setCategoryValue("");
         setPreviewImage(null);
@@ -240,7 +296,7 @@ export default function MenuManagementPage() {
           fileInputRef.current.value = "";
         }
       } else {
-        setRefetchToggle(prev => !prev);
+        setError("Failed to add item, please check your inputs.");
       }
 
     } catch (error) {
@@ -251,14 +307,41 @@ export default function MenuManagementPage() {
     }
   };
 
-  if (!user) return <div>Loading...</div>;
+  if (isLoading) {
+       return (
+        <div className="space-y-8">
+            <Card>
+                <CardHeader>
+                    <Skeleton className="h-8 w-48" />
+                    <Skeleton className="h-4 w-64 mt-2" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <Skeleton className="h-10" />
+                        <Skeleton className="h-10" />
+                    </div>
+                    <Skeleton className="h-20" />
+                    <Skeleton className="h-10 w-24" />
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <Skeleton className="h-8 w-32" />
+                </CardHeader>
+                <CardContent>
+                   <Skeleton className="h-40 w-full" />
+                </CardContent>
+            </Card>
+        </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
       {error && (
         <div className="bg-destructive/15 text-destructive px-4 py-3 rounded-md flex items-center justify-between">
           <p>{error}</p>
-          <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>Retry</Button>
+          <Button variant="ghost" size="sm" onClick={() => fetchData()}>Retry</Button>
         </div>
       )}
       <Card className="bg-card">
@@ -389,7 +472,7 @@ export default function MenuManagementPage() {
             <Separator className="my-4" />
 
             {/* Session Availability */}
-            {settings?.mealSessions && settings.mealSessions.length > 0 ? (
+            {settings?.mealSessions && settings.mealSessions.length > 0 && (
               <div className="space-y-4">
                 <h3 className="font-semibold text-lg">Session Availability</h3>
                 <p className="text-sm text-muted-foreground">
@@ -416,17 +499,7 @@ export default function MenuManagementPage() {
                   ))}
                 </div>
               </div>
-            ) : settings === null ? (
-              <div className="space-y-4">
-                <div className="h-7 w-48 bg-muted animate-pulse rounded" />
-                <div className="h-4 w-full bg-muted animate-pulse rounded" />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
-                  ))}
-                </div>
-              </div>
-            ) : null}
+            )}
 
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Adding..." : "Add Item"}
@@ -441,7 +514,7 @@ export default function MenuManagementPage() {
           <CardDescription>Search for items and toggle their availability or add-on status.</CardDescription>
         </CardHeader>
         <CardContent>
-          <MenuItemList items={menuItems} onToggle={() => setRefetchToggle(prev => !prev)} settings={settings} restaurantId={restaurantId} />
+          <MenuItemList items={menuItems} setItems={setMenuItems} settings={settings} restaurantId={restaurantId} />
         </CardContent>
       </Card>
     </div>

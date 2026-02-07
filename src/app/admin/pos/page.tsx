@@ -1,71 +1,125 @@
-
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef, useTransition } from 'react';
-import type { MenuItem, RestaurantSettings, OrderItem, Order, Branch, Table, RemoteOrder, CustomerDetails, AddonOption } from '@/lib/definitions';
+import { useRouter } from 'next/navigation';
+import type { MenuItem, RestaurantSettings, OrderItem, Order, Branch, Table, RemoteOrder, CustomerDetails, AddonOption, Discount } from '@/lib/definitions';
 import { useRestaurantData } from '@/lib/client-data';
 import { useAuth } from '../auth-provider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Image from 'next/image';
 import { placeholderImages } from '@/lib/placeholder-images';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
-import { LoaderCircle, PlusCircle, MinusCircle, Trash2, User, Phone, Hash, CreditCard, Banknote, QrCode, Utensils, Search, Globe, ShoppingBag, Home, Clock, XCircle, CheckCircle, Pencil, Building2, Grid3x3, Maximize, Minimize, CaseUpper, Delete, X, IceCream, Beef, Wine, Leaf, CircleDot } from 'lucide-react';
+import { LoaderCircle, PlusCircle, MinusCircle, Search, Globe, ShoppingBag, Utensils, ChevronRight, ChevronLeft, Beef, Leaf, Wine, Grid3x3, Drumstick, IceCream, DollarSign, CreditCard, Maximize, Minimize, X } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import Link from 'next/link';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { OrderStatusBadge } from '@/components/order-status-badge';
-import { formatDistanceInTimezone } from '@/lib/format-date';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { createOrderAction, updateOrderStatusAction } from "@/lib/actions";
+import { createOrderAction } from "@/lib/actions";
 import { Textarea } from '@/components/ui/textarea';
-import dynamic from 'next/dynamic';
 import { AddonDialog } from '@/components/addon-dialog';
-
-
-const DraggableTableLayout = dynamic(() => import('@/components/draggable-table-layout'), {
-    ssr: false,
-    loading: () => <div className="flex h-full items-center justify-center"><LoaderCircle className="h-10 w-10 animate-spin text-muted-foreground" /></div>
-});
-
+import { Progress } from '@/components/ui/progress';
+import { format } from 'date-fns';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 type OrderWithTable = Order & { table?: Table };
-type RemoteOrderWithTable = RemoteOrder & { table?: Table }; // Just for type consistency
+type RemoteOrderWithTable = RemoteOrder & { table?: Table };
 type CombinedOrderWithTable = OrderWithTable | RemoteOrderWithTable;
 
+const ScrollableContainer = ({ children, className = "" }: { children: React.ReactNode, className?: string }) => {
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
 
-const CategoryButton = ({ icon, label, selected, onClick }: { icon: React.ReactNode, label: string, selected: boolean, onClick: () => void }) => (
+    const checkScroll = () => {
+        if (scrollRef.current) {
+            const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+            setCanScrollLeft(scrollLeft > 0);
+            setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1);
+        }
+    };
+
+    useEffect(() => {
+        checkScroll();
+        const scrollElement = scrollRef.current;
+        if (scrollElement) {
+            scrollElement.addEventListener('scroll', checkScroll);
+            window.addEventListener('resize', checkScroll);
+            return () => {
+                scrollElement.removeEventListener('scroll', checkScroll);
+                window.removeEventListener('resize', checkScroll);
+            };
+        }
+    }, [children]);
+
+    const scroll = (direction: 'left' | 'right') => {
+        if (scrollRef.current) {
+            const scrollAmount = 300;
+            scrollRef.current.scrollBy({
+                left: direction === 'left' ? -scrollAmount : scrollAmount,
+                behavior: 'smooth'
+            });
+        }
+    };
+
+    return (
+        <div className="relative group">
+            {canScrollLeft && (
+                <button
+                    onClick={() => scroll('left')}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white dark:bg-gray-800 shadow-lg rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-100 dark:hover:bg-gray-700"
+                    aria-label="Scroll left"
+                >
+                    <ChevronLeft className="w-5 h-5" />
+                </button>
+            )}
+            <div ref={scrollRef} className={cn("overflow-x-auto scrollbar-hide", className)}>
+                {children}
+            </div>
+            {canScrollRight && (
+                <button
+                    onClick={() => scroll('right')}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white dark:bg-gray-800 shadow-lg rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-100 dark:hover:bg-gray-700"
+                    aria-label="Scroll right"
+                >
+                    <ChevronRight className="w-5 h-5" />
+                </button>
+            )}
+        </div>
+    );
+};
+
+const CategoryButton = ({ icon, label, count, selected, onClick }: { icon: React.ReactNode, label: string, count: number, selected: boolean, onClick: () => void }) => (
     <button
         onClick={onClick}
         className={cn(
-            "flex flex-col items-center justify-center gap-2 p-3 rounded-lg w-20 h-20 transition-all duration-200",
+            "flex items-center gap-2 p-2 rounded-lg transition-colors duration-200 border",
             selected
-                ? 'bg-pink-600 text-white shadow-md scale-105'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-pink-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+                ? 'bg-gray-800 text-white border-gray-800 dark:bg-gray-700 dark:border-gray-600'
+                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 border-gray-200 dark:border-gray-700'
         )}
     >
-        <div className="w-6 h-6 flex items-center justify-center">
-            {icon}
+        <div className={cn("w-6 h-6 flex items-center justify-center rounded-md", selected ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300')}>
+            {React.cloneElement(icon as React.ReactElement, { className: 'w-4 h-4' })}
         </div>
-        <span className="text-xs font-medium">{label}</span>
+        <div className='text-left'>
+            <span className="text-xs font-semibold">{label}</span>
+            <p className={cn("text-[10px]", selected ? "text-white/70" : "text-muted-foreground")}>{count} items</p>
+        </div>
     </button>
 )
 
-// POSMenuGrid Component
 function POSMenuGrid({
     items,
     onAddToCart,
     onRemoveFromCart,
     getQuantity,
     settings,
-    cart
+    cart,
+    discounts,
 }: {
     items: MenuItem[],
     onAddToCart: (item: MenuItem) => void,
@@ -73,23 +127,42 @@ function POSMenuGrid({
     getQuantity: (itemId: string) => number,
     settings: RestaurantSettings | null,
     cart: OrderItem[],
+    discounts: Discount[],
 }) {
+
+    const getActiveDiscount = (item: MenuItem): Discount | null => {
+        const now = new Date();
+        const activeDiscounts = discounts.filter(d => {
+            if (!d.isActive) return false;
+            const startDate = d.startDate ? new Date(d.startDate) : null;
+            const endDate = d.endDate ? new Date(d.endDate) : null;
+            if (startDate && now < startDate) return false;
+            if (endDate && now > endDate) return false;
+            return true;
+        });
+
+        const itemDiscount = activeDiscounts.find(d => d.applicability === 'items' && d.applicableItems?.includes(item.id));
+        if (itemDiscount) return itemDiscount;
+
+        const categoryDiscount = activeDiscounts.find(d => d.applicability === 'categories' && d.applicableCategories?.includes(item.category));
+        if (categoryDiscount) return categoryDiscount;
+
+        return null;
+    }
+
+
     if (!settings) {
         return <p>Loading settings...</p>;
     }
-    const currencySymbol = settings.currencySymbol || '$';
-    const currencyDecimalPlaces = settings.currencyDecimalPlaces ?? 2;
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 pr-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {items.map((item) => {
                 const image = placeholderImages.find(p => p.id === item.imageId);
                 const imageSrc = item.imageId?.startsWith('data:image') ? item.imageId : image?.imageUrl;
                 const hasAddons = item.addonGroups && item.addonGroups.length > 0;
-                const totalQuantity = cart.filter(cartItem => cartItem.menuItemId === item.id).reduce((sum, i) => sum + i.quantity, 0);
-
-                // For simple items (no addons), the quantity is the count of the base item.
                 const simpleItemQuantity = hasAddons ? 0 : cart.find(cartItem => cartItem.menuItemId === item.id)?.quantity || 0;
+                const discount = getActiveDiscount(item);
 
                 return (
                     <Card
@@ -102,28 +175,29 @@ function POSMenuGrid({
                             ) : (
                                 <div className="text-xs text-muted-foreground p-2 text-center">No image</div>
                             )}
-                            {totalQuantity > 0 && (
-                                <div className="absolute top-2 left-2 bg-pink-600 text-white rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold shadow-lg">
-                                    {totalQuantity}
+                            {discount && discount.type === 'percentage' && (
+                                <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
+                                    -{discount.value}%
                                 </div>
                             )}
                         </button>
-                        <div className="p-3 text-center flex flex-col flex-grow justify-between">
-                            <p className="text-sm font-semibold leading-tight line-clamp-2 mb-2 h-10 text-gray-900 dark:text-gray-100">{item.name}</p>
-                            <div className="flex justify-between items-center mt-auto">
-                                <p className="text-sm font-bold text-pink-600">{settings.currencySymbol}{item.price.toFixed(settings.currencyDecimalPlaces)}</p>
-                                {hasAddons ? (
-                                    <Button size="sm" variant="outline" className="text-pink-600 border-pink-600 hover:bg-pink-50 hover:text-pink-700" onClick={() => onAddToCart(item)}>
-                                        Customize
-                                    </Button>
-                                ) : simpleItemQuantity > 0 ? (
-                                    <div className="flex items-center gap-1">
-                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-pink-600 hover:bg-pink-100" onClick={() => onRemoveFromCart(item)}><MinusCircle className="h-5 w-5" /></Button>
-                                        <span className="font-bold text-lg w-5 text-center">{simpleItemQuantity}</span>
-                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-pink-600 hover:bg-pink-100" onClick={() => onAddToCart(item)}><PlusCircle className="h-5 w-5" /></Button>
+                        <div className="p-3 text-left flex flex-col flex-grow justify-between">
+                            <div>
+                                <p className="text-sm font-semibold leading-tight text-gray-900 dark:text-gray-100 line-clamp-1">{item.name}</p>
+                                <p className="text-sm text-primary font-bold mt-1">{settings.currencySymbol}{item.price.toFixed(settings.currencyDecimalPlaces)}</p>
+                                <p className="text-xs text-muted-foreground mt-1 h-7 line-clamp-2">{item.description}</p>
+                            </div>
+                            <div className="flex justify-between items-center mt-2">
+                                {simpleItemQuantity > 0 ? (
+                                    <div className="flex items-center gap-2 w-full justify-between">
+                                        <Button size="icon" variant="outline" className="h-7 w-7 rounded-full" onClick={() => onRemoveFromCart(item)}><MinusCircle className="h-4 w-4" /></Button>
+                                        <span className="font-bold text-base w-8 text-center">{simpleItemQuantity}</span>
+                                        <Button size="icon" variant="outline" className="h-7 w-7 rounded-full" onClick={() => onAddToCart(item)}><PlusCircle className="h-4 w-4" /></Button>
                                     </div>
                                 ) : (
-                                    <Button size="sm" variant="outline" className="text-pink-600 border-pink-600 hover:bg-pink-50 hover:text-pink-700" onClick={() => onAddToCart(item)}>Add</Button>
+                                    <Button size="sm" variant="outline" className="w-full text-primary border-primary/50 hover:bg-primary/5 hover:text-primary h-8" onClick={() => onAddToCart(item)}>
+                                        {hasAddons ? 'Customize' : 'Add to cart'}
+                                    </Button>
                                 )}
                             </div>
                         </div>
@@ -134,13 +208,12 @@ function POSMenuGrid({
     );
 }
 
-
-// POSCart Component
 function POSCart({
     cart,
+    menuItems,
     settings,
     onUpdateQuantity,
-    onPlaceOrder,
+    onProceedToPayment,
     tables,
     orderType,
     setOrderType,
@@ -157,19 +230,18 @@ function POSCart({
     takeAwayTime,
     setTakeAwayTime,
     orderToUpdate,
-    onClearEdit,
+    onClearCart,
     orderNotes,
     setOrderNotes,
-    onItemNoteChange,
-    onInputDoubleClick,
     discount,
     setDiscount,
     isSubmitting,
 }: {
     cart: OrderItem[];
+    menuItems: MenuItem[];
     settings: RestaurantSettings | null;
     onUpdateQuantity: (orderItemId: string, newQuantity: number) => void;
-    onPlaceOrder: (discount: number) => void;
+    onProceedToPayment: () => void;
     tables: Table[];
     orderType: 'Dine-in' | 'Take-away' | 'Online';
     setOrderType: (type: 'Dine-in' | 'Take-away' | 'Online') => void;
@@ -186,23 +258,23 @@ function POSCart({
     takeAwayTime: string;
     setTakeAwayTime: (time: string) => void;
     orderToUpdate: CombinedOrderWithTable | null;
-    onClearEdit: () => void;
+    onClearCart: () => void;
     orderNotes: string;
     setOrderNotes: (notes: string) => void;
-    onItemNoteChange: (orderItemId: string, note: string) => void;
-    onInputDoubleClick: (e: React.MouseEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
     discount: number;
-    setDiscount: (value: number) => void;
+    setDiscount: (d: number) => void;
     isSubmitting: boolean;
 }) {
-
-    useEffect(() => {
+    const handleOrderTypeChange = (newOrderType: 'Dine-in' | 'Take-away' | 'Online') => {
         if (orderToUpdate) {
-            setDiscount(orderToUpdate.discount || 0);
+            if (window.confirm('You are editing an order. Do you want to discard the changes and start a new order?')) {
+                onClearCart();
+                setOrderType(newOrderType);
+            }
         } else {
-            setDiscount(0);
+            setOrderType(newOrderType);
         }
-    }, [orderToUpdate, setDiscount]);
+    };
 
 
     if (!settings) {
@@ -212,7 +284,7 @@ function POSCart({
             </div>
         );
     }
-    const currencySymbol = settings.currencySymbol || '$';
+    const currencySymbol = settings.currencySymbol || '₹';
     const currencyDecimalPlaces = settings.currencyDecimalPlaces ?? 2;
 
     const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -221,553 +293,311 @@ function POSCart({
         amount: subtotal * (tax.rate / 100)
     }));
     const totalTaxAmount = taxes.reduce((acc, tax) => acc + tax.amount, 0);
-    const total = subtotal - discount + totalTaxAmount;
-
-    const handlePlaceOrder = async () => {
-        await onPlaceOrder(discount);
-    };
+    const discountAmount = subtotal * (discount / 100);
+    const total = subtotal - discountAmount + totalTaxAmount;
 
     return (
-        <div className="grid grid-rows-[auto_auto_1fr_auto] bg-white dark:bg-gray-800 rounded-2xl shadow-lg border-gray-200 dark:border-gray-700 h-full">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                        {orderToUpdate ? 'Edit Order' : 'New Order'}
-                    </h2>
-                    {orderToUpdate && (
-                        <Button variant="outline" size="sm" onClick={onClearEdit} className="bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-700">
-                            <PlusCircle className="h-4 w-4 mr-1" />
-                            New Order
-                        </Button>
-                    )}
-                </div>
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg border-gray-200 dark:border-gray-700 h-full flex flex-col">
+            <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                    {orderToUpdate ? `Edit Order #${orderToUpdate.id.slice(-6)}` : 'Cart Details'}
+                </h2>
             </div>
 
-            <div className="p-4 space-y-4 border-b border-gray-200 dark:border-gray-700">
-                <RadioGroup
-                    value={orderType}
-                    onValueChange={(value) => !orderToUpdate && setOrderType(value as any)}
-                    className="grid grid-cols-3 gap-4"
-                >
+            <div className="p-3 space-y-3">
+                <div className="grid grid-cols-3 gap-2">
                     <Label
-                        htmlFor="dine-in"
+                        onClick={() => handleOrderTypeChange('Dine-in')}
                         className={cn(
-                            "border rounded-md p-2 flex flex-col items-center justify-center gap-1 text-center text-sm h-16 transition-colors",
-                            !orderToUpdate && "cursor-pointer hover:bg-pink-50 dark:hover:bg-gray-700",
-                            orderType === 'Dine-in' && "bg-pink-100 text-pink-600 border-pink-300 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-700",
-                            !!orderToUpdate && orderType !== 'Dine-in' && "cursor-not-allowed opacity-50"
+                            "border rounded-md p-2 flex items-center justify-center gap-2 text-center text-sm h-10 transition-colors cursor-pointer hover:bg-accent",
+                            orderType === 'Dine-in' && "bg-gray-800 text-white border-gray-800 dark:bg-gray-700 dark:border-gray-600",
                         )}
                     >
-                        <RadioGroupItem value="Dine-in" id="dine-in" className="sr-only" disabled={!!orderToUpdate} />
-                        <Utensils className="h-5 w-5" />
-                        Dine-in
+                        <Utensils className="h-4 w-4" />
+                        Dine in
                     </Label>
                     <Label
-                        htmlFor="take-away"
+                        onClick={() => handleOrderTypeChange('Take-away')}
                         className={cn(
-                            "border rounded-md p-2 flex flex-col items-center justify-center gap-1 text-center text-sm h-16 transition-colors",
-                            !orderToUpdate && "cursor-pointer hover:bg-pink-50 dark:hover:bg-gray-700",
-                            orderType === 'Take-away' && "bg-pink-100 text-pink-600 border-pink-300 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-700",
-                            !!orderToUpdate && orderType !== 'Take-away' && "cursor-not-allowed opacity-50"
+                            "border rounded-md p-2 flex items-center justify-center gap-2 text-center text-sm h-10 transition-colors cursor-pointer hover:bg-accent",
+                            orderType === 'Take-away' && "bg-gray-800 text-white border-gray-800 dark:bg-gray-700 dark:border-gray-600",
                         )}
                     >
-                        <RadioGroupItem value="Take-away" id="take-away" className="sr-only" disabled={!!orderToUpdate} />
-                        <ShoppingBag className="h-5 w-5" />
-                        Take-away
+                        <ShoppingBag className="h-4 w-4" />
+                        Takeaway
                     </Label>
                     <Label
-                        htmlFor="online"
+                        onClick={() => handleOrderTypeChange('Online')}
                         className={cn(
-                            "border rounded-md p-2 flex flex-col items-center justify-center gap-1 text-center text-sm h-16 transition-colors",
-                            !orderToUpdate && "cursor-pointer hover:bg-pink-50 dark:hover:bg-gray-700",
-                            orderType === 'Online' && "bg-pink-100 text-pink-600 border-pink-300 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-700",
-                            !!orderToUpdate && orderType !== 'Online' && "cursor-not-allowed opacity-50"
+                            "border rounded-md p-2 flex items-center justify-center gap-2 text-center text-sm h-10 transition-colors cursor-pointer hover:bg-accent",
+                            orderType === 'Online' && "bg-gray-800 text-white border-gray-800 dark:bg-gray-700 dark:border-gray-600",
                         )}
                     >
-                        <RadioGroupItem value="Online" id="online" className="sr-only" disabled={!!orderToUpdate} />
-                        <Globe className="h-5 w-5" />
-                        Online
+                        <Globe className="h-4 w-4" />
+                        Delivery
                     </Label>
-                </RadioGroup>
-                <div className='py-4 space-y-2'>
+                </div>
+
+                <h3 className='font-medium text-sm pt-1'>Customer Information</h3>
+                <div className='space-y-2'>
+                    <Input id="customerName" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer name" className="h-9" />
                     {orderType === 'Dine-in' && (
-                        <div className="space-y-2">
-                            <Label htmlFor="tableId-select">Table</Label>
-                            <Select value={tableId} onValueChange={setTableId}>
-                                <SelectTrigger id="tableId-select">
-                                    <SelectValue placeholder="Select a table" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {tables.map(table => (
-                                        <SelectItem key={table.id} value={table.id}>
-                                            Table {table.number}{table.floor ? ` (${table.floor})` : ''}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <Select value={tableId} onValueChange={setTableId}>
+                            <SelectTrigger id="tableId-select" className="h-9"><SelectValue placeholder="Select table location" /></SelectTrigger>
+                            <SelectContent>{tables.map(table => <SelectItem key={table.id} value={table.id}>Table {table.number}{table.floor ? ` (${table.floor})` : ''}</SelectItem>)}</SelectContent>
+                        </Select>
                     )}
-                    <div className="space-y-2">
-                        <Label htmlFor="customerName">Customer Name</Label>
-                        <Input id="customerName" value={customerName} onDoubleClick={onInputDoubleClick} onChange={(e) => setCustomerName(e.target.value)} placeholder="John Doe" />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="customerPhone">Customer Phone</Label>
-                        <Input id="customerPhone" type="tel" value={customerPhone} onDoubleClick={onInputDoubleClick} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="555-1234" />
-                    </div>
-
+                    {(orderType === 'Take-away' || orderType === 'Online') && (
+                        <Input id="customerPhone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Customer phone" className="h-9" />
+                    )}
                     {orderType === 'Take-away' && (
-                        <div className="space-y-2">
-                            <Label htmlFor="takeAwayTime">Pickup Time (Optional)</Label>
-                            <Input
-                                id="takeAwayTime"
-                                name="takeAwayTime"
-                                type="time"
-                                value={takeAwayTime}
-                                onDoubleClick={onInputDoubleClick}
-                                onChange={(e) => setTakeAwayTime(e.target.value)}
-                            />
-                        </div>
+                        <Input id="takeAwayTime" value={takeAwayTime} onChange={(e) => setTakeAwayTime(e.target.value)} placeholder="Pickup time" type="time" className="h-9" />
                     )}
-
                     {orderType === 'Online' && (
                         <>
-                            <div className="space-y-2">
-                                <Label htmlFor="address">Address</Label>
-                                <Textarea id="address" value={address} onDoubleClick={onInputDoubleClick} onChange={(e) => setAddress(e.target.value)} placeholder="Delivery Address" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="platform">Platform</Label>
+                            <Textarea id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Delivery address" className="h-20" />
+                            {settings.onlineOrderPlatforms && settings.onlineOrderPlatforms.length > 0 && (
                                 <Select value={platform} onValueChange={setPlatform}>
-                                    <SelectTrigger id="platform">
-                                        <SelectValue placeholder="Select platform" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {(settings.onlineOrderPlatforms || []).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                                    </SelectContent>
+                                    <SelectTrigger id="platform-select" className="h-9"><SelectValue placeholder="Select platform" /></SelectTrigger>
+                                    <SelectContent>{settings.onlineOrderPlatforms.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
                                 </Select>
-                            </div>
+                            )}
                         </>
                     )}
                 </div>
             </div>
 
+            <Separator />
 
-            <ScrollArea className="flex-1 p-4">
-                <div className="space-y-4">
+            <div className='p-3'>
+                <div className='flex justify-between items-center'>
+                    <h3 className='font-medium text-sm'>Order Items</h3>
+                    <Button variant='link' className='text-primary p-0 h-auto text-xs' onClick={onClearCart}>Clear all</Button>
+                </div>
+            </div>
+
+            <ScrollArea className="flex-1 px-3">
+                <div className="space-y-3">
                     {cart.length === 0 ? (
-                        <p className="text-muted-foreground text-center pt-10">Select items to start an order.</p>
+                        <p className="text-muted-foreground text-center text-sm pt-8">Your cart is empty.</p>
                     ) : (
-                        cart.map((item, index) => (
-                            <div key={item.orderItemId ?? index} className="space-y-2">
-                                <div className="flex items-center gap-3">
+                        cart.map((item, index) => {
+                            const menuItem = menuItems.find(mi => mi.id === item.menuItemId);
+                            const image = placeholderImages.find(p => p.id === menuItem?.imageId);
+                            const imageSrc = menuItem?.imageId?.startsWith('data:image') ? menuItem.imageId : image?.imageUrl;
+
+                            return (
+                                <div key={item.orderItemId ?? index} className="flex items-start gap-2">
+                                    <div className='relative w-12 h-12 rounded-md overflow-hidden shrink-0 bg-muted'>
+                                        {imageSrc && <Image src={imageSrc} alt={item.name} fill className="object-cover" />}
+                                    </div>
                                     <div className="flex-1">
-                                        <p className="font-semibold text-sm line-clamp-1">{item.name}</p>
-                                        <p className="font-semibold text-sm text-pink-600">{currencySymbol}{(item.price * item.quantity).toFixed(currencyDecimalPlaces)}</p>
+                                        <p className="font-medium text-sm line-clamp-1">{item.name}</p>
+                                        <p className="font-bold text-xs text-primary mt-0.5">{currencySymbol}{(item.price * item.quantity).toFixed(currencyDecimalPlaces)}</p>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-pink-100 text-pink-600 rounded-full p-1">
-                                        <button onClick={() => onUpdateQuantity(item.orderItemId, item.quantity - 1)} className="hover:text-pink-800">
-                                            <MinusCircle className="h-5 w-5" />
-                                        </button>
-                                        <span className="w-6 text-center font-bold text-sm">{item.quantity}</span>
-                                        <button onClick={() => onUpdateQuantity(item.orderItemId, item.quantity + 1)} className="hover:text-pink-800">
-                                            <PlusCircle className="h-5 w-5" />
-                                        </button>
+                                    <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 rounded-full p-0.5">
+                                        <button onClick={() => onUpdateQuantity(item.orderItemId, item.quantity - 1)} className="hover:text-primary disabled:opacity-50" disabled={item.quantity <= 1}><MinusCircle className="h-5 w-5" /></button>
+                                        <span className="w-5 text-center font-bold text-sm">{item.quantity}</span>
+                                        <button onClick={() => onUpdateQuantity(item.orderItemId, item.quantity + 1)} className="hover:text-primary"><PlusCircle className="h-5 w-5" /></button>
                                     </div>
-                                    <button onClick={() => onUpdateQuantity(item.orderItemId, 0)} className="hover:text-destructive">
-                                        <Trash2 className="h-4 w-4 text-muted-foreground" />
-                                    </button>
                                 </div>
-                                <Textarea
-                                    placeholder="Add special instructions for this item..."
-                                    className="text-xs h-12"
-                                    value={item.notes || ''}
-                                    onDoubleClick={onInputDoubleClick}
-                                    onChange={(e) => onItemNoteChange(item.orderItemId, e.target.value)}
-                                />
-                            </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
             </ScrollArea>
 
-            <div className="p-4 border-t border-gray-200 dark:bg-gray-900 rounded-b-2xl">
-                <div className="w-full space-y-2 py-4">
-                    <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span>{currencySymbol}{subtotal.toFixed(currencyDecimalPlaces)}</span>
+            <div className="p-3 mt-auto border-t border-gray-200 dark:border-gray-700 space-y-2">
+                <div className="space-y-1 text-xs">
+                    <div className="flex justify-between"><span>Sub total</span><span className='font-mono'>{currencySymbol}{subtotal.toFixed(currencyDecimalPlaces)}</span></div>
+                    <div className="flex justify-between items-center">
+                        <span>Discount (%)</span>
+                        <Input type="number" value={discount} onChange={e => setDiscount(Number(e.target.value))} className="w-20 h-7 text-right" />
                     </div>
-                    <div className="flex justify-between items-center text-sm">
-                        <Label htmlFor="discount" className="text-muted-foreground">Discount</Label>
-                        <div className="flex items-center gap-1">
-                            <span className="text-muted-foreground">{currencySymbol}</span>
-                            <Input
-                                id="discount"
-                                type="number"
-                                value={discount}
-                                onDoubleClick={onInputDoubleClick}
-                                onChange={(e) => setDiscount(Number(e.target.value) || 0)}
-                                className="h-8 w-24 text-right"
-                                placeholder="0.00"
-                                min="0"
-                            />
-                        </div>
-                    </div>
-                    {taxes.map(tax => (
-                        <div key={tax.id} className="flex justify-between text-sm text-muted-foreground">
-                            <span>{tax.name} ({tax.rate}%)</span>
-                            <span>{currencySymbol}{tax.amount.toFixed(currencyDecimalPlaces)}</span>
-                        </div>
-                    ))}
-                    <Separator className="my-2" />
-                    <div className="flex justify-between text-lg font-bold">
-                        <span>Total</span>
-                        <span>{currencySymbol}{total.toFixed(currencyDecimalPlaces)}</span>
-                    </div>
+                    {discount > 0 && <div className="flex justify-between text-destructive"><span>Discount Amount</span><span className='font-mono'>-{currencySymbol}{discountAmount.toFixed(currencyDecimalPlaces)}</span></div>}
+                    {taxes.map(tax => <div key={tax.id} className="flex justify-between"><span>{tax.name} ({tax.rate}%)</span><span className='font-mono'>{currencySymbol}{tax.amount.toFixed(currencyDecimalPlaces)}</span></div>)}
                 </div>
+                <div className="flex justify-between font-bold text-sm border-t pt-2 mt-2"><span>Total amount</span><span className='font-mono'>{currencySymbol}{total.toFixed(currencyDecimalPlaces)}</span></div>
 
-                {!orderToUpdate && (
-                    <div className="w-full space-y-2 pt-4 border-t">
-                        <Label htmlFor="order-notes">Order Notes</Label>
-                        <Textarea
-                            id="order-notes"
-                            placeholder="Add general notes for the entire order..."
-                            value={orderNotes}
-                            onDoubleClick={onInputDoubleClick}
-                            onChange={(e) => setOrderNotes(e.target.value)}
-                        />
-                    </div>
-                )}
-
-                <Button className="w-full mt-4 bg-pink-600 hover:bg-pink-700" size="lg" onClick={handlePlaceOrder} disabled={cart.length === 0 || isSubmitting}>
-                    {isSubmitting ? <LoaderCircle className="animate-spin" /> : (orderToUpdate ? 'Update Order' : 'Place Order')}
+                <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white" size="default" onClick={onProceedToPayment} disabled={cart.length === 0 || isSubmitting}>
+                    {isSubmitting ? <LoaderCircle className="animate-spin" /> : 'Proceed Payment'}
                 </Button>
             </div>
         </div>
     );
 }
 
-function ActiveOrderCard({ order, settings, onUpdate, onEdit, restaurantId, startTransition }: { order: CombinedOrderWithTable, settings: RestaurantSettings | null, onUpdate: () => void, onEdit: (order: CombinedOrderWithTable) => void, restaurantId: string, startTransition: React.TransitionStartFunction }) {
-
-    const getOrderTitle = (order: CombinedOrderWithTable) => {
-        switch (order.orderType) {
-            case 'Dine-in':
-                return order.table ? `Table ${order.table.number}` : 'Dine-in';
-            case 'Online':
-                return 'Online Order';
-            case 'Take-away':
-                return 'Take-Away';
-            default:
-                return `Order #${order.id.slice(-6)}`;
-        }
-    }
-
-    const getOrderIcon = (order: CombinedOrderWithTable) => {
-        switch (order.orderType) {
-            case 'Dine-in':
-                return <Utensils className="h-4 w-4 mr-2" />;
-            case 'Online':
-            case 'Take-away':
-                return <ShoppingBag className="h-4 w-4 mr-2" />;
-            default:
-                return null;
-        }
-    }
-
-    const { toast } = useToast();
-
-
-    const handleUpdateStatus = (status: 'preparing' | 'ready' | 'completed' | 'cancelled') => {
-        startTransition(async () => {
-            try {
-                const formData = new FormData();
-                formData.append('orderId', order.id);
-                formData.append('status', status);
-                formData.append('restaurantId', restaurantId);
-                await updateOrderStatusAction(formData);
-
-                if (status === 'cancelled') {
-                    toast({
-                        title: "Order Cancelled",
-                        description: `Order #${order.invoiceNumber || order.id.slice(-6)} has been cancelled.`,
-                        variant: "destructive"
-                    });
-                } else {
-                    toast({
-                        title: "Status Updated",
-                        description: `Order marked as ${status}.`
-                    });
-                }
-
-                // Wait a bit for the database to update, then refresh
-                setTimeout(() => {
-                    onUpdate();
-                }, 500);
-            } catch (error) {
-                console.error('Failed to update order status:', error);
-                toast({
-                    variant: 'destructive',
-                    title: "Error",
-                    description: "Failed to update order status."
-                });
-            }
-        });
-    }
-
-    const nextStatus = order.status === 'received' ? 'preparing' : order.status === 'preparing' ? 'ready' : undefined;
+function OrderQueueCard({ order, onEdit }: { order: CombinedOrderWithTable, onEdit: (order: CombinedOrderWithTable) => void }) {
+    const readyItems = order.items.filter(i => i.isReady).length;
+    const totalItems = order.items.length;
+    const progress = totalItems > 0 ? (readyItems / totalItems) * 100 : 0;
 
     return (
-        <Card className="flex flex-col bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-            <CardHeader>
-                <div className="flex items-start justify-between">
+        <Card onClick={() => onEdit(order)} className="min-w-[240px] w-60 flex-shrink-0 cursor-pointer transition-all hover:shadow-lg hover:border-primary bg-white dark:bg-gray-800">
+            <CardContent className="p-3 space-y-2">
+                <div className="flex justify-between items-start">
                     <div>
-                        <CardTitle className="font-headline text-lg flex items-center text-gray-900 dark:text-gray-100">
-                            {getOrderIcon(order)}
-                            {getOrderTitle(order)}
-                        </CardTitle>
-                        <p className="text-xs text-muted-foreground">Order #{order.invoiceNumber || order.id.slice(-6)}</p>
+                        <p className="font-semibold text-primary text-sm">{order.invoiceNumber || `#${order.id.slice(-6)}`}</p>
+                        <p className="font-bold text-gray-800 dark:text-gray-100">{order.customerName || order.customerDetails?.name}</p>
+                        <p className="text-xs text-muted-foreground">{format(new Date(order.createdAt), 'dd-MM-yyyy, hh:mm a')}</p>
                     </div>
-                    {'status' in order && <OrderStatusBadge status={order.status} />}
-                </div>
-                <div className="text-xs text-muted-foreground flex items-center gap-2 pt-2">
-                    <div className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        <span>{formatDistanceInTimezone(order.createdAt, settings?.timezone)}</span>
+                    <div className="text-right">
+                        <div className="px-2 py-1 bg-orange-100 text-orange-800 rounded-md text-xs font-semibold dark:bg-orange-900/50 dark:text-orange-300">
+                            Table {order.table?.number || "N/A"}
+                        </div>
                     </div>
                 </div>
-            </CardHeader>
-            <CardContent className="flex-1">
-                <div className="text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2 mb-2">
-                        <User className="h-4 w-4 flex-shrink-0" />
-                        <span>{'customerDetails' in order ? order.customerDetails.name : order.customerName}</span>
+
+                <div className='flex items-center justify-between text-xs'>
+                    <div className='flex items-center gap-2'>
+                        <Progress value={progress} className="w-16 h-1.5" />
+                        <span className="font-semibold text-gray-700 dark:text-gray-300">{Math.round(progress)}%</span>
+                        <span className="text-muted-foreground">On cooking</span>
                     </div>
+                    <span className="text-muted-foreground flex items-center">{order.items.length} items <ChevronRight className="h-3 w-3" /></span>
                 </div>
-                <Separator className="my-2" />
-                <ScrollArea className="h-24">
-                    <ul className="space-y-1 text-sm">
-                        {order.items.map((item, index) => (
-                            <li key={item.orderItemId ?? index} className="flex justify-between items-start gap-2">
-                                <div className="flex-1">
-                                    <span className={cn("font-semibold", (item.isReady || item.status === 'cancelled') && "line-through text-muted-foreground")}>
-                                        {item.quantity}x {item.name}
-                                    </span>
-                                </div>
-                                {item.status === 'cancelled' && <Badge variant="destructive" className="flex items-center gap-1"><XCircle className="h-3 w-3" />Cancelled</Badge>}
-                            </li>
-                        ))}
-                    </ul>
-                </ScrollArea>
             </CardContent>
-            <CardFooter className="flex flex-col items-start gap-2">
-                {nextStatus && (
-                    <Button onClick={() => handleUpdateStatus(nextStatus as any)} size="sm" className="w-full">
-                        Mark as {nextStatus.charAt(0).toUpperCase() + nextStatus.slice(1)}
-                    </Button>
-                )}
-                {order.status === 'ready' && (
-                    <Button asChild size="sm" className="w-full bg-green-600 hover:bg-green-700">
-                        <Link href={`/admin/orders/${order.id}/payment?redirectTo=/admin/pos`}>
-                            <CreditCard className="h-4 w-4 mr-2" />
-                            Proceed to Payment
-                        </Link>
-                    </Button>
-                )}
-                <Button onClick={() => onEdit(order)} size="sm" variant="outline" className="w-full">
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Edit Order
-                </Button>
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" className="w-full">
-                            Cancel Order
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This action will cancel the entire order. This action cannot be undone.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Go Back</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleUpdateStatus('cancelled')} className="bg-destructive hover:bg-destructive/90">
-                                Yes, Cancel Order
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            </CardFooter>
         </Card>
-    );
+    )
 }
 
-// On-screen keyboard component
-const OnScreenKeyboard = ({ onClose, inputType = 'text' }: { onClose: () => void; inputType?: 'text' | 'number' | 'email' | 'tel' }) => {
-    const [isShift, setIsShift] = React.useState(false);
+function PaymentSheet({
+    isOpen,
+    onOpenChange,
+    order,
+    settings,
+    onFinalizePayment,
+    isFinalizing
+}: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    order: any; // Temporary order object
+    settings: RestaurantSettings | null;
+    onFinalizePayment: (paymentMethod: 'cash' | 'card') => void;
+    isFinalizing: boolean;
+}) {
+    const [paymentMode, setPaymentMode] = useState<'cash' | 'card'>('cash');
+    const [cashReceived, setCashReceived] = useState<number | string>('');
 
-    const handleKeyPress = (key: string) => {
-        const target = keyboardConfig.target;
-        if (!target) return;
-
-        const currentValue = target.value || '';
-        let newValue;
-
-        if (key === 'Backspace') {
-            newValue = currentValue.slice(0, -1);
-        } else {
-            newValue = currentValue + key;
+    useEffect(() => {
+        if (isOpen) {
+            setCashReceived('');
+            setPaymentMode('cash');
         }
+    }, [isOpen]);
 
-        const prototype = Object.getPrototypeOf(target);
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+    if (!order || !settings) return null;
 
-        nativeInputValueSetter?.call(target, newValue);
+    const currencySymbol = settings.currencySymbol || '$';
+    const currencyDecimalPlaces = settings.currencyDecimalPlaces ?? 2;
+    const denominations = settings.posSettings?.cashDenominations || [10, 20, 50, 100];
 
-        const event = new Event('input', { bubbles: true, cancelable: true });
-        target.dispatchEvent(event);
+    const changeDue = (typeof cashReceived === 'number' && cashReceived >= order.total)
+        ? cashReceived - order.total
+        : 0;
 
-        target.focus();
-        target.setSelectionRange(newValue.length, newValue.length);
-    };
+    const handleDenominationClick = (amount: number) => {
+        setCashReceived(current => (Number(current) || 0) + amount);
+    }
 
-    const handleKeyClick = (key: string) => {
-        if (key === 'Shift') {
-            setIsShift(!isShift);
-            return;
-        }
-        if (key === 'Space') {
-            handleKeyPress(' ');
-            if (isShift) setIsShift(false);
-            return;
-        }
-        if (key === 'Backspace') {
-            handleKeyPress('Backspace');
-            if (isShift) setIsShift(false);
-            return;
-        }
-
-        handleKeyPress(isShift ? key.toUpperCase() : key.toLowerCase());
-        if (isShift) setIsShift(false);
-    };
-
-    const isNumeric = inputType === 'number' || inputType === 'tel';
-
-    const KeyButton = ({ children, onClick, className, ...props }: { children: React.ReactNode, onClick: () => void, className?: string, style?: React.CSSProperties }) => (
-        <Button
-            type="button"
-            variant="outline"
-            className={cn("h-12 text-lg font-semibold bg-white/80 dark:bg-gray-800/80 shadow-sm transition-transform active:scale-95", className)}
-            onClick={onClick}
-            {...props}
-        >
-            {children}
-        </Button>
-    );
-
-    const AlphanumericLayout = () => (
-        <div className="flex justify-center items-start gap-4">
-            {/* Letter Section */}
-            <div className="flex flex-col gap-1.5">
-                {[['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'], ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'], ['z', 'x', 'c', 'v', 'b', 'n', 'm']].map((row, rowIndex) => (
-                    <div key={`letter-row-${rowIndex}`} className="flex justify-center gap-1.5">
-                        {row.map((key) => (
-                            <KeyButton key={key} onClick={() => handleKeyClick(key)} className="w-12">
-                                {isShift ? key.toUpperCase() : key.toLowerCase()}
-                            </KeyButton>
-                        ))}
-                    </div>
-                ))}
-                <div className="flex justify-center gap-1.5">
-                    <KeyButton onClick={() => handleKeyClick('Shift')} className="px-4 flex-grow"><CaseUpper /></KeyButton>
-                    <KeyButton onClick={() => handleKeyClick('@')} className="w-12">@</KeyButton>
-                    <KeyButton onClick={() => handleKeyClick('Space')} className="px-4 flex-grow min-w-[200px]">Space</KeyButton>
-                    <KeyButton onClick={() => handleKeyClick('.')} className="w-12">.</KeyButton>
-                    <KeyButton onClick={() => handleKeyClick('Backspace')} className="px-4 flex-grow"><Delete /></KeyButton>
-                </div>
-            </div>
-
-            <Separator orientation="vertical" className="h-auto self-stretch" />
-
-            {/* Number Section */}
-            <div className="flex flex-col gap-1.5">
-                 {[['7', '8', '9'], ['4', '5', '6'], ['1', '2', '3']].map((row, rowIndex) => (
-                     <div key={`num-row-${rowIndex}`} className="flex justify-center gap-1.5">
-                        {row.map((key) => (
-                            <KeyButton key={key} onClick={() => handleKeyClick(key)} className="w-12 h-12">
-                                {key}
-                            </KeyButton>
-                        ))}
-                    </div>
-                ))}
-                 <div className="flex justify-center gap-1.5">
-                    <KeyButton onClick={() => handleKeyClick('0')} className="flex-grow h-12">0</KeyButton>
-                </div>
-            </div>
-        </div>
-    );
-
-    const NumericLayout = () => (
-        <div className="space-y-1.5 w-fit mx-auto">
-            {[['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9']].map((row, rowIndex) => (
-                <div key={rowIndex} className="flex justify-center gap-1.5">
-                    {row.map((key) => (
-                        <KeyButton key={key} onClick={() => handleKeyClick(key)} className="w-20 h-16 text-2xl">
-                            {key}
-                        </KeyButton>
-                    ))}
-                </div>
-            ))}
-            <div className="flex justify-center gap-1.5">
-                 <KeyButton onClick={() => handleKeyClick('.')} className="w-20 h-16 text-2xl">.</KeyButton>
-                 <KeyButton onClick={() => handleKeyClick('0')} className="w-20 h-16 text-2xl">0</KeyButton>
-                 <KeyButton onClick={() => handleKeyClick('Backspace')} className="w-20 h-16 text-2xl"><Delete /></KeyButton>
-            </div>
-        </div>
-    );
+    const handleFinalize = () => {
+        onFinalizePayment(paymentMode);
+    }
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 bg-gray-200/95 dark:bg-gray-900/95 backdrop-blur-sm p-2 z-[100] shadow-lg rounded-t-lg border-t dark:border-gray-700">
-            <div className="flex justify-end">
-                <Button variant="ghost" size="icon" onClick={onClose}>
-                    <X className="h-5 w-5" />
-                </Button>
-            </div>
-            <div className="p-1 flex justify-center">
-                {isNumeric ? <NumericLayout /> : <AlphanumericLayout />}
-            </div>
-        </div>
-    );
-};
+        <Sheet open={isOpen} onOpenChange={onOpenChange}>
+            <SheetContent className="w-full sm:max-w-md flex flex-col">
+                <SheetHeader>
+                    <SheetTitle className="font-headline text-2xl">Process Payment</SheetTitle>
+                    <SheetDescription>Finalize the order for {order.customerName}.</SheetDescription>
+                </SheetHeader>
+                <div className="flex-1 overflow-y-auto pr-2">
+                    <Card className="my-4">
+                        <CardHeader>
+                            <CardTitle className="font-headline">Order Summary</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 text-sm">
+                            <div className="flex justify-between"><span>Subtotal</span><span className="font-mono">{currencySymbol}{order.subtotal.toFixed(currencyDecimalPlaces)}</span></div>
+                            {order.discount > 0 && <div className="flex justify-between text-destructive"><span>Discount</span><span className="font-mono">-{currencySymbol}{order.discount.toFixed(currencyDecimalPlaces)}</span></div>}
+                            {order.taxes.map((tax: any) => <div key={tax.id} className="flex justify-between"><span>{tax.name} ({tax.rate}%)</span><span className='font-mono'>{currencySymbol}{tax.amount.toFixed(currencyDecimalPlaces)}</span></div>)}
+                            <Separator />
+                            <div className="flex justify-between text-lg font-bold"><span>Total</span><span className="font-mono">{currencySymbol}{order.total.toFixed(currencyDecimalPlaces)}</span></div>
+                        </CardContent>
+                    </Card>
 
+                    <div className="space-y-4">
+                        <Label className="text-base">Payment Mode</Label>
+                        <RadioGroup value={paymentMode} onValueChange={(value: 'cash' | 'card') => setPaymentMode(value)} className="grid grid-cols-2 gap-4">
+                            <div>
+                                <RadioGroupItem value="cash" id="cash" className="peer sr-only" />
+                                <Label htmlFor="cash" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                    <DollarSign className="mb-3 h-6 w-6" /> Cash
+                                </Label>
+                            </div>
+                            <div>
+                                <RadioGroupItem value="card" id="card" className="peer sr-only" />
+                                <Label htmlFor="card" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                    <CreditCard className="mb-3 h-6 w-6" /> Card/Other
+                                </Label>
+                            </div>
+                        </RadioGroup>
+                    </div>
+
+                    {paymentMode === 'cash' && (
+                        <div className="space-y-4 rounded-lg border bg-muted/50 p-4 mt-4">
+                            <h4 className="font-semibold">Cash Payment</h4>
+                            <div className="space-y-2">
+                                <Label htmlFor="cashReceived">Cash Received</Label>
+                                <div className="relative">
+                                    <span className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground">{currencySymbol}</span>
+                                    <Input
+                                        id="cashReceived" type="number" step="0.01" placeholder="0.00"
+                                        value={cashReceived}
+                                        onChange={(e) => setCashReceived(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                        className="pl-6"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {denominations.map(denom => (
+                                    <Button key={denom} type="button" variant="secondary" onClick={() => handleDenominationClick(denom)}>
+                                        +{denom}
+                                    </Button>
+                                ))}
+                            </div>
+                            <div className="flex justify-between items-center rounded-md bg-background p-3">
+                                <span className="font-medium text-muted-foreground">Change Due</span>
+                                <span className="text-xl font-bold font-mono">{currencySymbol}{changeDue.toFixed(currencyDecimalPlaces)}</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <SheetFooter className="mt-auto pt-4 border-t">
+                    <Button type="button" className="w-full" size="lg" onClick={handleFinalize} disabled={isFinalizing}>
+                        {isFinalizing ? <LoaderCircle className="animate-spin" /> : 'Finalize & Complete Order'}
+                    </Button>
+                </SheetFooter>
+            </SheetContent>
+        </Sheet>
+    );
+}
 
 export default function POSPage() {
+    const router = useRouter();
     const { user } = useAuth();
-    const {
-        getMenuItems,
-        getSettings,
-        getBranches,
-        getTables,
-        restaurantId,
-        getActiveOrders,
-        updateFullOrder,
-        getMainBranch,
-        getTableById,
-    } = useRestaurantData();
-
+    const { getMenuItems, getSettings, getBranches, getTables, restaurantId, getActiveOrders, updateFullOrder, getMainBranch, getTableById, getDiscounts } = useRestaurantData();
     const [isPending, startTransition] = useTransition();
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [tables, setTables] = useState<Table[]>([]);
     const [branches, setBranches] = useState<Branch[]>([]);
+    const [discounts, setDiscounts] = useState<Discount[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<string | undefined>(undefined);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('All');
+    const [selectedCategory, setSelectedCategory] = useState('All menu');
     const [cart, setCart] = useState<OrderItem[]>([]);
     const [orderToUpdate, setOrderToUpdate] = useState<CombinedOrderWithTable | null>(null);
-    const [activeTab, setActiveTab] = useState('new-order');
     const [orderType, setOrderType] = useState<'Dine-in' | 'Take-away' | 'Online'>('Dine-in');
     const [customerName, setCustomerName] = useState('');
     const [customerPhone, setCustomerPhone] = useState('');
@@ -776,85 +606,54 @@ export default function POSPage() {
     const [platform, setPlatform] = useState('');
     const [takeAwayTime, setTakeAwayTime] = useState('');
     const [orderNotes, setOrderNotes] = useState('');
-    const [discount, setDiscount] = useState(0);
     const [activeOrders, setActiveOrders] = useState<CombinedOrderWithTable[]>([]);
     const { toast } = useToast();
     const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
-    const [floorFilter, setFloorFilter] = useState<string>('');
     const [selectedItemForAddons, setSelectedItemForAddons] = useState<MenuItem | null>(null);
+
+    const [discount, setDiscount] = useState(0);
+    const [isPaymentSheetOpen, setIsPaymentSheetOpen] = useState(false);
+    const [orderToPay, setOrderToPay] = useState<any>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
-    const [keyboardConfig, setKeyboardConfig] = React.useState<{ visible: boolean; target: HTMLInputElement | HTMLTextAreaElement | null; inputType?: 'text' | 'number' | 'email' | 'tel' }>({ visible: false, target: null });
-
-
-    const handleFullscreen = () => {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen();
-        } else {
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            }
-        }
-    };
-
-    useEffect(() => {
-        const handleFullscreenChange = () => {
-            setIsFullscreen(!!document.fullscreenElement);
-        };
-        document.addEventListener('fullscreenchange', handleFullscreenChange);
-        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    }, []);
 
     const fetchStaticData = useCallback(async () => {
         if (!selectedBranchId || !restaurantId) return;
         setIsLoading(true);
         try {
-            const [fetchedMenuItems, fetchedSettings, fetchedTables] = await Promise.all([
+            const [fetchedMenuItems, fetchedSettings, fetchedTables, fetchedDiscounts] = await Promise.all([
                 getMenuItems(selectedBranchId),
                 getSettings(selectedBranchId),
                 getTables(selectedBranchId),
+                getDiscounts(selectedBranchId),
             ]);
             setMenuItems(fetchedMenuItems);
             setSettings(fetchedSettings);
             setTables(fetchedTables);
-
-            if (fetchedSettings?.multiFloorEnabled && fetchedSettings.floors && fetchedSettings.floors.length > 0) {
-                const groundFloor = fetchedSettings.floors.find(f => f.toLowerCase() === 'ground floor');
-                if (groundFloor) {
-                    setFloorFilter(groundFloor);
-                } else {
-                    setFloorFilter(fetchedSettings.defaultFloor || fetchedSettings.floors[0]);
-                }
-            } else {
-                setFloorFilter('');
-            }
-
-            if (fetchedSettings?.onlineOrderPlatforms?.length) {
-                setPlatform(p => p || fetchedSettings.onlineOrderPlatforms![0]);
-            }
+            setDiscounts(fetchedDiscounts);
         } catch (error) {
             console.error("Failed to fetch initial POS data:", error);
             toast({ variant: 'destructive', title: "Error", description: "Failed to load core POS data." });
         } finally {
             setIsLoading(false);
         }
-    }, [selectedBranchId, restaurantId, getMenuItems, getSettings, getTables, toast]);
+    }, [selectedBranchId, restaurantId, getMenuItems, getSettings, getTables, getDiscounts, toast]);
 
     const refreshActiveOrders = useCallback(async () => {
         if (!selectedBranchId || !restaurantId) return;
         try {
             const fetchedActiveOrders = await getActiveOrders(selectedBranchId);
-    
+
             const activeOrdersWithTables: OrderWithTable[] = await Promise.all(fetchedActiveOrders.map(async (order) => {
                 const table = order.tableId ? await getTableById(order.tableId) : undefined;
                 return { ...order, table };
             }));
-    
+
             const filteredActiveOrders = activeOrdersWithTables.filter(order =>
                 order.status !== 'cancelled' && order.status !== 'completed'
             );
-    
+
             setActiveOrders(filteredActiveOrders);
-    
+
         } catch (error) {
             console.error("Failed to refresh active orders:", error);
         }
@@ -880,19 +679,25 @@ export default function POSPage() {
 
     useEffect(() => {
         if (selectedBranchId) {
-            fetchStaticData(); // Load menu, settings etc once
-            refreshActiveOrders(); // Load orders and start interval
-            const interval = setInterval(refreshActiveOrders, 10000); // 10 seconds
+            fetchStaticData();
+            refreshActiveOrders();
+            const interval = setInterval(refreshActiveOrders, 10000);
             return () => clearInterval(interval);
         }
     }, [selectedBranchId, fetchStaticData, refreshActiveOrders]);
 
+    // Listen for fullscreen changes (e.g., when user presses F11)
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
 
-    const handleItemNoteChange = (orderItemId: string, note: string) => {
-        setCart(prev => prev.map(item => item.orderItemId === orderItemId ? { ...item, notes: note } : item));
-    };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
 
-    const handleClearEdit = () => {
+
+    const handleClearCart = useCallback(() => {
         setOrderToUpdate(null);
         setCart([]);
         setOrderType('Dine-in');
@@ -904,7 +709,7 @@ export default function POSPage() {
         setTakeAwayTime('');
         setOrderNotes('');
         setDiscount(0);
-    };
+    }, [settings]);
 
     const handleEditOrder = (order: CombinedOrderWithTable) => {
         setOrderToUpdate(order);
@@ -928,18 +733,18 @@ export default function POSPage() {
             setPlatform('');
             setTakeAwayTime('');
         }
-        setActiveTab('new-order');
+
+        const currentDiscount = order.discount && order.subtotal > 0
+            ? (order.discount / order.subtotal) * 100
+            : 0;
+        setDiscount(currentDiscount);
+
         toast({ title: "Editing Order", description: `Order #${order.invoiceNumber || order.id.slice(-6)} loaded into cart.` });
     };
 
     const getAddonCombinationId = (selectedAddons?: Record<string, AddonOption>): string => {
-        if (!selectedAddons || Object.keys(selectedAddons).length === 0) {
-            return 'base';
-        }
-        return Object.keys(selectedAddons)
-            .sort()
-            .map(groupId => `${groupId}:${selectedAddons[groupId].id}`)
-            .join(';');
+        if (!selectedAddons || Object.keys(selectedAddons).length === 0) return 'base';
+        return Object.keys(selectedAddons).sort().map(groupId => `${groupId}:${selectedAddons[groupId].id}`).join(';');
     };
 
     const handleAddToCartWithAddons = (menuItem: MenuItem, selectedAddons?: Record<string, AddonOption>) => {
@@ -948,17 +753,11 @@ export default function POSPage() {
 
         setCart((prevCart) => {
             const existingItem = prevCart.find(item => item.orderItemId === orderItemId);
-
             if (existingItem) {
-                return prevCart.map(item =>
-                    item.orderItemId === orderItemId
-                        ? { ...item, quantity: item.quantity + 1 }
-                        : item
-                );
+                return prevCart.map(item => item.orderItemId === orderItemId ? { ...item, quantity: item.quantity + 1 } : item);
             } else {
                 let notes = '';
                 let addonPrice = 0;
-
                 if (selectedAddons && Object.keys(selectedAddons).length > 0) {
                     notes = Object.entries(selectedAddons).map(([groupId, option]) => {
                         const group = menuItem.addonGroups?.find(g => g.id === groupId);
@@ -966,19 +765,7 @@ export default function POSPage() {
                     }).join('; ');
                     addonPrice = Object.values(selectedAddons).reduce((sum, addon) => sum + addon.price, 0);
                 }
-
-                const newOrderItem: OrderItem = {
-                    orderItemId: orderItemId,
-                    menuItemId: menuItem.id,
-                    name: menuItem.name,
-                    price: menuItem.price + addonPrice,
-                    quantity: 1,
-                    category: menuItem.category,
-                    isReady: false,
-                    status: 'active',
-                    notes: notes,
-                };
-
+                const newOrderItem: OrderItem = { orderItemId, menuItemId: menuItem.id, name: menuItem.name, price: menuItem.price + addonPrice, quantity: 1, category: menuItem.category, isReady: false, status: 'active', notes };
                 return [...prevCart, newOrderItem];
             }
         });
@@ -992,11 +779,20 @@ export default function POSPage() {
         }
     };
 
-    const handleRemoveFromCart = (menuItem: MenuItem) => {
+    const handleSimpleRemoveFromCart = (menuItem: MenuItem) => {
         const orderItemId = `${menuItem.id}-base`;
-        const itemInCart = cart.find(i => i.orderItemId === orderItemId);
-        if (itemInCart) {
-            handleUpdateQuantity(orderItemId, itemInCart.quantity - 1);
+        const existingItem = cart.find(item => item.orderItemId === orderItemId);
+
+        if (existingItem) {
+            if (existingItem.quantity > 1) {
+                setCart(prev => prev.map(item =>
+                    item.orderItemId === orderItemId
+                        ? { ...item, quantity: item.quantity - 1 }
+                        : item
+                ));
+            } else {
+                setCart(prev => prev.filter(item => item.orderItemId !== orderItemId));
+            }
         }
     };
 
@@ -1009,47 +805,94 @@ export default function POSPage() {
     };
 
     const getQuantity = (menuItemId: string): number => {
-        return cart
-            .filter(item => item.menuItemId === menuItemId)
-            .reduce((sum, item) => sum + item.quantity, 0);
+        return cart.filter(item => item.menuItemId === menuItemId).reduce((sum, item) => sum + item.quantity, 0);
     };
 
-    const handlePlaceOrder = (discountValue: number) => {
-        if (!selectedBranchId || !user || !restaurantId) {
-            toast({ variant: 'destructive', title: "Error", description: "Branch not selected or user not found." });
-            return;
-        }
+    const handleProceedToPayment = () => {
+        if (!settings) return;
 
-        if (isPending) {
-            return;
+        const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+        const discountAmount = subtotal * (discount / 100);
+        const taxes = (settings.taxes || []).map(tax => ({
+            ...tax,
+            amount: (subtotal - discountAmount) * (tax.rate / 100)
+        }));
+        const totalTaxAmount = taxes.reduce((acc, tax) => acc + tax.amount, 0);
+        const total = subtotal - discountAmount + totalTaxAmount;
+
+        const tempOrder = {
+            id: orderToUpdate ? orderToUpdate.id : 'new-order',
+            invoiceNumber: orderToUpdate?.invoiceNumber,
+            items: cart,
+            subtotal,
+            taxes,
+            totalTaxAmount,
+            discount: discountAmount,
+            total,
+            orderType,
+            customerName: customerName || 'Customer',
+            customerPhone: customerPhone || 'N/A',
+            tableId: orderType === 'Dine-in' ? tableId : undefined,
+            address: orderType === 'Online' ? address : undefined,
+            platform: orderType === 'Online' ? platform : undefined,
+            takeAwayTime: orderType === 'Take-away' ? takeAwayTime : undefined,
+            notes: orderNotes,
+        };
+
+        setOrderToPay(tempOrder);
+        setIsPaymentSheetOpen(true);
+    };
+
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().then(() => {
+                setIsFullscreen(true);
+            }).catch((err) => {
+                console.error('Error attempting to enable fullscreen:', err);
+            });
+        } else {
+            document.exitFullscreen().then(() => {
+                setIsFullscreen(false);
+            }).catch((err) => {
+                console.error('Error attempting to exit fullscreen:', err);
+            });
         }
+    };
+
+    const handleExitToDashboard = () => {
+        router.push('/admin/');
+    };
+
+    const handleFinalizePayment = (paymentMethod: 'cash' | 'card') => {
+        if (!selectedBranchId || !user || !restaurantId || isPending || !orderToPay) return;
 
         startTransition(async () => {
             try {
                 if (orderToUpdate) {
                     await updateFullOrder(orderToUpdate.id, orderToUpdate.orderType as any, {
-                        items: cart,
-                        notes: orderNotes,
-                        customerName: customerName || 'Customer',
-                        customerPhone: customerPhone || 'N/A',
-                        tableId: orderType === 'Dine-in' ? tableId : undefined,
-                        address: orderType === 'Online' ? address : undefined,
-                        platform: orderType === 'Online' ? platform : undefined,
-                        takeAwayTime: orderType === 'Take-away' ? takeAwayTime : undefined,
-                        discount: discountValue,
+                        items: orderToPay.items,
+                        notes: orderToPay.notes,
+                        customerName: orderToPay.customerName,
+                        customerPhone: orderToPay.customerPhone,
+                        tableId: orderToPay.tableId,
+                        address: orderToPay.address,
+                        platform: orderToPay.platform,
+                        takeAwayTime: orderToPay.takeAwayTime,
+                        paymentMethod,
+                        discount: orderToPay.discount,
                     });
                     toast({ title: "Success", description: "Order updated successfully." });
-                    handleClearEdit();
                 } else {
                     const orderPayload: any = {
                         branchId: selectedBranchId,
-                        customerName: customerName || 'Customer',
-                        customerPhone: customerPhone || 'N/A',
-                        items: cart,
-                        orderType: orderType,
-                        notes: orderNotes,
+                        customerName: orderToPay.customerName,
+                        customerPhone: orderToPay.customerPhone,
+                        items: orderToPay.items,
+                        orderType: orderToPay.orderType,
+                        notes: orderToPay.notes,
                         createdByName: user.username,
-                        discount: discountValue,
+                        discount: orderToPay.discount,
+                        paymentMethod
                     };
                     if (orderType === 'Dine-in') {
                         if (!tableId) {
@@ -1058,21 +901,17 @@ export default function POSPage() {
                         }
                         const selectedTable = tables.find(t => t.id === tableId);
                         orderPayload.tableId = tableId;
-                        if (!orderPayload.customerName) {
-                            orderPayload.customerName = `Table ${selectedTable?.number || ''}`;
-                        }
+                        if (!orderPayload.customerName) orderPayload.customerName = `Table ${selectedTable?.number || ''}`;
                     }
-                    if (orderType === 'Take-away') {
-                        orderPayload.takeAwayTime = takeAwayTime;
-                    }
-                    if (orderType === 'Online') {
-                        orderPayload.customerDetails = { name: customerName, phone: customerPhone, address, platform };
-                    }
+                    if (orderType === 'Take-away') orderPayload.takeAwayTime = takeAwayTime;
+                    if (orderType === 'Online') orderPayload.customerDetails = { name: orderToPay.customerName, phone: orderToPay.customerPhone, address: orderToPay.address, platform: orderToPay.platform };
 
                     await createOrderAction(orderPayload, restaurantId);
                     toast({ title: "Success", description: "Order placed successfully." });
-                    handleClearEdit();
                 }
+                setIsPaymentSheetOpen(false);
+                setOrderToPay(null);
+                handleClearCart();
                 refreshActiveOrders();
             } catch (error: any) {
                 toast({ variant: 'destructive', title: "Order Failed", description: error.message || "Could not place order." });
@@ -1080,213 +919,117 @@ export default function POSPage() {
         });
     };
 
-
-    const handleTableSelectFromLayout = (table: Table) => {
-        setOrderType('Dine-in');
-        setTableId(table.id);
-        setCustomerName(`Table ${table.number}`);
-        setCustomerPhone(''); // Clear phone for new order
-        setCart([]); // Clear cart
-        setOrderToUpdate(null); // Ensure we're not editing
-        setActiveTab('new-order'); // Switch to the order creation tab
-        toast({
-            title: `Table ${table.number} Selected`,
-            description: "Start adding items to the order.",
+    const categories = useMemo(() => {
+        const itemCounts: Record<string, number> = {};
+        menuItems.forEach(item => {
+            if (item.category) {
+                itemCounts[item.category] = (itemCounts[item.category] || 0) + 1;
+            }
         });
-    };
+        const allCount = menuItems.length;
+        const sortedCategories = Object.keys(itemCounts).sort();
+        return [{ name: 'All menu', count: allCount }, ...sortedCategories.map(name => ({ name, count: itemCounts[name] }))];
+    }, [menuItems]);
 
-    const categories = useMemo(() => ["All", ...Array.from(new Set(menuItems.map(item => item.category)))], [menuItems]);
     const filteredMenu = useMemo(() => menuItems.filter(item =>
         item.isAvailable &&
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        (selectedCategory === "All" || item.category === selectedCategory)
+        (selectedCategory === "All menu" || item.category === selectedCategory)
     ), [menuItems, searchTerm, selectedCategory]);
 
-    const categoryIcons: Record<string, React.ReactNode> = {
-        'All': <Grid3x3 className="w-6 h-6" />,
-        'Meals': <Utensils className="w-6 h-6" />,
-        'Snacks': <Beef className="w-6 h-6" />,
-        'Beverages': <Wine className="w-6 h-6" />,
-        'Breads': <CircleDot className="w-6 h-6" />,
-        'Desserts': <IceCream className="w-6 h-6" />,
-        'Vegan': <Leaf className="w-6 h-6" />,
-        'Default': <Utensils className="w-6 h-6" />
+    // Function to get icon based on category name (case-insensitive and keyword matching)
+    const getCategoryIcon = (categoryName: string): React.ReactNode => {
+        const name = categoryName.toLowerCase();
+
+        // Exact matches first
+        const exactIcons: Record<string, React.ReactNode> = {
+            'all menu': <Grid3x3 />,
+            'all': <Grid3x3 />,
+        };
+
+        if (exactIcons[name]) return exactIcons[name];
+
+        // Keyword-based matching
+        if (name.includes('burger')) return <Beef />;
+        if (name.includes('sandwich') || name.includes('sandwish')) return <Utensils />;
+        if (name.includes('salad') || name.includes('veg')) return <Leaf />;
+        if (name.includes('chicken') || name.includes('meat') || name.includes('beef') || name.includes('steak')) return <Drumstick />;
+        if (name.includes('juice') || name.includes('drink') || name.includes('beverage') || name.includes('smoothie')) return <Wine />;
+        if (name.includes('dessert') || name.includes('sweet') || name.includes('ice cream') || name.includes('cake')) return <IceCream />;
+        if (name.includes('pizza')) return <Beef />;
+        if (name.includes('pasta') || name.includes('noodle')) return <Utensils />;
+        if (name.includes('soup')) return <Utensils />;
+        if (name.includes('appetizer') || name.includes('starter')) return <Utensils />;
+
+        // Default fallback
+        return <Utensils />;
     };
 
-    const handleInputDoubleClick = (e: React.MouseEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        if (settings?.posSettings?.enableOnScreenKeyboard) {
-            const target = e.currentTarget;
-            setKeyboardConfig({
-                visible: true,
-                target: target,
-                inputType: (target.type as any) || 'text',
-            });
-        }
-    };
-
-    if (isLoading) {
-        return <div className="flex h-full items-center justify-center"><LoaderCircle className="h-10 w-10 animate-spin text-muted-foreground" /></div>;
-    }
-
-    if (!settings) {
-        return (
-            <div className="flex h-full items-center justify-center p-4">
-                <Card className="w-full max-w-md text-center">
-                    <CardHeader>
-                        <CardTitle>Welcome to the POS</CardTitle>
-                        <CardDescription>To get started, please select a branch.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {isGlobalAdmin ? (
-                            <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-                                <SelectTrigger className="w-[180px]"><SelectValue placeholder="Select a branch" /></SelectTrigger>
-                                <SelectContent>{branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
-                            </Select>
-                        ) : <p className="text-muted-foreground">It seems you are not assigned to a branch. Please contact an administrator.</p>}
-                    </CardContent>
-                </Card>
-            </div>
-        );
-    }
-
-    const mainCategories = settings?.menuCategories?.slice(0, 4) || [];
+    if (isLoading) return <div className="flex h-full items-center justify-center"><LoaderCircle className="h-10 w-10 animate-spin text-muted-foreground" /></div>;
+    if (!settings) return <div className="flex h-full items-center justify-center p-4"><Card><CardContent><p>Select a branch to get started.</p>{isGlobalAdmin && <Select value={selectedBranchId} onValueChange={setSelectedBranchId}><SelectTrigger><SelectValue placeholder="Select a branch" /></SelectTrigger><SelectContent>{branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select>}</CardContent></Card></div >;
 
     return (
-        <div className="bg-gray-50 dark:bg-gray-900 rounded-lg h-screen overflow-hidden flex flex-col">
+        <div className="bg-slate-50 dark:bg-gray-950 h-screen overflow-hidden flex flex-col p-2">
             {selectedItemForAddons && (
-                <AddonDialog
-                    item={selectedItemForAddons}
-                    open={!!selectedItemForAddons}
-                    onOpenChange={(isOpen) => !isOpen && setSelectedItemForAddons(null)}
-                    onAddToCart={handleAddToCartWithAddons}
-                    settings={settings}
-                />
+                <AddonDialog item={selectedItemForAddons} open={!!selectedItemForAddons} onOpenChange={(isOpen) => !isOpen && setSelectedItemForAddons(null)} onAddToCart={handleAddToCartWithAddons} settings={settings} />
             )}
-            <div className="grid grid-cols-1 lg:grid-cols-3 flex-1 min-h-0 gap-0">
-                <div className="lg:col-span-2 flex flex-col p-4 overflow-hidden min-h-0">
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
-                        <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
-                            <TabsTrigger value="new-order">{orderToUpdate ? 'Edit Order' : 'New Order'}</TabsTrigger>
-                            <TabsTrigger value="table-view">Table View</TabsTrigger>
-                            <TabsTrigger value="manage-orders">Manage Orders ({activeOrders.length})</TabsTrigger>
-                        </TabsList>
+            <div className="grid grid-cols-1 lg:grid-cols-3 flex-1 min-h-0 gap-2 overflow-hidden">
+                <main className="lg:col-span-2 flex flex-col overflow-hidden min-h-0">
+                    <header className='space-y-3 mb-3'>
+                        <p className='text-muted-foreground text-sm'>Dashboard / Overview / <span className='text-foreground font-semibold'>Recent orders {activeOrders.length}</span></p>
+                        <div className='flex justify-between items-center'>
+                            <h1 className='text-xl font-bold'>Order Queues</h1>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant='outline'
+                                    size="sm"
+                                    onClick={toggleFullscreen}
+                                    title={isFullscreen ? "Exit Fullscreen (F11)" : "Enter Fullscreen (F11)"}
+                                >
+                                    {isFullscreen ? <Minimize className='w-4 h-4' /> : <Maximize className='w-4 h-4' />}
+                                </Button>
+                                <Button
+                                    variant='outline'
+                                    size="sm"
+                                    onClick={handleExitToDashboard}
+                                    title="Exit to Dashboard"
+                                >
+                                    <X className='w-4 h-4' />
+                                </Button>
+                            </div>
+                        </div>
+                    </header>
+                    <ScrollableContainer className="pb-3">
+                        <div className="flex gap-3">
+                            {activeOrders.map(order => <OrderQueueCard key={order.id} order={order} onEdit={handleEditOrder} />)}
+                        </div>
+                    </ScrollableContainer>
 
-                        <TabsContent value="new-order" className="flex-1 min-h-0 relative data-[state=active]:block">
-                            <div className="absolute inset-0 flex flex-col">
-                                <div className="flex flex-col md:flex-row gap-4 justify-end items-center flex-shrink-0 mt-4 mb-4">
-                                    <div className="flex items-center gap-2 w-full md:w-auto">
-                                        <div className="relative w-full md:max-w-xs">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                                            <Input
-                                                placeholder="Search menu..."
-                                                value={searchTerm}
-                                                onChange={(e) => setSearchTerm(e.target.value)}
-                                                onDoubleClick={handleInputDoubleClick}
-                                                className="pl-10 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 h-12 rounded-lg text-gray-900 dark:text-gray-100"
-                                            />
-                                        </div>
-                                        <Button variant="outline" className="h-12 w-12 shrink-0" onClick={handleFullscreen} title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}>
-                                            {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
-                                        </Button>
-                                        <Link href="/admin" passHref>
-                                            <Button variant="outline" className="h-12 w-12 shrink-0" title="Exit POS">
-                                                <Home className="h-5 w-5" />
-                                            </Button>
-                                        </Link>
-                                    </div>
-                                </div>
-                                <div className='flex-shrink-0'>
-                                    <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-gray-100">Choose Category</h3>
-                                    <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4">
-                                        <CategoryButton key="All" label="All" selected={selectedCategory === "All"} onClick={() => setSelectedCategory("All")} icon={categoryIcons['All']} />
-                                        {mainCategories.map(cat => <CategoryButton key={cat} label={cat} selected={selectedCategory === cat} onClick={() => setSelectedCategory(cat)} icon={categoryIcons[cat] || categoryIcons['Default']} />)}
-                                    </div>
-                                </div>
-                                <div className="flex-1 overflow-y-auto -mr-4 pr-4 mt-4 min-h-0 pb-8">
-                                    <POSMenuGrid
-                                        items={filteredMenu}
-                                        onAddToCart={handleSimpleAddToCart}
-                                        onRemoveFromCart={handleRemoveFromCart}
-                                        getQuantity={getQuantity}
-                                        settings={settings}
-                                        cart={cart}
-                                    />
-                                </div>
-                            </div>
-                        </TabsContent>
-                        <TabsContent value="table-view" className="flex-1 min-h-0 relative data-[state=active]:block">
-                            <div className="absolute inset-0 flex flex-col">
-                                <div className="flex flex-col md:flex-row gap-4 justify-end items-center flex-shrink-0 mt-4 mb-4">
-                                    <div className="flex items-center gap-2 w-full md:w-auto">
-                                        {settings?.multiFloorEnabled && (settings.floors?.length ?? 0) > 0 && (
-                                            <Select value={floorFilter} onValueChange={setFloorFilter}>
-                                                <SelectTrigger className="w-full sm:w-[180px]">
-                                                    <SelectValue placeholder="Filter by floor" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {settings.floors?.filter(f => f.toLowerCase() !== 'all floor').map(floor => (
-                                                        <SelectItem key={floor} value={floor}>{floor}</SelectItem>
-                                                    ))}
-                                                    <SelectItem value="__none__">No Floor</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        )}
-                                        <Button variant="outline" className="h-12 w-12 shrink-0" onClick={handleFullscreen} title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}>
-                                            {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
-                                        </Button>
-                                        <Link href="/admin" passHref>
-                                            <Button variant="outline" className="h-12 w-12 shrink-0" title="Exit POS">
-                                                <Home className="h-5 w-5" />
-                                            </Button>
-                                        </Link>
-                                    </div>
-                                </div>
-                                <div className="flex-1 overflow-y-auto -mr-4 pr-4 min-h-0">
-                                    {selectedBranchId ? (
-                                        <DraggableTableLayout
-                                            branchId={selectedBranchId}
-                                            floorFilter={floorFilter}
-                                            onTableSelect={handleTableSelectFromLayout}
-                                        />
-                                    ) : (
-                                        <p className="text-center text-muted-foreground p-8">Select a branch to see the table layout.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </TabsContent>
-                        <TabsContent value="manage-orders" className="flex-1 min-h-0 relative data-[state=active]:block">
-                            <div className="absolute inset-0 flex flex-col">
-                                <div className="flex justify-end items-center gap-2 flex-shrink-0 mt-4 mb-4">
-                                    <Button variant="outline" className="h-12 w-12 shrink-0" onClick={handleFullscreen} title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}>
-                                        {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
-                                    </Button>
-                                    <Link href="/admin" passHref>
-                                        <Button variant="outline" className="h-12 w-12 shrink-0" title="Exit POS">
-                                            <Home className="h-5 w-5" />
-                                        </Button>
-                                    </Link>
-                                </div>
-                                {activeOrders.length === 0 ? (
-                                    <div className="flex-1 flex items-center justify-center">
-                                        <p className="text-muted-foreground">No active orders for this branch.</p>
-                                    </div>
-                                ) : (
-                                    <div className="flex-1 overflow-y-auto -mr-4 pr-4 min-h-0">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
-                                            {activeOrders.map((order) => <ActiveOrderCard key={order.id} order={order} settings={settings} onUpdate={refreshActiveOrders} onEdit={handleEditOrder} restaurantId={restaurantId} startTransition={startTransition} />)}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </TabsContent>
-                    </Tabs>
-                </div>
-                <div className="col-span-1 border-l border-gray-200 dark:border-gray-700 overflow-hidden min-h-0">
+                    <div className='flex justify-between items-center mt-4 mb-3'>
+                        <h1 className='text-xl font-bold'>Product Lists</h1>
+                        <div className="relative w-full md:max-w-xs">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Search for food..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 bg-white dark:bg-gray-800 h-9" />
+                        </div>
+                    </div>
+                    <ScrollableContainer className="pb-3">
+                        <div className='flex gap-2'>
+                            {categories.map(({ name, count }) => <CategoryButton key={name} label={name} count={count} selected={selectedCategory === name} onClick={() => setSelectedCategory(name)} icon={getCategoryIcon(name)} />)}
+                        </div>
+                    </ScrollableContainer>
+                    <ScrollArea className='flex-1 -mx-2'>
+                        <div className='px-2'>
+                            <POSMenuGrid items={filteredMenu} onAddToCart={handleSimpleAddToCart} onRemoveFromCart={handleSimpleRemoveFromCart} getQuantity={getQuantity} settings={settings} cart={cart} discounts={discounts} />
+                        </div>
+                    </ScrollArea>
+                </main>
+                <aside className="col-span-1 overflow-hidden min-h-0">
                     <POSCart
                         cart={cart}
+                        menuItems={menuItems}
                         settings={settings}
                         onUpdateQuantity={handleUpdateQuantity}
-                        onPlaceOrder={handlePlaceOrder}
+                        onProceedToPayment={handleProceedToPayment}
                         tables={tables}
                         orderType={orderType}
                         setOrderType={setOrderType}
@@ -1303,24 +1046,25 @@ export default function POSPage() {
                         takeAwayTime={takeAwayTime}
                         setTakeAwayTime={setTakeAwayTime}
                         orderToUpdate={orderToUpdate}
-                        onClearEdit={handleClearEdit}
+                        onClearCart={handleClearCart}
                         orderNotes={orderNotes}
                         setOrderNotes={setOrderNotes}
-                        onItemNoteChange={handleItemNoteChange}
-                        onInputDoubleClick={handleInputDoubleClick}
                         discount={discount}
                         setDiscount={setDiscount}
                         isSubmitting={isPending}
                     />
-                </div>
+                </aside>
             </div>
-            {keyboardConfig.visible && (
-                <OnScreenKeyboard
-                    onClose={() => setKeyboardConfig({ visible: false, target: null })}
-                    inputType={keyboardConfig.inputType}
+            {orderToPay && (
+                <PaymentSheet
+                    isOpen={isPaymentSheetOpen}
+                    onOpenChange={setIsPaymentSheetOpen}
+                    order={orderToPay}
+                    settings={settings}
+                    onFinalizePayment={handleFinalizePayment}
+                    isFinalizing={isPending}
                 />
             )}
         </div>
     );
 }
-

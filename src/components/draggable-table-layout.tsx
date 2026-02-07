@@ -1,4 +1,5 @@
 
+
 'use client';
 import { cn } from "@/lib/utils";
 import { Users, MoreVertical, FileText, PlusCircle, Trash2, Move, LoaderCircle } from "lucide-react";
@@ -100,7 +101,7 @@ function DraggableTable({
         </AlertDialog>
 
 
-        <div ref={setNodeRef} style={style} className="w-32 group/table">
+        <div ref={setNodeRef} style={style} className="group/table">
             <DropdownMenu>
                  <DropdownMenuTrigger
                     asChild
@@ -114,8 +115,11 @@ function DraggableTable({
                     <div className="flex flex-col items-center gap-2 group cursor-pointer">
                         <div
                             className={cn(
-                                "relative flex items-center justify-center h-20 w-full rounded-lg border-4 transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg",
-                                table.isOccupied ? "bg-red-500/20 border-red-500" : "bg-green-500/20 border-green-500"
+                                "relative flex items-center justify-center border-4 transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg",
+                                table.isOccupied ? "bg-red-500/20 border-red-500" : "bg-green-500/20 border-green-500",
+                                (!table.shape || table.shape === 'square') && "h-24 w-24 rounded-lg",
+                                table.shape === 'rectangle' && "h-20 w-32 rounded-lg",
+                                table.shape === 'circle' && "h-24 w-24 rounded-full"
                             )}
                         >
                             <span className="font-headline text-3xl font-bold text-foreground p-4 select-none">

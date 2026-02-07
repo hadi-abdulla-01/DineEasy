@@ -18,7 +18,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['var(--font-sans)', 'sans-serif'],
-        headline: ['var(--font-sans)', 'sans-serif'],
+        headline: ['var(--font-poppins)', 'sans-serif'],
         body: ['var(--font-sans)', 'sans-serif'],
         code: ['monospace'],
         // Custom fonts
@@ -62,6 +62,10 @@ export default {
         border: 'var(--border)',
         input: 'var(--input)',
         ring: 'var(--ring)',
+        orange: {
+          500: 'var(--orange-500)',
+          600: 'var(--orange-600)',
+        },
         chart: {
           '1': 'var(--chart-1)',
           '2': 'var(--chart-2)',
@@ -109,5 +113,20 @@ export default {
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [
+    require('tailwindcss-animate'),
+    function ({ addUtilities }: any) {
+      addUtilities({
+        '.scrollbar-hide': {
+          /* Hide scrollbar for Chrome, Safari and Opera */
+          '&::-webkit-scrollbar': {
+            display: 'none',
+          },
+          /* Hide scrollbar for IE, Edge and Firefox */
+          '-ms-overflow-style': 'none',
+          'scrollbar-width': 'none',
+        },
+      });
+    },
+  ],
 } satisfies Config;

@@ -2,7 +2,7 @@
 
 'use client';
 import { collection, query, where, onSnapshot, DocumentSnapshot } from "firebase/firestore";
-import { getClientFirebase } from "@/firebase/client";
+import { useFirebase } from "@/firebase/provider";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { OrderStatusBadge } from "@/components/order-status-badge";
 import { Separator } from "@/components/ui/separator";
@@ -23,7 +23,7 @@ type OrderWithTable = Order & { table?: Table };
 function KitchenTicket({ order, settings, visibleItems, printSize }: { order: OrderWithTable, settings: RestaurantSettings | null, visibleItems: OrderItem[], printSize?: string }) {
     // Adjust font sizes based on print format
     const isA4 = printSize === 'a4';
-    const isThermal = printSize === 'thermal80mm';
+    const isThermal = printSize === 'thermal80mm' || printSize === 'custom';
 
     const titleSize = isA4 ? 'text-4xl' : isThermal ? 'text-xl' : 'text-2xl';
     const textSize = isA4 ? 'text-xl' : isThermal ? 'text-sm' : 'text-base';
@@ -31,7 +31,7 @@ function KitchenTicket({ order, settings, visibleItems, printSize }: { order: Or
     const padding = isA4 ? 'p-8' : 'p-3';
 
     return (
-        <div className={`${padding} font-mono ${textSize} w-full h-full`}>
+        <div className={`${padding} font-mono ${textSize} w-full h-full bg-white text-black`}>
             <div className={`text-center font-bold ${titleSize} mb-4 uppercase tracking-wide`}>KITCHEN TICKET</div>
             <div className="mb-4 space-y-1">
                 <div className="font-bold text-2xl">Order #: {order.invoiceNumber || order.id.slice(-4)}</div>
@@ -63,7 +63,6 @@ function PrintTicketButton({ order, settings, visibleItems }: { order: OrderWith
         const printSize = settings.printSettings?.kitchenTicketPrintSize || 'thermal80mm';
         const customWidth = settings.printSettings?.kitchenTicketCustomWidth || 80;
 
-        // Determine window size and body styling based on print size
         let windowWidth = 400;
         let bodyStyle = 'padding: 0; margin: 0;';
 
@@ -72,10 +71,10 @@ function PrintTicketButton({ order, settings, visibleItems }: { order: OrderWith
             bodyStyle = 'padding: 20px; margin: 0;';
         } else if (printSize === 'thermal80mm') {
             windowWidth = 300;
-            bodyStyle = 'padding: 0; margin: 0; width: 80mm;';
+            bodyStyle = 'padding: 0; margin: 0;';
         } else if (printSize === 'custom') {
-            windowWidth = Math.max(300, customWidth * 3.78); // Convert mm to pixels (approximate)
-            bodyStyle = `padding: 0; margin: 0; width: ${customWidth}mm;`;
+            windowWidth = Math.max(300, customWidth * 3.78);
+            bodyStyle = `padding: 0; margin: 0;`;
         }
 
         const printWindow = window.open('', '', `height=600,width=${windowWidth}`);
@@ -84,28 +83,46 @@ function PrintTicketButton({ order, settings, visibleItems }: { order: OrderWith
             const ticketHtml = ReactDOMServer.renderToString(<KitchenTicket order={order} settings={settings} visibleItems={visibleItems} printSize={printSize} />);
 
             printWindow.document.write('<html><head><title>Kitchen Ticket</title>');
-            printWindow.document.write('<style>');
-            printWindow.document.write('* { margin: 0; padding: 0; box-sizing: border-box; }');
-            printWindow.document.write('html, body { width: 100%; height: 100%; }');
-            printWindow.document.write('body { font-family: monospace; display: flex; flex-direction: column; }');
-            printWindow.document.write('@media print {');
-            if (printSize === 'thermal80mm') {
-                printWindow.document.write('@page { size: 80mm auto; margin: 0; }');
-            } else if (printSize === 'custom') {
-                printWindow.document.write(`@page { size: ${customWidth}mm auto; margin: 0; }`);
-            } else {
-                printWindow.document.write('@page { size: A4; margin: 5mm; }');
-            }
-            printWindow.document.write('}');
-            printWindow.document.write('</style>');
+            
+            const styles = Array.from(document.styleSheets).map(sheet => {
+                try {
+                    if (sheet.href) {
+                        return `<link rel="stylesheet" href="${sheet.href}">`;
+                    }
+                    if (sheet.cssRules) {
+                        return `<style>${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}</style>`;
+                    }
+                } catch (e) {
+                    console.warn('Could not copy stylesheet for printing:', e);
+                }
+                return '';
+            }).join('\n');
+
+            const printSpecificStyles = `
+              @media print {
+                  @page { 
+                      size: ${printSize === 'a4' ? 'A4' : (printSize === 'custom' ? `${customWidth}mm` : '80mm')} auto;
+                      margin: ${printSize === 'a4' ? '5mm' : '2mm'};
+                  }
+                  body {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                    background-color: #fff !important;
+                  }
+              }
+            `;
+            
+            printWindow.document.head.innerHTML = styles + `<style>${printSpecificStyles}</style>`;
+
             printWindow.document.write(`</head><body style="${bodyStyle}">`);
-            printWindow.document.body.innerHTML = ticketHtml;
+            printWindow.document.write(ticketHtml);
             printWindow.document.write('</body></html>');
             printWindow.document.close();
             setTimeout(() => {
+                printWindow.focus();
                 printWindow.print();
                 printWindow.close();
-            }, 250);
+            }, 500);
         }
     };
     return (
@@ -144,16 +161,6 @@ function MarkOrderReadyButton({ order, visibleItems, restaurantId }: { order: Or
     // Only verify readiness of VISIBLE items for this kitchen user
     const allVisibleReady = visibleItems.every(item => item.isReady);
 
-    // We can't easily use form action with data binding AND formData comfortably without hidden inputs or weird binds. 
-    // Direct call is easier.
-    // updateKitchenOrderStatusAction expects FormData. We should use updateOrderStatus or create a new action?
-    // Actually updateKitchenOrderStatusAction implementation:
-    // export async function updateKitchenOrderStatusAction(orderId: string, formData: FormData) {
-    //    const status = formData.get('status') as OrderStatus;
-    //    const restaurantId = formData.get('restaurantId') as string; ...
-    // So if I construct a FormData object client side I can call it.
-    // OR create a wrapper. 
-    // simpler: construct FormData.
     const handleMarkReady = async () => {
         try {
             const formData = new FormData();
@@ -181,13 +188,13 @@ function MarkOrderReadyButton({ order, visibleItems, restaurantId }: { order: Or
 
 export default function KitchenPage() {
     const { user } = useAuth();
+    const { firestore } = useFirebase();
     const [orders, setOrders] = useState<OrderWithTable[]>([]);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
 
     // Extract restaurantId from user email
     const restaurantId = user?.email ? extractRestaurantId(user.email) : null;
 
-    // Helper to convert doc to object (client-side)
     // Helper to convert doc to object (client-side)
     function docToObj<T>(doc: DocumentSnapshot): T {
         const data = doc.data();
@@ -206,14 +213,13 @@ export default function KitchenPage() {
     }
 
     useEffect(() => {
-        if (!user?.branchId || !restaurantId) return;
+        if (!user?.branchId || !restaurantId || !firestore) return;
 
         console.log(`[KitchenPage] Using restaurantId: ${restaurantId}`);
         console.log(`[KitchenPage] User email: ${user.email}`);
 
         getSettings(user.branchId, restaurantId).then(setSettings);
 
-        const { firestore } = getClientFirebase();
         // Use restaurant-specific collection
         const ordersRef = collection(firestore, `restaurants/${restaurantId}/orders`);
         const q = query(ordersRef, where('status', 'in', ['received', 'preparing', 'ready']));
@@ -245,7 +251,7 @@ export default function KitchenPage() {
         });
 
         return () => unsubscribe();
-    }, [user]);
+    }, [user, firestore, restaurantId]);
 
     const filteredOrders = useMemo(() => {
         if (!user) return [];

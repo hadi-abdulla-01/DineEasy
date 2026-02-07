@@ -1,10 +1,11 @@
 
+
 'use server';
 
 import { z } from 'zod';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, unstable_noStore as noStore } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { OrderItem, OrderStatus, MenuItem, Table, Order, KitchenUser, RestaurantSettings, AddonGroup, SelectedAddon, UserRole, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, RemoteOrder } from './definitions';
+import type { OrderItem, OrderStatus, MenuItem, Table, Order, AppUser, RestaurantSettings, AddonGroup, SelectedAddon, UserRole, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, RemoteOrder, DayOfWeek, Discount, DiscountApplicability, OTPRequest } from './definitions';
 import {
     createOrder,
     updateTableStatus,
@@ -16,9 +17,9 @@ import {
     toggleMenuItemAvailability,
     getOrdersByTableId,
     cancelOrdersForTable,
-    createKitchenUserInFirestore,
-    updateKitchenUser,
-    deleteKitchenUser,
+    createUserInFirestore,
+    updateUser,
+    deleteUser,
     updateOrderItemStatus,
     cancelOrderItem,
     updateTablePosition,
@@ -33,15 +34,22 @@ import {
     createBranch,
     deleteBranch,
     setMainBranch,
-    getKitchenUserByUsername,
+    getUserByUsername,
     getTableById,
     logActivity,
-    getKitchenUserById,
+    getUserById,
     getBranchById,
     updateTable,
     updateOrder,
+    addDiscount,
+    updateDiscount,
+    getFirestoreInstance,
+    sendOtpNotification,
+    createOtpRequest,
+    verifyOtp,
 } from './data';
-
+import { randomUUID } from 'crypto';
+import { doc, getDocFromServer, deleteField, runTransaction, Timestamp } from 'firebase/firestore';
 
 const OrderItemSchema = z.object({
     menuItemId: z.string(),
@@ -59,7 +67,7 @@ const OrderItemSchema = z.object({
     notes: z.string().optional(),
 });
 
-type PlaceOrderState = {
+export type PlaceOrderState = {
     errors?: {
         customerName?: string[];
         customerPhone?: string[];
@@ -68,6 +76,19 @@ type PlaceOrderState = {
     success?: boolean;
     orderId?: string;
 } | null;
+
+// Helper to convert Firestore doc to object with ID, specific for this server action context
+function docToObjAction<T>(d: any): T {
+    if (!d.exists()) return null as T;
+    const data = d.data();
+    // Convert Timestamps to ISO strings
+    for (const key in data) {
+        if (data[key] instanceof Timestamp) {
+            data[key] = data[key].toDate().toISOString();
+        }
+    }
+    return { ...data, id: d.id } as T;
+}
 
 export async function placeOrder(prevState: PlaceOrderState, formData: FormData): Promise<PlaceOrderState> {
     const tableId = formData.get('tableId') as string;
@@ -130,7 +151,7 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
 
     let createdByName = isCustomerFacing ? 'Customer' : 'Staff';
     if (createdByForm) {
-        const user = await getKitchenUserById(createdByForm, restaurantId);
+        const user = await getUserById(createdByForm, restaurantId);
         if (user) createdByName = user.username;
     }
 
@@ -160,7 +181,7 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
         if (!finalOrder) {
             throw new Error("Failed to create or update order.");
         }
-
+        
         await updateTableStatus(tableId, 'occupied', restaurantId);
         if (createdByForm) {
             await logActivity(createdByForm, createdByName, 'Order Placed', `Placed order for ${customerName} at table.`, restaurantId);
@@ -177,7 +198,7 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
     revalidatePath('/kitchen', 'layout');
 
     if (isCustomerFacing) {
-        redirect(`/order/${tableId}/status/${finalOrder.id}`);
+        redirect(`/order/${tableId}/status/${finalOrder.id}?restaurantId=${restaurantId}`);
     }
 
     return { success: true, orderId: finalOrder.id };
@@ -205,10 +226,19 @@ export async function updateOrderStatusAction(formData: FormData) {
 
         if (updatedOrder && (status === 'completed' || status === 'cancelled')) {
             if (updatedOrder.orderType === 'Dine-in' && updatedOrder.tableId) {
-                const otherOrders = await getOrdersByTableId(updatedOrder.tableId, restaurantId);
+                const tableId = updatedOrder.tableId;
+                const otherOrders = await getOrdersByTableId(tableId, restaurantId);
                 const activeOrdersOnTable = otherOrders.filter(o => o.id !== orderId && o.status !== 'completed' && o.status !== 'cancelled');
+
                 if (activeOrdersOnTable.length === 0) {
-                    await updateTableStatus(updatedOrder.tableId, 'available', restaurantId);
+                    const table = await getTableById(tableId, restaurantId);
+                    if (table) {
+                        const tableUpdateData: Partial<Table> = { status: 'available' };
+                        if (table.isDynamicQR) {
+                            tableUpdateData.qrToken = randomUUID();
+                        }
+                        await updateTable(tableId, tableUpdateData, restaurantId);
+                    }
                 }
             }
         }
@@ -473,17 +503,22 @@ type CreateUserState = {
 } | undefined;
 
 
-export async function createKitchenUserAction(restaurantId: string, formData: FormData): Promise<CreateUserState> {
+export async function createUserAction(restaurantId: string, formData: FormData): Promise<CreateUserState> {
     const username = formData.get('username') as string;
     const password = formData.get('password') as string;
     const role = formData.get('role') as UserRole;
     const branchId = formData.get('branchId') as string;
+    const assignedTableId = formData.get('assignedTableId') as string | null;
     let categories = formData.getAll('categories').map(String);
     const permissionsString = formData.get('permissions') as string | null;
     const createdBy = formData.get('createdBy') as string | null;
 
     if (!username || !password || !role || !branchId) {
         return { message: "Missing required fields." };
+    }
+
+    if (role === 'Table' && !assignedTableId) {
+        return { message: "An assigned table is required for the 'Table' role."};
     }
 
     if (!restaurantId) {
@@ -495,7 +530,7 @@ export async function createKitchenUserAction(restaurantId: string, formData: Fo
     }
 
     // Check for unique username within the restaurant
-    const existingUser = await getKitchenUserByUsername(username, restaurantId);
+    const existingUser = await getUserByUsername(username, restaurantId);
     if (existingUser) {
         return { message: "Username already exists. Please choose a different one." };
     }
@@ -526,7 +561,8 @@ export async function createKitchenUserAction(restaurantId: string, formData: Fo
             categories: uniqueCategories,
             role,
             permissions,
-            branchId
+            branchId,
+            assignedTableId: assignedTableId || undefined,
         }, restaurantId); // Pass restaurantId to auth function
 
         if (!authResult.success) {
@@ -535,7 +571,7 @@ export async function createKitchenUserAction(restaurantId: string, formData: Fo
 
         // Log activity
         if (createdBy) {
-            const creator = await getKitchenUserById(createdBy, restaurantId);
+            const creator = await getUserById(createdBy, restaurantId);
             if (creator) {
                 await logActivity(creator.id, creator.username, 'Created User', `Created new user: ${username} (${email}) with role ${role}`, restaurantId);
             }
@@ -551,11 +587,12 @@ export async function createKitchenUserAction(restaurantId: string, formData: Fo
 }
 
 
-export async function updateKitchenUserAction(userId: string, formData: FormData): Promise<KitchenUser | undefined> {
+export async function updateUserAction(userId: string, formData: FormData): Promise<AppUser | undefined> {
     const username = formData.get('username') as string;
     const password = formData.get('password') as string;
     const role = formData.get('role') as UserRole;
     const branchId = formData.get('branchId') as string;
+    const assignedTableId = formData.get('assignedTableId') as string | null;
     const categories = formData.getAll('categories').map(String);
     const permissionsString = formData.get('permissions') as string | null;
     const updatedBy = formData.get('updatedBy') as string | null;
@@ -571,9 +608,9 @@ export async function updateKitchenUserAction(userId: string, formData: FormData
     // Remove duplicates
     const uniqueCategories = Array.from(new Set(categories));
 
-    const updateData: Partial<KitchenUser> = {};
+    const updateData: Partial<AppUser> & {[key: string]: any} = {};
     if (username) updateData.username = username;
-    if (password) updateData.password = password; // In a real app, this should be hashed
+    if (password) updateData.password = password; // In a real app, this should be hashed (kept for backward compatibility)
     if (role) updateData.role = role;
     if (branchId) updateData.branchId = branchId;
     if (uniqueCategories.length > 0) updateData.categories = uniqueCategories;
@@ -581,12 +618,21 @@ export async function updateKitchenUserAction(userId: string, formData: FormData
         updateData.categories = [];
     }
     if (permissions) updateData.permissions = permissions;
+    
+    if (role === 'Table') {
+        if (assignedTableId) {
+            updateData.assignedTableId = assignedTableId;
+        }
+    } else {
+        // If role is changed from Table to something else, remove assignedTableId
+        updateData.assignedTableId = deleteField();
+    }
 
 
     try {
-        const updatedUser = await updateKitchenUser(userId, updateData, restaurantId);
+        const updatedUser = await updateUser(userId, updateData, restaurantId);
         if (updatedBy) {
-            const updater = await getKitchenUserById(updatedBy, restaurantId);
+            const updater = await getUserById(updatedBy, restaurantId);
             if (updater && updatedUser) {
                 await logActivity(updater.id, updater.username, 'Updated User', `Updated profile for ${updatedUser.username}`, restaurantId);
             }
@@ -600,12 +646,12 @@ export async function updateKitchenUserAction(userId: string, formData: FormData
 }
 
 
-export async function deleteKitchenUserAction(userId: string, deletedBy: string | null, restaurantId?: string) {
+export async function deleteUserAction(userId: string, deletedBy: string | null, restaurantId?: string) {
     try {
-        const userToDelete = await getKitchenUserById(userId, restaurantId);
+        const userToDelete = await getUserById(userId, restaurantId);
         if (userToDelete) {
             if (deletedBy) {
-                const deleter = await getKitchenUserById(deletedBy, restaurantId);
+                const deleter = await getUserById(deletedBy, restaurantId);
                 if (deleter) {
                     await logActivity(deleter.id, deleter.username, 'Deleted User', `Deleted user: ${userToDelete.username}`, restaurantId || 'dineeasee-restaurant');
                 }
@@ -621,7 +667,7 @@ export async function deleteKitchenUserAction(userId: string, deletedBy: string 
                 if (adminAuth) {
                     try {
                         await adminAuth.deleteUser(userToDelete.firebaseUid);
-                        console.log(`Deleted Firebase Auth user: ${userToDelete.firebaseUid}`);
+                        console.log(`Deleted Auth User for restaurant ${restaurantId}: ${userToDelete.firebaseUid}`);
                     } catch (e) {
                         console.warn(`Failed to delete auth user ${userToDelete.firebaseUid}:`, e);
                     }
@@ -630,7 +676,7 @@ export async function deleteKitchenUserAction(userId: string, deletedBy: string 
                 }
             }
         }
-        await deleteKitchenUser(userId, restaurantId);
+        await deleteUser(userId, restaurantId);
         revalidatePath('/admin/user-management');
     } catch (error) {
         console.error("Error deleting user:", error);
@@ -663,6 +709,7 @@ export async function updateSettingsAction(formData: FormData) {
     if (formData.has('currencySymbol')) newSettings.currencySymbol = formData.get('currencySymbol') as string;
     if (formData.has('currencyDecimalPlaces')) newSettings.currencyDecimalPlaces = Number(formData.get('currencyDecimalPlaces'));
     if (formData.has('timezone')) newSettings.timezone = formData.get('timezone') as string;
+    if (formData.has('endOfDayTime')) newSettings.endOfDayTime = formData.get('endOfDayTime') as string;
     if (formData.has('qrCodeColor')) newSettings.qrCodeColor = formData.get('qrCodeColor') as string;
     if (formData.has('qrCodeBackgroundColor')) newSettings.qrCodeBackgroundColor = formData.get('qrCodeBackgroundColor') as string;
 
@@ -733,10 +780,9 @@ export async function updateSettingsAction(formData: FormData) {
 }
 
 
-export async function deleteOrderAction(orderId: string, orderType: 'Dine-in' | 'Remote', restaurantId?: string) {
+export async function deleteOrderAction(orderId: string, orderType: 'Dine-in' | 'Remote', restaurantId: string = 'dineeasee-restaurant') {
     try {
         await deleteOrder(orderId, orderType, restaurantId);
-        revalidatePath('/admin/sales-history');
     } catch (error) {
         return { message: 'Database Error: Failed to delete order.' };
     }
@@ -762,7 +808,6 @@ export async function updateOrderDetailsAction(orderId: string, orderType: Order
 export async function deleteTableAction(tableId: string, restaurantId?: string) {
     try {
         await deleteTable(tableId, restaurantId);
-        revalidatePath('/admin/tables');
     } catch (error) {
         console.error('Error in deleteTableAction:', error);
         return { message: 'Database Error: Failed to delete table.' };
@@ -775,6 +820,15 @@ export async function updateTableFloorAction(tableId: string, floor: string, res
     } catch (error) {
         console.error('Error updating table floor:', error);
         return { message: 'Database Error: Failed to update table floor.' };
+    }
+}
+
+export async function updateTableShapeAction(tableId: string, shape: 'rectangle' | 'square' | 'circle', restaurantId?: string) {
+    try {
+        await updateTable(tableId, { shape }, restaurantId);
+    } catch (error) {
+        console.error('Error updating table shape:', error);
+        return { message: 'Database Error: Failed to update table shape.' };
     }
 }
 
@@ -961,8 +1015,23 @@ export async function changeOrderTableAction(formData: FormData) {
             return { message: 'Order is already at this table.' };
         }
 
-        // 1. Update the order's tableId.
-        await updateOrder(orderId, { tableId: newTableId }, restaurantId);
+        // Fetch details for both tables to get their numbers
+        const oldTable = await getTableById(oldTableId, restaurantId);
+        const newTable = await getTableById(newTableId, restaurantId);
+        
+        if (!newTable) {
+            return { message: 'New table not found.' };
+        }
+
+        const updatePayload: Partial<Order> = { tableId: newTableId };
+
+        // Check if the customer name matches the old table name pattern
+        if (oldTable && order.customerName === `Table ${oldTable.number}`) {
+            updatePayload.customerName = `Table ${newTable.number}`;
+        }
+        
+        // 1. Update the order's tableId and potentially customerName.
+        await updateOrder(orderId, updatePayload, restaurantId);
 
         // 2. Update status of the new table to 'occupied'
         await updateTableStatus(newTableId, 'occupied', restaurantId);
@@ -984,10 +1053,251 @@ export async function changeOrderTableAction(formData: FormData) {
         return { message: 'Database Error: Failed to change table.' };
     }
 }
+
+// Discount Actions
+export async function createDiscountAction(formData: FormData) {
+    try {
+        const branchId = formData.get('branchId') as string;
+        const restaurantId = formData.get('restaurantId') as string;
+        
+        const discountData: Omit<Discount, 'id'> = {
+          name: formData.get('name') as string,
+          description: formData.get('description') as string,
+          type: formData.get('type') as DiscountType,
+          value: Number(formData.get('value')),
+          isActive: formData.get('isActive') === 'on',
+          startDate: formData.get('startDate') ? new Date(formData.get('startDate') as string).toISOString() : undefined,
+          endDate: formData.get('endDate') ? new Date(formData.get('endDate') as string).toISOString() : undefined,
+          startTime: formData.get('startTime') as string || undefined,
+          endTime: formData.get('endTime') as string || undefined,
+          daysOfWeek: JSON.parse(formData.get('daysOfWeek') as string || '[]') as DayOfWeek[],
+          applicability: formData.get('applicability') as DiscountApplicability,
+          applicableCategories: JSON.parse(formData.get('applicableCategories') as string || '[]'),
+          applicableItems: JSON.parse(formData.get('applicableItems') as string || '[]'),
+          branchId,
+        };
+        await addDiscount(branchId, discountData, restaurantId);
+        revalidatePath('/admin/settings/discounts');
+    } catch (error) {
+        if (error instanceof Error) return { error: error.message };
+        return { error: 'Failed to create discount.' };
+    }
+}
+
+export async function updateDiscountAction(discountId: string, formData: FormData) {
+    try {
+        const branchId = formData.get('branchId') as string;
+        const restaurantId = formData.get('restaurantId') as string;
+
+        const updates: Partial<Discount> = {
+          name: formData.get('name') as string,
+          description: formData.get('description') as string,
+          type: formData.get('type') as DiscountType,
+          value: Number(formData.get('value')),
+          isActive: formData.get('isActive') === 'on',
+          startDate: formData.get('startDate') ? new Date(formData.get('startDate') as string).toISOString() : undefined,
+          endDate: formData.get('endDate') ? new Date(formData.get('endDate') as string).toISOString() : undefined,
+          startTime: formData.get('startTime') as string || undefined,
+          endTime: formData.get('endTime') as string || undefined,
+          daysOfWeek: JSON.parse(formData.get('daysOfWeek') as string || '[]'),
+          applicability: formData.get('applicability') as DiscountApplicability,
+          applicableCategories: JSON.parse(formData.get('applicableCategories') as string || '[]'),
+          applicableItems: JSON.parse(formData.get('applicableItems') as string || '[]'),
+        };
+
+        await updateDiscount(branchId, discountId, updates, restaurantId);
+        revalidatePath('/admin/settings/discounts');
+    } catch (error) {
+        if (error instanceof Error) return { error: error.message };
+        return { error: 'Failed to update discount.' };
+    }
+}
+
+export async function deleteDiscountAction(discountId: string, branchId: string, restaurantId: string) {
+    const { deleteDiscount } = await import('./data');
+    try {
+        await deleteDiscount(branchId, discountId, restaurantId);
+        revalidatePath('/admin/settings/discounts');
+    } catch(error) {
+        if (error instanceof Error) return { error: error.message };
+        return { error: 'Failed to delete discount.' };
+    }
+}
+
+export async function toggleTableDynamicQRAction(tableId: string, isDynamic: boolean, restaurantId: string) {
+    if (!tableId || !restaurantId) {
+        return { success: false, message: 'Missing required data.' };
+    }
+
+    try {
+        const updateData: Partial<Table> = { 
+            isDynamicQR: isDynamic,
+            qrToken: isDynamic ? randomUUID() : ''
+        };
+        await updateTable(tableId, updateData, restaurantId);
+        revalidatePath('/admin/tables'); // Revalidate to update the UI if needed
+        return { success: true };
+    } catch (error) {
+        console.error("Failed to toggle dynamic QR for table:", error);
+        return { success: false, message: "Failed to update table." };
+    }
+}
+
+export async function resetTableQRTokenAction(tableId: string, restaurantId: string) {
+    if (!tableId || !restaurantId) {
+        return { success: false, message: 'Missing required data.' };
+    }
+
+    try {
+        const updateData: Partial<Table> = {
+            qrToken: randomUUID()
+        };
+        await updateTable(tableId, updateData, restaurantId);
+        revalidatePath('/admin/tables');
+        return { success: true };
+    } catch (error) {
+        console.error("Failed to reset QR token for table:", error);
+        return { success: false, message: "Failed to reset token." };
+    }
+}
+
+export async function pairDeviceAction(formData: FormData) {
+    const tableId = formData.get('tableId') as string;
+    const pairingCode = formData.get('pairingCode') as string;
+    const restaurantId = formData.get('restaurantId') as string;
+
+    if (!tableId || !restaurantId || !pairingCode) {
+        return { success: false, message: 'Missing required data.' };
+    }
+
+    try {
+        await updateTable(tableId, { pairingCode }, restaurantId);
+        revalidatePath('/admin/tables');
+        return { success: true };
+    } catch (error) {
+        console.error("Failed to pair device:", error);
+        return { success: false, message: "Database error: Failed to pair device." };
+    }
+}
+
+export async function validateTableAction(
+  tableId: string,
+  restaurantId: string,
+  token: string | null
+): Promise<{ success: boolean; tableNumber?: string; error?: string }> {
+  noStore();
+  try {
+    const firestore = await getFirestoreInstance();
+    const docRef = doc(firestore, `restaurants/${restaurantId}/tables`, tableId);
+    const docSnap = await getDocFromServer(docRef);
+
+    if (!docSnap.exists()) {
+        return { success: false, error: 'This table does not exist or the restaurant ID is incorrect.' };
+    }
     
+    const tableData = docSnap.data() as Omit<Table, 'id'>;
+    if (!tableData) {
+        return { success: false, error: 'Failed to process table data.' };
+    }
 
-
-
-
-
+    const table: Table = { ...tableData, id: docSnap.id, restaurantId };
     
+    if (table.isDynamicQR) {
+      if (!token) {
+        return { success: false, error: 'This is a dynamic QR code and requires a token, which is missing from the URL. Please re-scan.' };
+      }
+      if (table.qrToken !== token) {
+        return { success: false, error: `This QR code is invalid or has expired. Please ask for a new one.` };
+      }
+    }
+
+    return { success: true, tableNumber: table.number };
+  } catch (err) {
+    console.error("Error in validateTableAction:", err);
+    return { success: false, error: "A server error occurred while trying to validate the table." };
+  }
+}
+      
+
+export async function requestOrderAccessAction(
+    prevState: { error?: string; redirectTo?: string; success?: boolean } | null,
+    formData: FormData
+): Promise<{ error?: string; redirectTo?: string; success?: boolean }> {
+    noStore();
+    const tableId = formData.get('tableId') as string;
+    const restaurantId = formData.get('restaurantId') as string;
+    const token = formData.get('token') as string | null;
+    const customerName = formData.get('customerName') as string;
+    const customerPhone = formData.get('customerPhone') as string;
+    
+    if (!customerName || !customerPhone) {
+        return { error: 'Name and phone number are required.' };
+    }
+
+    try {
+        const validation = await validateTableAction(tableId, restaurantId, token);
+        if (!validation.success) {
+            // Display the error on the welcome page itself without a hard error page
+            return { error: validation.error };
+        }
+        
+        // Get the table data to find out which branch it belongs to.
+        const table = await getTableById(tableId, restaurantId);
+        if (!table || !table.branchId) {
+             return { error: 'Could not determine the branch for this table.' };
+        }
+
+        // Fetch settings specifically for that branch.
+        const settings = await getSettings(table.branchId, restaurantId);
+        
+        const useOtp = settings.posSettings?.enableDineInOTP;
+
+        if (useOtp) {
+            const otpRequest = await createOtpRequest(tableId, restaurantId, customerName, customerPhone);
+            if (otpRequest) {
+                await sendOtpNotification(otpRequest);
+                // Return a redirect instruction instead of calling redirect()
+                return { redirectTo: `/order/${tableId}/verify?reqId=${otpRequest.id}&name=${customerName}&phone=${customerPhone}&restaurantId=${restaurantId}` };
+            } else {
+                return { error: 'Failed to create OTP request.' };
+            }
+
+        } else {
+            // For non-OTP, just return success. Client will handle sessionStorage and redirect.
+            return { success: true };
+        }
+    } catch (e: any) {
+        console.error(e);
+        return { error: e.message || 'An unexpected error occurred.' };
+    }
+}
+
+
+export async function verifyOtpAction(
+    prevState: { error?: string; success?: boolean; message?: string } | null,
+    formData: FormData
+): Promise<{ error?: string; success?: boolean; message?: string; }> {
+    noStore();
+    const reqId = formData.get('reqId') as string;
+    const otp = formData.get('otp') as string;
+    const restaurantId = formData.get('restaurantId') as string;
+
+    if (!reqId || !otp || !restaurantId) {
+        return { error: 'Missing required data.' };
+    }
+
+    try {
+        const isValid = await verifyOtp(reqId, otp, restaurantId);
+
+        if (isValid) {
+            return { success: true, message: 'OTP Verified Successfully!' };
+        } else {
+            return { success: false, error: 'Invalid or expired OTP. Please try again.' };
+        }
+
+    } catch (e: any) {
+        console.error(e);
+        return { error: e.message || 'An unexpected error occurred during verification.' };
+    }
+}
+

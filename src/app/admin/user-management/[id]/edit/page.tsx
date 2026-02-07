@@ -2,8 +2,8 @@
 
 'use client';
 import { useEffect, useState } from 'react';
-import { updateKitchenUserAction } from '@/lib/actions';
-import type { KitchenUser, MenuItem, UserRole, NavMenuKey, UserPermissions, Branch } from '@/lib/definitions';
+import { updateUserAction } from '@/lib/actions';
+import type { AppUser, MenuItem, UserRole, NavMenuKey, UserPermissions, Branch, Table } from '@/lib/definitions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,15 +19,18 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/app/admin/auth-provider';
 import { ALL_PERMISSIONS_CONFIG } from '@/lib/permissions';
 import { useRestaurantData } from '@/lib/client-data';
+import { Table as UiTable, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-const USER_ROLES: UserRole[] = ['Admin', 'Manager', 'Server', 'Kitchen'];
+
+const USER_ROLES: UserRole[] = ['Admin', 'Manager', 'Server', 'Captain', 'Cashier', 'Accountant', 'Kitchen', 'Table'];
 
 export default function EditUserPage() {
     const { user: currentUser, login, refreshUser } = useAuth();
-    const { getKitchenUserById, getMenuItems, getBranches, getMainBranch, restaurantId } = useRestaurantData();
-    const [user, setUser] = useState<KitchenUser | null>(null);
+    const { getUserById, getMenuItems, getBranches, getMainBranch, getTables, restaurantId } = useRestaurantData();
+    const [user, setUser] = useState<AppUser | null>(null);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [branches, setBranches] = useState<Branch[]>([]);
+    const [tables, setTables] = useState<Table[]>([]);
     const [mainBranch, setMainBranch] = useState<Branch | null>(null);
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [permissions, setPermissions] = useState<UserPermissions>({});
@@ -39,16 +42,19 @@ export default function EditUserPage() {
     const [popoverOpen, setPopoverOpen] = useState(false);
     const [categorySearchTerm, setCategorySearchTerm] = useState("");
     const [selectAllPermissions, setSelectAllPermissions] = useState(false);
+    const [assignedTableId, setAssignedTableId] = useState<string | undefined>(undefined);
+
 
     useEffect(() => {
         if (userId && restaurantId) {
-            getKitchenUserById(userId).then(fetchedUser => {
+            getUserById(userId).then(fetchedUser => {
                 if (fetchedUser) {
                     setUser(fetchedUser);
                     setSelectedCategories(fetchedUser.categories || []);
                     setSelectedRole(fetchedUser.role || 'Kitchen');
                     setPermissions(fetchedUser.permissions || {});
                     setSelectedBranch(fetchedUser.branchId);
+                    setAssignedTableId(fetchedUser.assignedTableId);
                 } else {
                     notFound();
                 }
@@ -56,8 +62,9 @@ export default function EditUserPage() {
             getMenuItems().then(setMenuItems);
             getBranches().then(setBranches);
             getMainBranch().then(setMainBranch);
+            getTables().then(setTables);
         }
-    }, [userId, restaurantId, getKitchenUserById, getMenuItems, getBranches, getMainBranch]);
+    }, [userId, restaurantId, getUserById, getMenuItems, getBranches, getMainBranch, getTables]);
 
     const handleSubmit = async (formData: FormData) => {
         formData.delete('categories');
@@ -70,8 +77,12 @@ export default function EditUserPage() {
         if(currentUser?.id) {
             formData.append('updatedBy', currentUser.id);
         }
+        if (assignedTableId) {
+            formData.append('assignedTableId', assignedTableId);
+        }
 
-        await updateKitchenUserAction(userId, formData);
+
+        await updateUserAction(userId, formData);
         
         // If the admin is editing their own profile, refresh the session
         if (currentUser?.id === userId) {
@@ -88,6 +99,10 @@ export default function EditUserPage() {
             </div>
         );
     }
+    
+    // Determine if sensitive fields (role, branch, permissions) should be editable.
+    const isEditingSelf = currentUser.id === userId;
+    const canEditSensitiveFields = currentUser.role === 'Admin' || !isEditingSelf;
 
     const allCategories = ['All', ...Array.from(new Set(menuItems.map(item => item.category)))];
 
@@ -114,15 +129,27 @@ export default function EditUserPage() {
                 newPermissions[menu] = {};
             }
             const menuPermissions = newPermissions[menu]!;
-            (menuPermissions as any)[right] = value;
 
-            if (right === 'view' && !value) {
-                Object.keys(menuPermissions).forEach(key => {
-                    (menuPermissions as any)[key] = false;
-                });
-            }
-            if (right !== 'view' && value) {
-                menuPermissions.view = true;
+            if (right === 'view') {
+                if (value) {
+                    // When 'view' is checked, enable all available rights for that menu
+                    const menuConfig = ALL_PERMISSIONS_CONFIG.find(p => p.key === menu);
+                    menuConfig?.rights.forEach(r => {
+                        (menuPermissions as any)[r] = true;
+                    });
+                } else {
+                    // When 'view' is unchecked, disable all rights for that menu
+                    Object.keys(menuPermissions).forEach(key => {
+                        (menuPermissions as any)[key] = false;
+                    });
+                }
+            } else {
+                // For 'create', 'edit', 'delete'
+                (menuPermissions as any)[right] = value;
+                if (value) {
+                    // Checking any other right automatically checks 'view'
+                    menuPermissions.view = true;
+                }
             }
 
             return newPermissions;
@@ -143,14 +170,21 @@ export default function EditUserPage() {
         setPermissions(newPermissions);
     };
 
+    const handleRoleChange = (role: UserRole) => {
+        setSelectedRole(role);
+        if (role === 'Kitchen') {
+            setPermissions({ kitchen: { view: true } });
+            setSelectAllPermissions(false);
+        }
+    };
+
     const selectedCategoriesText = selectedCategories.length > 0
         ? selectedCategories.join(', ')
         : 'Select categories';
 
     const showCategorySelector = selectedRole === 'Kitchen';
 
-    const isMainBranchManager = currentUser?.role === 'Manager' && currentUser?.branchId === mainBranch?.id;
-    const canManageAllBranches = currentUser?.role === 'Admin' || isMainBranchManager;
+    const canManageAllBranches = currentUser?.role === 'Admin';
 
 
     return (
@@ -160,7 +194,7 @@ export default function EditUserPage() {
                 <CardDescription>Update the credentials and permissions for this staff member.</CardDescription>
             </CardHeader>
             <CardContent>
-                <form action={handleSubmit} className="space-y-4 max-w-2xl">
+                <form action={handleSubmit} className="space-y-6 max-w-4xl">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="username">Username</Label>
@@ -171,12 +205,12 @@ export default function EditUserPage() {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="role">Role</Label>
-                            <Select name="role" required value={selectedRole} onValueChange={(value: UserRole) => setSelectedRole(value)}>
+                            <Select name="role" required value={selectedRole} onValueChange={handleRoleChange} disabled={!canEditSensitiveFields}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select a role" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {USER_ROLES.filter(r => (currentUser?.role === 'Admin' || isMainBranchManager) ? true : r !== 'Admin').map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
+                                    {USER_ROLES.filter(r => (currentUser?.role === 'Admin') ? true : r !== 'Admin').map(role => <SelectItem key={role} value={role}>{role}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -192,7 +226,7 @@ export default function EditUserPage() {
                     {canManageAllBranches && (
                         <div className="space-y-2">
                             <Label htmlFor="branchId">Branch</Label>
-                            <Select name="branchId" required value={selectedBranch} onValueChange={setSelectedBranch}>
+                            <Select name="branchId" required value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canEditSensitiveFields}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select a branch" />
                                 </SelectTrigger>
@@ -203,96 +237,134 @@ export default function EditUserPage() {
                         </div>
                     )}
 
+                    {selectedRole === 'Table' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="assignedTableId">Assigned Table</Label>
+                            <Select name="assignedTableId" required value={assignedTableId} onValueChange={setAssignedTableId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a table" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {tables.filter(t => t.branchId === selectedBranch).map(table => (
+                                        <SelectItem key={table.id} value={table.id}>Table {table.number}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
 
                     <Separator />
 
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <Label>Permissions</Label>
-                                <p className="text-xs text-muted-foreground pt-1">Which sidebar menus and actions can this user access?</p>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <Checkbox
-                                    id="select-all-perms"
-                                    checked={selectAllPermissions}
-                                    onCheckedChange={handleSelectAllPermissionsChange}
-                                />
-                                <label htmlFor="select-all-perms" className="text-sm font-medium">Select All</label>
-                            </div>
-                        </div>
-
-                        <div className="rounded-md border p-4 space-y-4">
-                            {ALL_PERMISSIONS_CONFIG.map(menu => (
-                                <div key={menu.key} className="flex flex-col sm:flex-row sm:items-center sm:justify-between rounded-lg border p-3">
-                                    <Label htmlFor={`perm-view-${menu.key}`} className="font-semibold">{menu.label}</Label>
-                                    <div className="flex items-center gap-x-4 gap-y-2 pt-2 sm:pt-0">
-                                        {menu.rights.map(right => (
-                                            <div key={right} className="flex items-center space-x-2">
-                                                <Checkbox
-                                                    id={`perm-${right}-${menu.key}`}
-                                                    checked={permissions[menu.key]?.[right] || false}
-                                                    onCheckedChange={(checked) => handlePermissionChange(menu.key, right, !!checked)}
-                                                />
-                                                <label htmlFor={`perm-${right}-${menu.key}`} className="text-sm font-medium capitalize">
-                                                    {right}
-                                                </label>
-                                            </div>
-                                        ))}
-                                    </div>
+                    {selectedRole !== 'Table' && (
+                        <fieldset disabled={!canEditSensitiveFields} className="disabled:opacity-60 space-y-4">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <Label className="text-base">Permissions</Label>
+                                    <p className="text-xs text-muted-foreground pt-1">Which menus and actions can this user access?</p>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {showCategorySelector && (
-                        <div className="space-y-2">
-                            <Label>Accessible Kitchen Categories</Label>
-                            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        role="combobox"
-                                        aria-expanded={popoverOpen}
-                                        className="w-full justify-between"
-                                    >
-                                        <span className="truncate">{selectedCategoriesText}</span>
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                    <div className="p-2">
-                                        <Input
-                                            placeholder="Search categories..."
-                                            value={categorySearchTerm}
-                                            onChange={(e) => setCategorySearchTerm(e.target.value)}
-                                            className="w-full"
+                                {selectedRole !== 'Kitchen' && (
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="select-all-perms"
+                                            checked={selectAllPermissions}
+                                            onCheckedChange={handleSelectAllPermissionsChange}
                                         />
+                                        <label htmlFor="select-all-perms" className="text-sm font-medium">Select All</label>
                                     </div>
-                                    <ScrollArea className="h-48">
-                                        <div className="p-4 pt-0 space-y-2">
-                                            {filteredCategories.length > 0 ? filteredCategories.map(cat => (
-                                                <div key={cat} className="flex items-center space-x-2">
-                                                    <Checkbox
-                                                        id={`edit-category-${cat}`}
-                                                        checked={selectedCategories.includes(cat)}
-                                                        onCheckedChange={() => handleCategoryChange(cat)}
-                                                    />
-                                                    <label htmlFor={`edit-category-${cat}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                                                        {cat}
-                                                    </label>
-                                                </div>
-                                            )) : (
-                                                <div className="text-sm text-center text-muted-foreground py-4">No categories found.</div>
-                                            )}
-                                        </div>
-                                    </ScrollArea>
-                                </PopoverContent>
-                            </Popover>
-                            <p className="text-xs text-muted-foreground pt-1">Select 'All' to grant access to all categories, or select individual ones.</p>
-                        </div>
+                                )}
+                            </div>
+
+                            <div className="border rounded-lg overflow-hidden">
+                                <UiTable>
+                                    <TableHeader>
+                                        <TableRow className="bg-muted/50">
+                                            <TableHead className="w-1/3">Feature</TableHead>
+                                            <TableHead className="text-center">View</TableHead>
+                                            <TableHead className="text-center">Create</TableHead>
+                                            <TableHead className="text-center">Edit</TableHead>
+                                            <TableHead className="text-center">Delete</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {(selectedRole === 'Kitchen' ? ALL_PERMISSIONS_CONFIG.filter(p => p.key === 'kitchen') : ALL_PERMISSIONS_CONFIG).map(menu => {
+                                            const availableRights = ['view', 'create', 'edit', 'delete'];
+                                            const currentPerms = permissions[menu.key] || {};
+                                            return (
+                                                <TableRow key={menu.key}>
+                                                    <TableCell className="font-medium">{menu.label}</TableCell>
+                                                    {availableRights.map(right => (
+                                                        <TableCell key={right} className="text-center">
+                                                            {menu.rights.includes(right as any) ? (
+                                                                <Checkbox
+                                                                    checked={currentPerms[right as keyof typeof currentPerms] || false}
+                                                                    onCheckedChange={(checked) => handlePermissionChange(menu.key, right as any, !!checked)}
+                                                                    disabled={right !== 'view' && !currentPerms.view}
+                                                                />
+                                                            ) : <span className="text-muted-foreground">-</span>}
+                                                        </TableCell>
+                                                    ))}
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </UiTable>
+                            </div>
+                        </fieldset>
                     )}
-                    <div className="flex gap-2">
+
+
+                    {showCategorySelector && selectedRole !== 'Table' && (
+                        <fieldset disabled={!canEditSensitiveFields} className="disabled:opacity-60">
+                            <div className="space-y-2">
+                                <Label>Accessible Kitchen Categories</Label>
+                                <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={popoverOpen}
+                                            className="w-full justify-between disabled:cursor-not-allowed disabled:opacity-100"
+                                            disabled={!canEditSensitiveFields}
+                                        >
+                                            <span className="truncate">{selectedCategoriesText}</span>
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                        <div className="p-2">
+                                            <Input
+                                                placeholder="Search categories..."
+                                                value={categorySearchTerm}
+                                                onChange={(e) => setCategorySearchTerm(e.target.value)}
+                                                className="w-full"
+                                            />
+                                        </div>
+                                        <ScrollArea className="h-48">
+                                            <div className="p-4 pt-0 space-y-2">
+                                                {filteredCategories.length > 0 ? filteredCategories.map(cat => (
+                                                    <div key={cat} className="flex items-center space-x-2">
+                                                        <Checkbox
+                                                            id={`edit-category-${cat}`}
+                                                            checked={selectedCategories.includes(cat)}
+                                                            onCheckedChange={() => handleCategoryChange(cat)}
+                                                        />
+                                                        <label htmlFor={`edit-category-${cat}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                                            {cat}
+                                                        </label>
+                                                    </div>
+                                                )) : (
+                                                    <div className="text-sm text-center text-muted-foreground py-4">No categories found.</div>
+                                                )}
+                                            </div>
+                                        </ScrollArea>
+                                    </PopoverContent>
+                                </Popover>
+                                <p className="text-xs text-muted-foreground pt-1">Select 'All' to grant access to all categories, or select individual ones.</p>
+                            </div>
+                        </fieldset>
+                    )}
+                    <div className="flex gap-2 pt-4">
                         <Button type="submit">Save Changes</Button>
                         <Button variant="outline" asChild>
                             <Link href="/admin/user-management">Cancel</Link>

@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import {
@@ -8,8 +9,8 @@ import {
     signOut as firebaseSignOut,
 } from 'firebase/auth';
 import { initializeFirebase } from '@/firebase/server';
-import { getKitchenUserByEmail, createKitchenUserInFirestore } from './data';
-import type { KitchenUser } from './definitions';
+import { getUserByEmail, createUserInFirestore } from './data';
+import type { AppUser } from './definitions';
 import { isSuperAdmin, extractRestaurantId } from './auth-utils';
 
 
@@ -19,24 +20,38 @@ import { isSuperAdmin, extractRestaurantId } from './auth-utils';
  */
 export async function signInWithEmail(email: string, password: string): Promise<{
     success: boolean;
-    user?: KitchenUser;
+    user?: AppUser;
     error?: string;
-    isSuperAdmin?: boolean;
 }> {
     try {
         const { auth } = initializeFirebase();
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
-        // Check if super admin
+        // Get user data from Firestore
+        // Note: For multi-tenant, you might need to determine restaurantId differently
+        const restaurantId = extractRestaurantId(email);
+        if (!restaurantId && !isSuperAdmin(email)) {
+            return { success: false, error: 'Invalid email format for restaurant user.' };
+        }
+
+        const userData = await getUserByEmail(email, restaurantId || 'dineeasee-restaurant'); // Fallback to default for now
+
+        if (!userData && !isSuperAdmin(email)) {
+            return {
+                success: false,
+                error: 'User not found in database'
+            };
+        }
+
         if (isSuperAdmin(email)) {
             return {
                 success: true,
-                isSuperAdmin: true,
                 user: {
                     id: userCredential.user.uid,
                     username: 'Super Admin',
                     email: email,
                     role: 'Admin',
+                    isSuperAdmin: true,
                     password: '', // Not stored
                     categories: ['All'],
                     branchId: '',
@@ -59,25 +74,10 @@ export async function signInWithEmail(email: string, password: string): Promise<
             };
         }
 
-        // Get user data from Firestore by extracting restaurantId from email
-        const restaurantId = extractRestaurantId(email);
-        if (!restaurantId) {
-            return { success: false, error: 'Invalid email format for restaurant user.' };
-        }
-
-        const userData = await getKitchenUserByEmail(email, restaurantId);
-
-        if (!userData) {
-            return {
-                success: false,
-                error: 'User not found in database'
-            };
-        }
 
         return {
             success: true,
-            user: userData,
-            isSuperAdmin: false
+            user: userData
         };
     } catch (error: any) {
         console.error('Sign in error:', error);
@@ -87,6 +87,10 @@ export async function signInWithEmail(email: string, password: string): Promise<
             errorMessage = 'Invalid email or password';
         } else if (error.code === 'auth/too-many-requests') {
             errorMessage = 'Too many failed attempts. Please try again later';
+        } else if (error.code === 'auth/network-request-failed') {
+            errorMessage = 'Network error: Unable to connect to authentication server. Please check your internet connection and try again.';
+        } else if (error.code === 'auth/timeout') {
+            errorMessage = 'Request timeout: The server took too long to respond. Please try again.';
         }
 
         return {
@@ -102,11 +106,11 @@ export async function signInWithEmail(email: string, password: string): Promise<
 export async function createAuthUser(
     email: string,
     password: string,
-    userData: Omit<KitchenUser, 'id' | 'email'>,
+    userData: Omit<AppUser, 'id' | 'email'>,
     restaurantId: string
 ): Promise<{
     success: boolean;
-    user?: KitchenUser;
+    user?: AppUser;
     error?: string;
 }> {
     try {
@@ -116,7 +120,7 @@ export async function createAuthUser(
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
         // Create user in Firestore
-        const newUser = await createKitchenUserInFirestore({
+        const newUser = await createUserInFirestore({
             ...userData,
             email,
             firebaseUid: userCredential.user.uid

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { Branch } from '@/lib/definitions';
+import type { Branch, POSSettings } from '@/lib/definitions';
 import { updateSettingsAction } from '@/lib/actions';
 import { useFormStatus } from 'react-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -15,6 +15,12 @@ import { useSearchParams } from 'next/navigation';
 import { useRestaurantData } from '@/lib/client-data';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
+
+const defaultPosSettings: POSSettings = {
+    cashDenominations: [10, 20, 50, 100],
+    enableOnScreenKeyboard: false,
+    enableDineInOTP: false,
+};
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -30,9 +36,8 @@ export default function PosSettingsPage() {
     const branchId = searchParams.get('branchId');
     const { getBranchById, restaurantId } = useRestaurantData();
     const [branch, setBranch] = useState<Branch | null>(null);
-    const [denominations, setDenominations] = useState<number[]>([]);
+    const [posSettings, setPosSettings] = useState<POSSettings>(defaultPosSettings);
     const [newDenomination, setNewDenomination] = useState('');
-    const [enableOnScreenKeyboard, setEnableOnScreenKeyboard] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const { toast } = useToast();
 
@@ -41,8 +46,10 @@ export default function PosSettingsPage() {
             getBranchById(branchId).then(b => {
                 setBranch(b);
                 if (b) {
-                    setDenominations(b?.posSettings?.cashDenominations || []);
-                    setEnableOnScreenKeyboard(b?.posSettings?.enableOnScreenKeyboard || false);
+                    setPosSettings({
+                        ...defaultPosSettings,
+                        ...(b.posSettings || {}),
+                    });
                 }
                 setIsLoading(false);
             });
@@ -52,10 +59,6 @@ export default function PosSettingsPage() {
     }, [branchId, getBranchById]);
 
     const handleFormAction = async (formData: FormData) => {
-        const posSettings = {
-            cashDenominations: denominations,
-            enableOnScreenKeyboard: enableOnScreenKeyboard,
-        };
         const newFormData = new FormData();
         newFormData.append('posSettings', JSON.stringify(posSettings));
         newFormData.append('branchId', branchId!);
@@ -70,14 +73,20 @@ export default function PosSettingsPage() {
 
     const addDenomination = () => {
         const value = parseInt(newDenomination, 10);
-        if (!isNaN(value) && value > 0 && !denominations.includes(value)) {
-            setDenominations([...denominations, value].sort((a,b) => a-b));
+        if (!isNaN(value) && value > 0 && !posSettings.cashDenominations.includes(value)) {
+            setPosSettings(prev => ({
+                ...prev,
+                cashDenominations: [...prev.cashDenominations, value].sort((a,b) => a-b)
+            }));
             setNewDenomination('');
         }
     };
 
     const removeDenomination = (denominationToRemove: number) => {
-        setDenominations(denominations.filter(d => d !== denominationToRemove));
+        setPosSettings(prev => ({
+            ...prev,
+            cashDenominations: prev.cashDenominations.filter(d => d !== denominationToRemove)
+        }));
     };
     
     if (isLoading) {
@@ -124,7 +133,7 @@ export default function PosSettingsPage() {
                 <CardHeader>
                     <CardTitle className="font-headline">POS Settings for {branch.name}</CardTitle>
                     <CardDescription>
-                        Configure cash denomination buttons for quick cash handling on the POS screen.
+                        Configure cash denominations and other options for the Point of Sale screen.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -145,9 +154,9 @@ export default function PosSettingsPage() {
 
                     <div className="space-y-4">
                          <Label>Current Denominations</Label>
-                         {denominations.length > 0 ? (
+                         {posSettings.cashDenominations.length > 0 ? (
                             <div className="flex flex-wrap gap-2 rounded-md border p-4">
-                                {denominations.map(denom => (
+                                {posSettings.cashDenominations.map(denom => (
                                     <div key={denom} className="flex items-center justify-between bg-muted px-3 py-1 rounded-md">
                                         <span className="font-medium">{denom}</span>
                                         <Button
@@ -184,8 +193,29 @@ export default function PosSettingsPage() {
                             </div>
                             <Switch
                                 id="onScreenKeyboardSwitch"
-                                checked={enableOnScreenKeyboard}
-                                onCheckedChange={setEnableOnScreenKeyboard}
+                                checked={posSettings.enableOnScreenKeyboard}
+                                onCheckedChange={(checked) => setPosSettings(prev => ({...prev, enableOnScreenKeyboard: checked}))}
+                            />
+                        </div>
+                    </div>
+
+                    <Separator />
+                    
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-medium">Dine-in OTP Verification</h3>
+                        <div className="flex items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                                <Label htmlFor="enableDineInOTPSwitch" className="text-base">
+                                    Enable OTP for Dine-in Orders
+                                </Label>
+                                <p className="text-sm text-muted-foreground">
+                                    If enabled, customers must enter an OTP sent to staff devices before they can place an order.
+                                </p>
+                            </div>
+                            <Switch
+                                id="enableDineInOTPSwitch"
+                                checked={posSettings.enableDineInOTP}
+                                onCheckedChange={(checked) => setPosSettings(prev => ({...prev, enableDineInOTP: checked}))}
                             />
                         </div>
                     </div>

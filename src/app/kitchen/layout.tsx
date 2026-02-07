@@ -2,7 +2,6 @@
 'use client';
 
 import { AuthProvider } from "@/app/admin/auth-provider";
-import { useAuth } from "@/app/admin/auth-provider";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -10,10 +9,10 @@ import AdminHeader from "@/components/admin-header";
 import AdminSidebar from "@/components/admin-sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { FirebaseClientProvider } from "@/firebase/client-provider";
+import { RestaurantProvider } from "@/contexts/restaurant-context";
 
 function KitchenDashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { logout, user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Close sidebar on route change
@@ -34,24 +33,14 @@ function KitchenDashboardLayout({ children }: { children: ReactNode }) {
   );
 }
 
-function LayoutWrapper({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-
-  if (pathname.startsWith('/login')) {
-    return <>{children}</>;
-  }
-
-  return (
-    <KitchenDashboardLayout>{children}</KitchenDashboardLayout>
-  );
-}
-
 export default function KitchenLayout({ children }: { children: ReactNode }) {
   return (
     <FirebaseClientProvider>
       <AuthProvider>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-          <LayoutWrapper>{children}</LayoutWrapper>
+          <RestaurantProvider>
+            <KitchenDashboardLayout>{children}</KitchenDashboardLayout>
+          </RestaurantProvider>
         </ThemeProvider>
       </AuthProvider>
     </FirebaseClientProvider>

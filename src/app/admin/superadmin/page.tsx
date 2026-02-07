@@ -13,17 +13,15 @@ export default function SuperAdminPage() {
     const [isChecking, setIsChecking] = useState(true);
 
     useEffect(() => {
-        // Check if user is logged in and is super admin
         if (!user) {
             router.push('/admin');
             return;
         }
 
-        if (user.email && isSuperAdmin(user.email)) {
+        if (isSuperAdmin(user.email || '')) {
             setIsAuthorized(true);
         } else {
-            // Not a super admin, redirect to regular admin dashboard
-            router.push('/admin/dashboard');
+            router.push('/admin');
         }
 
         setIsChecking(false);
@@ -41,7 +39,7 @@ export default function SuperAdminPage() {
     }
 
     if (!isAuthorized) {
-        return null; // Will redirect
+        return null;
     }
 
     return <SuperAdminPanel />;

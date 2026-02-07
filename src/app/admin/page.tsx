@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import type { ChartConfig } from '@/components/ui/chart';
-import { DollarSign, ShoppingCart, Users, TrendingUp, LoaderCircle } from 'lucide-react';
+import { Banknote, ShoppingCart, Users, TrendingUp, LoaderCircle } from 'lucide-react';
 import { useAuth } from './auth-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -49,14 +49,11 @@ export default function AdminDashboardPage() {
             setIsLoading(true);
 
             // Determine target branch based on user role and filter
-            // If Global Admin: Use filter (undefined for 'all', or specific ID)
-            // If Branch User: Always use their assigned branchId
             const targetBranchId = isGlobalAdmin
                 ? (selectedBranchFilter === 'all' ? undefined : selectedBranchFilter)
                 : user!.branchId; // user is guaranteed non-null here
 
             // Determine settings execution context
-            // Default to target branch if selected, otherwise fallback to Main Branch
             let settingsBranchId = targetBranchId;
             if (!settingsBranchId) {
                 const mainBranch = await getMainBranch();
@@ -69,14 +66,18 @@ export default function AdminDashboardPage() {
                 setIsLoading(false);
                 return;
             }
+            
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const dateRange = { from: thirtyDaysAgo, to: new Date() };
 
             const fetchedSettings = await getSettings(settingsBranchId);
             setSettings(fetchedSettings);
 
             const [fetchedMenuItems, dineInOrders, remoteOrders] = await Promise.all([
                 getMenuItems(targetBranchId),
-                getOrders(targetBranchId),
-                getRemoteOrders(targetBranchId)
+                getOrders(targetBranchId, dateRange),
+                getRemoteOrders(targetBranchId, dateRange)
             ]);
 
             setMenuItems(fetchedMenuItems);
@@ -91,7 +92,7 @@ export default function AdminDashboardPage() {
         }
 
         fetchData();
-    }, [user, selectedBranchFilter, isGlobalAdmin, getBranches, getOrders, getRemoteOrders, getSettings, getMenuItems, getMainBranch]);
+    }, [user, selectedBranchFilter, isGlobalAdmin, getBranches, getOrders, getRemoteOrders, getSettings, getMenuItems, getMainBranch, restaurantId]);
 
     const stats = useMemo(() => {
         const totalRevenue = allOrders.reduce((acc, order) => acc + (order.total || 0), 0);
@@ -165,11 +166,11 @@ export default function AdminDashboardPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <Banknote className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{currencySymbol}{stats.totalRevenue.toFixed(currencyDecimalPlaces)}</div>
-                        <p className="text-xs text-muted-foreground">from all completed orders</p>
+                        <p className="text-xs text-muted-foreground">from completed orders</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -244,4 +245,5 @@ export default function AdminDashboardPage() {
         </div>
     );
 }
+
 

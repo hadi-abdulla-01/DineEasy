@@ -5,14 +5,14 @@ import { useAuth } from '@/app/admin/auth-provider';
 import { useEffect, useState } from 'react';
 import AdminHeader from './admin-header';
 import AdminSidebar from './admin-sidebar';
+import KioskHeader from './kiosk-header';
 import { cn } from '@/lib/utils';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
     const pathname = usePathname();
 
     const AuthDependentLayout = () => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { logout, user } = useAuth();
+        const { user } = useAuth();
         const [isSidebarOpen, setIsSidebarOpen] = useState(false);
         const isPosPage = pathname === '/admin/pos';
 
@@ -23,6 +23,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
         if (!user) {
             return null;
+        }
+
+        // Kiosk mode for Table users
+        if (user.role === 'Table') {
+            return (
+                <div className="min-h-screen bg-muted dark:bg-gray-800 flex flex-col font-sans">
+                    <KioskHeader />
+                    <main className="flex-1 overflow-y-auto">
+                       {children}
+                    </main>
+                </div>
+            );
         }
 
         return (
@@ -47,8 +59,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         )
     }
 
-    if (pathname.startsWith('/admin')) {
-        return <AuthDependentLayout />;
+    if (pathname.startsWith('/admin') || pathname.startsWith('/display')) {
+         return <AuthDependentLayout />;
     }
 
     return <>{children}</>;

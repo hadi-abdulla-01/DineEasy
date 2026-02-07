@@ -2,7 +2,7 @@
 'use client';
 
 import { getOrderById, getSettings, getTableById } from "@/lib/data";
-import { notFound, useParams, useRouter } from "next/navigation";
+import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
 import { OrderStatusView } from "@/components/order-status-view";
 import { useEffect, useState, useRef } from "react";
 import type { Order, RestaurantSettings } from "@/lib/definitions";
@@ -11,12 +11,14 @@ import { LoaderCircle } from "lucide-react";
 export default function OrderStatusPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const orderId = params.orderId as string;
   const tableId = params.tableId as string;
+  const restaurantIdFromUrl = searchParams.get('restaurantId');
+
 
   const [order, setOrder] = useState<Order | null>(null);
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
-  const [restaurantId, setRestaurantId] = useState<string>('dineeasee-restaurant');
   const [isLoading, setIsLoading] = useState(true);
 
   // Track which branch's settings we have loaded to avoid re-fetching unnecessarily
@@ -37,25 +39,22 @@ export default function OrderStatusPage() {
         } catch { }
       }
 
+      if (!restaurantIdFromUrl) {
+        console.error("Restaurant ID missing from URL on status page.");
+        router.replace(`/order/${tableId}/welcome`);
+        return;
+      }
+      
       if (!customerPhone) {
-        router.replace(`/order/${tableId}/welcome?next=/order/${tableId}/status/${orderId}`);
+        router.replace(`/order/${tableId}/welcome?next=/order/${tableId}/status/${orderId}&restaurantId=${restaurantIdFromUrl}`);
         return;
       }
 
       try {
-        const fetchedTable = await getTableById(tableId);
-        if (!fetchedTable) {
-          notFound();
-          return;
-        }
-
-        const restaurantId = fetchedTable.restaurantId || 'dineeasee-restaurant';
-        setRestaurantId(restaurantId);
-
         const { firestore } = await import("@/firebase/client").then(mod => mod.getClientFirebase());
         const { doc, onSnapshot } = await import("firebase/firestore");
 
-        const orderRef = doc(firestore, `restaurants/${restaurantId}/orders`, orderId);
+        const orderRef = doc(firestore, `restaurants/${restaurantIdFromUrl}/orders`, orderId);
 
         const unsub = onSnapshot(orderRef, async (docSnap) => {
           if (docSnap.exists()) {
@@ -68,7 +67,7 @@ export default function OrderStatusPage() {
             } as Order;
 
             if (customerPhone !== orderData.customerPhone) {
-              router.replace(`/order/${tableId}/welcome`);
+              router.replace(`/order/${tableId}/welcome?restaurantId=${restaurantIdFromUrl}`);
               return;
             }
 
@@ -77,7 +76,7 @@ export default function OrderStatusPage() {
             // Check if we need to fetch settings (first load or branch changed)
             if (loadedBranchIdRef.current !== orderData.branchId) {
               try {
-                const newSettings = await getSettings(orderData.branchId, restaurantId);
+                const newSettings = await getSettings(orderData.branchId, restaurantIdFromUrl);
                 setSettings(newSettings);
                 loadedBranchIdRef.current = orderData.branchId;
               } catch (err) {
@@ -106,7 +105,7 @@ export default function OrderStatusPage() {
     return () => {
       unsubs.forEach(u => u());
     };
-  }, [orderId, tableId, router]);
+  }, [orderId, tableId, router, restaurantIdFromUrl]);
 
   if (isLoading || !order || !settings) {
     return (
@@ -121,7 +120,7 @@ export default function OrderStatusPage() {
 
   return (
     <div className="min-h-screen bg-[var(--order-status-bg)] flex items-center justify-center">
-      <OrderStatusView initialOrder={order} settings={settings} tableId={tableId} restaurantId={restaurantId} />
+      <OrderStatusView initialOrder={order} settings={settings} tableId={tableId} restaurantId={restaurantIdFromUrl || 'dineeasee-restaurant'} />
     </div>
   );
 }

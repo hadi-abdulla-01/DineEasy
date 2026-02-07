@@ -35,6 +35,38 @@ export type PrintSettings = {
     invoiceThankYouMessage?: string;
 };
 
+export type DiscountType = 'percentage' | 'fixed';
+export type DayOfWeek = 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
+export type DiscountApplicability = 'all' | 'categories' | 'items';
+
+export type Discount = {
+  id: string;
+  name: string;
+  description?: string;
+  type: DiscountType;
+  value: number; // Percentage or fixed amount
+  isActive: boolean;
+  branchId: string;
+  
+  // Time-based rules
+  startDate?: string;
+  endDate?: string;
+  startTime?: string; // HH:MM
+  endTime?: string; // HH:MM
+  daysOfWeek?: DayOfWeek[];
+
+  // Applicability rules
+  applicability: DiscountApplicability;
+  applicableCategories?: string[]; // applies if applicability is 'categories'
+  applicableItems?: string[]; // Array of menuItemIds, applies if applicability is 'items'
+};
+
+export type POSSettings = {
+    cashDenominations: number[];
+    enableOnScreenKeyboard?: boolean;
+    enableDineInOTP?: boolean;
+};
+
 export type RestaurantSettings = {
     restaurantName: string;
     restaurantAddress: string;
@@ -42,6 +74,7 @@ export type RestaurantSettings = {
     taxes: Tax[];
     currencyDecimalPlaces: number;
     timezone?: string; // IANA timezone identifier (e.g., 'Asia/Kolkata', 'UTC')
+    endOfDayTime?: string; // Format: "HH:mm"
     taxName?: string; // e.g. "GSTIN", "VAT ID"
     taxNumber?: string; // The actual tax number
     qrCodeColor?: string;
@@ -53,15 +86,17 @@ export type RestaurantSettings = {
     onlineOrderPlatforms?: string[];
     invoiceSettings?: InvoiceSettings;
     printSettings?: PrintSettings;
-    posSettings?: {
-        cashDenominations: number[];
-        enableOnScreenKeyboard?: boolean;
-    };
+    posSettings?: POSSettings;
     mealSessions?: MealSession[];
     menuCategories?: string[]; // Food categories like Meals, Snacks, Beverages, etc.
     multiFloorEnabled?: boolean;
     floors?: string[];
     defaultFloor?: string;
+    discounts?: Discount[];
+    manualSessionOverride?: {
+        enabled: boolean;
+        sessionId: string | null;
+    };
 };
 
 export type Branch = {
@@ -79,6 +114,10 @@ export type Table = {
     branchId: string;
     restaurantId?: string;
     floor?: string;
+    isDynamicQR?: boolean;
+    qrToken?: string;
+    pairingCode?: string;
+    shape?: 'rectangle' | 'square' | 'circle';
 };
 
 export type AddonOption = {
@@ -187,9 +226,16 @@ export type RemoteOrder = Omit<Order, 'tableId' | 'customerName' | 'customerPhon
     customerDetails: CustomerDetails;
 };
 
-export type UserRole = 'Admin' | 'Manager' | 'Server' | 'Kitchen';
+export type UserRole = 'Admin' | 'Manager' | 'Server' | 'Captain' | 'Cashier' | 'Accountant' | 'Kitchen' | 'Table';
 
-export type NavMenuKey = 'dashboard' | 'pos' | 'tableOrder' | 'tables' | 'menu' | 'kitchen' | 'sales' | 'salesHistory' | 'onlineOrders' | 'takeAway' | 'userManagement' | 'settings' | 'menuPerformance' | 'employeePerformance' | 'peakHours';
+export type NavMenuKey =
+    | 'dashboard' | 'pos' | 'tableOrder' | 'tables' | 'menu' | 'kitchen' | 'sales' | 'salesHistory'
+    | 'onlineOrders' | 'takeAway' | 'userManagement' | 'menuPerformance' | 'employeePerformance' | 'peakHours' | 'display' | 'receiveOtp'
+    // Settings Sub-sections
+    | 'settingsRestaurant' | 'settingsBranches' | 'settingsGeneral' | 'settingsFloors'
+    | 'settingsCategories' | 'settingsSessions' | 'settingsPos' | 'settingsOnline'
+    | 'settingsInvoicing' | 'settingsPrinting' | 'settingsQr' | 'settingsPlatforms' | 'settingsDiscounts';
+
 
 export type UserPermission = {
     view?: boolean;
@@ -202,7 +248,7 @@ export type UserPermissions = {
     [K in NavMenuKey]?: UserPermission;
 };
 
-export type KitchenUser = {
+export type AppUser = {
     id: string;
     username: string;
     email?: string; // Email for Firebase Authentication
@@ -214,6 +260,8 @@ export type KitchenUser = {
     restaurantId?: string;
     accessibleMenus?: NavMenuKey[]; // Will be deprecated
     permissions?: UserPermissions;
+    isSuperAdmin?: boolean;
+    assignedTableId?: string;
 };
 
 
@@ -250,4 +298,16 @@ export type InvoiceSettings = {
         prefix: string;
         nextNumber: number;
     };
+};
+
+export type OTPRequest = {
+  id: string;
+  tableId: string;
+  tableNumber: string;
+  branchId: string;
+  restaurantId: string;
+  otp: string;
+  customerName: string;
+  customerPhone: string;
+  createdAt: any; // Firestore Timestamp
 };

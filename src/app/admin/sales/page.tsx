@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Order, RemoteOrder, RestaurantSettings, Branch } from '@/lib/definitions';
@@ -103,21 +104,18 @@ export default function SalesReportPage() {
   }, [user, isGlobalAdmin, getMainBranch, getSettings, getBranches, getBranchById]);
 
   useEffect(() => {
-    if (user) {
-      if (isGlobalAdmin) {
-        setBranchFilter('all');
-      } else {
-        setBranchFilter(user.branchId);
-      }
-    }
-  }, [user, isGlobalAdmin]);
-
-  useEffect(() => {
     async function fetchOrders() {
-      if (!user) return;
-
-      const dineInOrders = await getOrders();
-      const remoteOrders = await getRemoteOrders();
+      if (!user || !date?.from) return;
+      setIsLoading(true);
+      const dateRange = {
+        from: startOfDay(date.from),
+        to: date.to ? endOfDay(date.to) : new Date(),
+      };
+      
+      const targetBranchId = isGlobalAdmin ? (branchFilter === 'all' ? undefined : branchFilter) : user.branchId;
+      
+      const dineInOrders = await getOrders(targetBranchId, dateRange);
+      const remoteOrders = await getRemoteOrders(targetBranchId, dateRange);
 
       const combined: CombinedOrder[] = [
         ...dineInOrders.map(o => ({ ...o, type: 'Dine-in' as const })),
@@ -125,29 +123,23 @@ export default function SalesReportPage() {
       ];
 
       setAllOrders(combined.filter(o => 'status' in o ? o.status === 'completed' : true));
+      setIsLoading(false);
     }
     if (user) {
       fetchOrders();
     }
-  }, [user]);
+  }, [user, date, branchFilter, getOrders, getRemoteOrders, isGlobalAdmin]);
 
   const filteredOrders = useMemo(() => {
-    if (!date?.from) return [];
-
-    const fromDate = startOfDay(date.from);
-    const toDate = date.to ? endOfDay(date.to) : endOfDay(date.from);
-
     return allOrders.filter(order => {
-      const orderDate = new Date(order.createdAt);
-      const branchMatch = branchFilter === 'all' || !branchFilter || ('branchId' in order && order.branchId === branchFilter);
       const typeMatch = orderTypeFilter === 'all' || order.orderType === orderTypeFilter;
       const paymentMatch = paymentMethodFilter === 'all' || order.paymentMethod === paymentMethodFilter;
       const customerName = 'customerName' in order ? order.customerName : (order.customerDetails?.name || '');
       const nameMatch = customerNameFilter ? customerName.toLowerCase().includes(customerNameFilter.toLowerCase()) : true;
 
-      return orderDate >= fromDate && orderDate <= toDate && branchMatch && typeMatch && nameMatch;
+      return typeMatch && paymentMatch && nameMatch;
     });
-  }, [allOrders, date, branchFilter, orderTypeFilter, paymentMethodFilter, customerNameFilter]);
+  }, [allOrders, orderTypeFilter, paymentMethodFilter, customerNameFilter]);
 
   const detailedStats = useMemo(() => {
     const totalRevenue = filteredOrders.reduce((acc, order) => acc + order.total, 0);

@@ -86,15 +86,19 @@ export default function EmployeePerformancePage() {
 
     useEffect(() => {
         async function fetchDataForBranch() {
-            if (!branchFilter) return;
+            if (!branchFilter || !date?.from) return;
             setIsLoading(true);
             
             const targetBranchId = branchFilter === 'all' ? undefined : branchFilter;
+            const dateRange = {
+                from: startOfDay(date.from),
+                to: date.to ? endOfDay(date.to) : endOfDay(date.from),
+            };
 
             const [fetchedSettings, fetchedOrders, fetchedRemoteOrders] = await Promise.all([
                 getSettings(targetBranchId),
-                getOrders(targetBranchId),
-                getRemoteOrders(targetBranchId)
+                getOrders(targetBranchId, dateRange),
+                getRemoteOrders(targetBranchId, dateRange)
             ]);
 
             setSettings(fetchedSettings);
@@ -106,20 +110,14 @@ export default function EmployeePerformancePage() {
             setIsLoading(false);
         }
         fetchDataForBranch();
-    }, [branchFilter, getSettings, getOrders, getRemoteOrders]);
+    }, [branchFilter, date, getSettings, getOrders, getRemoteOrders]);
 
     const performanceData: EmployeePerformance[] = useMemo(() => {
-        const filteredOrders = allOrders.filter(order => {
-            if (!date?.from) return false;
-            const orderDate = new Date(order.createdAt);
-            const fromDate = startOfDay(date.from);
-            const toDate = date.to ? endOfDay(date.to) : endOfDay(date.from);
-            return orderDate >= fromDate && orderDate <= toDate;
-        });
-
         const statsByName: { [name: string]: { totalRevenue: number; totalOrders: number; } } = {};
 
-        filteredOrders.forEach(order => {
+        const employeeOrders = allOrders.filter(order => order.createdByName && order.createdByName !== 'Customer');
+
+        employeeOrders.forEach(order => {
             const employeeName = order.createdByName || 'Unassigned';
             if (!statsByName[employeeName]) {
                 statsByName[employeeName] = { totalRevenue: 0, totalOrders: 0 };
@@ -135,7 +133,7 @@ export default function EmployeePerformancePage() {
             averageOrderValue: stats.totalOrders > 0 ? stats.totalRevenue / stats.totalOrders : 0,
         })).sort((a, b) => b.totalRevenue - a.totalRevenue);
 
-    }, [allOrders, date]);
+    }, [allOrders]);
     
     const executePrint = () => {
         const content = reportRef.current;
@@ -356,10 +354,19 @@ export default function EmployeePerformancePage() {
                         <CardContent>
                             <ChartContainer config={chartConfig} className="h-[300px] w-full">
                                 <ResponsiveContainer>
-                                    <RechartsBarChart data={performanceData} layout="vertical" margin={{ left: 20 }}>
-                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                        <XAxis type="number" hide />
-                                        <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tick={{ fontSize: 12, width: 120 }} width={120}/>
+                                    <RechartsBarChart data={performanceData} margin={{ left: -10, right: 10 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis
+                                            dataKey="name"
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tickMargin={8}
+                                            tick={{ fontSize: 12 }}
+                                        />
+                                        <YAxis
+                                            tickFormatter={(value) => `${currencySymbol}${value}`}
+                                            tick={{ fontSize: 12 }}
+                                        />
                                         <Tooltip
                                             cursor={{ fill: 'hsl(var(--accent))' }}
                                             content={<ChartTooltipContent
@@ -367,7 +374,7 @@ export default function EmployeePerformancePage() {
                                                 nameKey="name"
                                             />}
                                         />
-                                        <Bar dataKey="totalRevenue" name="Total Revenue" fill="var(--color-primary)" radius={[0, 4, 4, 0]} />
+                                        <Bar dataKey="totalRevenue" name="Total Revenue" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
                                     </RechartsBarChart>
                                 </ResponsiveContainer>
                             </ChartContainer>

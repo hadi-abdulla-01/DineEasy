@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRestaurantData } from "@/lib/client-data";
 import { ChangeTableDialog } from '@/components/change-table-dialog';
-import { getClientFirebase } from '@/firebase/client';
+import { useFirebase } from '@/firebase/provider';
 import { collection, onSnapshot, query, where, type DocumentSnapshot } from 'firebase/firestore';
 
 
@@ -178,6 +178,7 @@ function docToObj<T>(doc: DocumentSnapshot): T {
 export default function AdminKitchenPage() {
     const { user } = useAuth();
     const { getBranches, getMainBranch, restaurantId, getSettings } = useRestaurantData();
+    const { firestore } = useFirebase();
     const [orders, setOrders] = useState<Order[]>([]);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [allBranches, setAllBranches] = useState<Branch[]>([]);
@@ -221,9 +222,8 @@ export default function AdminKitchenPage() {
 
     // Real-time listener for tables
     useEffect(() => {
-        if (!selectedBranchId || !restaurantId) return;
+        if (!selectedBranchId || !restaurantId || !firestore) return;
 
-        const { firestore } = getClientFirebase();
         const tablesRef = collection(firestore, `restaurants/${restaurantId}/tables`);
         const q = query(tablesRef, where('branchId', '==', selectedBranchId));
 
@@ -235,14 +235,13 @@ export default function AdminKitchenPage() {
         });
 
         return () => unsubscribe();
-    }, [selectedBranchId, restaurantId]);
+    }, [selectedBranchId, restaurantId, firestore]);
 
     // Real-time listener for orders
     useEffect(() => {
-        if (!selectedBranchId || !restaurantId) return;
+        if (!selectedBranchId || !restaurantId || !firestore) return;
 
         setIsLoading(true);
-        const { firestore } = getClientFirebase();
         const ordersRef = collection(firestore, `restaurants/${restaurantId}/orders`);
         const q = query(ordersRef,
             where('branchId', '==', selectedBranchId),
@@ -273,7 +272,7 @@ export default function AdminKitchenPage() {
         });
 
         return () => unsubscribe();
-    }, [selectedBranchId, restaurantId, allTables]); // Rerun when tables update
+    }, [selectedBranchId, restaurantId, allTables, firestore]); // Rerun when tables update
 
     useEffect(() => {
         if (selectedBranchId) {

@@ -1,4 +1,5 @@
 
+
 import type { NavMenuKey } from './definitions';
 
 export const ALL_PERMISSIONS_CONFIG: {key: NavMenuKey, label: string, rights: ('view' | 'create' | 'edit' | 'delete')[]}[] = [
@@ -16,5 +17,20 @@ export const ALL_PERMISSIONS_CONFIG: {key: NavMenuKey, label: string, rights: ('
     { key: 'onlineOrders', label: 'Online Orders', rights: ['view', 'create'] },
     { key: 'takeAway', label: 'Take Away', rights: ['view', 'create'] },
     { key: 'userManagement', label: 'User Management', rights: ['view', 'create', 'edit', 'delete'] },
-    { key: 'settings', label: 'Settings', rights: ['view', 'edit'] },
+    { key: 'display', label: 'QR Display Screen', rights: ['view'] },
+    { key: 'receiveOtp', label: 'Receive Dine-in OTPs', rights: ['view']},
+    // Granular Settings
+    { key: 'settingsRestaurant', label: 'Settings: Restaurant', rights: ['view', 'edit']},
+    { key: 'settingsBranches', label: 'Settings: Branches', rights: ['view', 'create', 'edit', 'delete']},
+    { key: 'settingsGeneral', label: 'Settings: General', rights: ['view', 'edit']},
+    { key: 'settingsFloors', label: 'Settings: Floors', rights: ['view', 'edit']},
+    { key: 'settingsCategories', label: 'Settings: Categories', rights: ['view', 'edit']},
+    { key: 'settingsSessions', label: 'Settings: Sessions', rights: ['view', 'edit']},
+    { key: 'settingsPos', label: 'Settings: POS', rights: ['view', 'edit']},
+    { key: 'settingsDiscounts', label: 'Settings: Discounts', rights: ['view', 'create', 'edit', 'delete']},
+    { key: 'settingsOnline', label: 'Settings: Online Orders', rights: ['view', 'edit']},
+    { key: 'settingsInvoicing', label: 'Settings: Invoicing', rights: ['view', 'edit']},
+    { key: 'settingsPrinting', label: 'Settings: Printing', rights: ['view', 'edit']},
+    { key: 'settingsQr', label: 'Settings: QR Code', rights: ['view', 'edit']},
+    { key: 'settingsPlatforms', label: 'Settings: Platforms', rights: ['view', 'edit']},
 ];

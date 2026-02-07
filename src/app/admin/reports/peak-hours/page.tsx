@@ -86,15 +86,19 @@ export default function PeakHoursPage() {
 
     useEffect(() => {
         async function fetchDataForBranch() {
-            if (!branchFilter) return;
+            if (!branchFilter || !date?.from) return;
             setIsLoading(true);
             
             const targetBranchId = branchFilter === 'all' ? undefined : branchFilter;
+            const dateRange = {
+                from: startOfDay(date.from),
+                to: date.to ? endOfDay(date.to) : endOfDay(date.from),
+            };
 
             const [fetchedSettings, fetchedOrders, fetchedRemoteOrders] = await Promise.all([
                 getSettings(targetBranchId),
-                getOrders(targetBranchId),
-                getRemoteOrders(targetBranchId)
+                getOrders(targetBranchId, dateRange),
+                getRemoteOrders(targetBranchId, dateRange)
             ]);
 
             setSettings(fetchedSettings);
@@ -106,23 +110,15 @@ export default function PeakHoursPage() {
             setIsLoading(false);
         }
         fetchDataForBranch();
-    }, [branchFilter, getSettings, getOrders, getRemoteOrders]);
+    }, [branchFilter, date, getSettings, getOrders, getRemoteOrders]);
 
     const peakHoursData: PeakHourData[] = useMemo(() => {
-        const filteredOrders = allOrders.filter(order => {
-            if (!date?.from) return false;
-            const orderDate = new Date(order.createdAt);
-            const fromDate = startOfDay(date.from);
-            const toDate = date.to ? endOfDay(date.to) : endOfDay(date.from);
-            return orderDate >= fromDate && orderDate <= toDate;
-        });
-
         const statsByHour: { [hour: number]: { revenue: number; orders: number } } = {};
         for(let i = 0; i < 24; i++) {
             statsByHour[i] = { revenue: 0, orders: 0 };
         }
 
-        filteredOrders.forEach(order => {
+        allOrders.forEach(order => {
             const hour = getHours(new Date(order.createdAt));
             statsByHour[hour].revenue += order.total;
             statsByHour[hour].orders += 1;
@@ -138,7 +134,7 @@ export default function PeakHoursPage() {
             };
         });
 
-    }, [allOrders, date]);
+    }, [allOrders]);
     
     const executePrint = () => {
         const content = reportRef.current;

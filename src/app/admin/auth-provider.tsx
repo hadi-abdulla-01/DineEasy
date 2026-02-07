@@ -3,15 +3,16 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode, useCallback, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import type { KitchenUser } from '@/lib/definitions';
+import type { AppUser, NavMenuKey } from '@/lib/definitions';
 import { LoaderCircle } from 'lucide-react';
-import { isSuperAdmin } from '@/lib/auth-utils';
-import { getKitchenUserById } from '@/lib/data'; // Assuming this function can be used client-side
+import { getUserById } from '@/lib/data';
+import { useUser } from '@/firebase/provider';
+import { extractRestaurantId } from '@/lib/auth-utils';
 
 type AuthContextType = {
   isAuthenticated: boolean;
-  user: KitchenUser | null;
-  login: (user: KitchenUser) => void;
+  user: AppUser | null;
+  login: (user: AppUser) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
 };
@@ -19,17 +20,74 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const isProtectedRoute = (pathname: string) => {
-  return pathname.startsWith('/admin') || pathname.startsWith('/kitchen');
+  return pathname.startsWith('/admin') || pathname.startsWith('/kitchen') || pathname.startsWith('/display');
 }
 
+// --- START PERMISSION HELPERS ---
+
+const settingsKeys: NavMenuKey[] = [
+    'settingsRestaurant', 'settingsBranches', 'settingsGeneral', 'settingsFloors',
+    'settingsCategories', 'settingsSessions', 'settingsPos', 'settingsOnline',
+    'settingsInvoicing', 'settingsPrinting', 'settingsQr', 'settingsPlatforms',
+    'settingsDiscounts'
+];
+
+function hasPermission(user: AppUser, key: NavMenuKey): boolean {
+    if (!user) return false;
+    if (user.isSuperAdmin || user.role === 'Admin') {
+        return true;
+    }
+    if (key === 'settings') {
+        if (user.permissions?.settings?.view) {
+            return true;
+        }
+        return settingsKeys.some(settingKey => !!user.permissions?.[settingKey]?.view);
+    }
+    return !!user.permissions?.[key]?.view;
+};
+
+const ROUTE_PERMISSION_MAP: { path: string; permission: NavMenuKey }[] = [
+  { path: '/admin/pos', permission: 'pos' },
+  { path: '/admin/table-order', permission: 'tableOrder' },
+  { path: '/admin/tables', permission: 'tables' },
+  { path: '/admin/menu', permission: 'menu' },
+  { path: '/admin/kitchen', permission: 'kitchen' },
+  { path: '/admin/sales-history', permission: 'salesHistory' },
+  { path: '/admin/sales', permission: 'sales' },
+  { path: '/admin/reports/menu-performance', permission: 'menuPerformance'},
+  { path: '/admin/reports/employee-performance', permission: 'employeePerformance'},
+  { path: '/admin/reports/peak-hours', permission: 'peakHours'},
+  { path: '/admin/online-orders', permission: 'onlineOrders' },
+  { path: '/admin/take-away', permission: 'takeAway' },
+  { path: '/admin/user-management', permission: 'userManagement' },
+  { path: '/admin/settings', permission: 'settings' },
+  { path: '/display', permission: 'display' },
+];
+
+function getPermissionForPath(pathname: string): NavMenuKey | null {
+    const sortedMap = ROUTE_PERMISSION_MAP.sort((a, b) => b.path.length - a.path.length);
+    const match = sortedMap.find(mapping => pathname.startsWith(mapping.path));
+    return match ? match.permission : null;
+}
+
+// --- END PERMISSION HELPERS ---
+
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<KitchenUser | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+  const { isUserLoading: isFirebaseUserLoading } = useUser();
+
+  const logout = useCallback(() => {
+    setUser(null);
+    sessionStorage.removeItem('dineEasyUser');
+    router.replace('/login?role=admin');
+  }, [router]);
 
   useEffect(() => {
-    let currentUser: KitchenUser | null = null;
+    let currentUser: AppUser | null = null;
     try {
       const storedUser = sessionStorage.getItem('dineEasyUser');
       if (storedUser) {
@@ -41,37 +99,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const isProtected = isProtectedRoute(pathname);
-    // Check if user is on any login page
-    const isOnLoginPage = pathname.startsWith('/login') ||
-      pathname.startsWith('/login');
+    const isOnLoginPage = pathname.startsWith('/login');
 
-    if (isProtected) {
-      if (!currentUser) {
-        // Only redirect if not on a login-related page to avoid redirect loops
-        if (!isOnLoginPage) {
-          router.push('/login?role=admin');
+    if (!isFirebaseUserLoading) {
+        if (isProtected && !isOnLoginPage) {
+            if (!currentUser) {
+                router.replace('/login?role=admin');
+                return;
+            }
+            
+            if (currentUser.role === 'Table') {
+                if (!pathname.startsWith('/admin/place-order') && !pathname.startsWith('/display')) {
+                    router.replace('/admin/place-order');
+                    return;
+                }
+            } else if (currentUser.role === 'Kitchen' && !pathname.startsWith('/kitchen')) {
+                router.replace('/kitchen');
+                return;
+            } 
+            else if (currentUser.role !== 'Kitchen' && pathname.startsWith('/kitchen')) {
+                router.replace('/admin');
+                return;
+            }
+            else if (currentUser.role !== 'Admin' && !currentUser.isSuperAdmin) {
+                const requiredPermission = getPermissionForPath(pathname);
+                
+                if (requiredPermission && !hasPermission(currentUser, requiredPermission)) {
+                    if(pathname !== '/admin') {
+                      router.replace('/admin');
+                      return;
+                    }
+                }
+            }
         }
-      } else {
-        // Handle role-based redirects for authenticated users on protected routes
-        if (currentUser.role === 'Kitchen' && pathname.startsWith('/admin') && !isOnLoginPage) {
-          router.replace('/kitchen');
-        } else if (currentUser.role !== 'Kitchen' && pathname.startsWith('/kitchen') && !isOnLoginPage) {
-          router.replace('/admin');
-        }
-      }
+        setIsLoading(false);
     }
 
-    setIsLoading(false);
+  }, [pathname, router, logout, isFirebaseUserLoading]);
 
-  }, [pathname, router]);
-
-  const login = useCallback((loggedInUser: KitchenUser) => {
+  const login = useCallback((loggedInUser: AppUser) => {
     sessionStorage.setItem('dineEasyUser', JSON.stringify(loggedInUser));
     setUser(loggedInUser);
 
     // Check if super admin
-    if (loggedInUser.email && isSuperAdmin(loggedInUser.email)) {
+    if (loggedInUser.isSuperAdmin) {
       router.replace('/admin/superadmin');
+    } else if (loggedInUser.role === 'Table') {
+        if (loggedInUser.assignedTableId && loggedInUser.restaurantId) {
+            router.replace(`/display?tableId=${loggedInUser.assignedTableId}&restaurantId=${loggedInUser.restaurantId}`);
+        } else {
+            // Handle case where a table user is not assigned to a table
+            // For now, redirect to a safe place.
+            router.replace('/admin');
+        }
     } else if (loggedInUser.role === 'Kitchen') {
       router.replace('/kitchen');
     } else {
@@ -79,18 +159,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [router]);
 
-  const logout = useCallback(() => {
-    setUser(null);
-    sessionStorage.removeItem('dineEasyUser');
-    router.push('/login?role=admin');
-  }, [router]);
-
   const refreshUser = useCallback(async () => {
     const storedUser = sessionStorage.getItem('dineEasyUser');
     if (storedUser) {
-      const currentUser: KitchenUser = JSON.parse(storedUser);
+      const currentUser: AppUser = JSON.parse(storedUser);
       if (currentUser?.id && currentUser.restaurantId) {
-        const refreshedUser = await getKitchenUserById(currentUser.id, currentUser.restaurantId);
+        const refreshedUser = await getUserById(currentUser.id, currentUser.restaurantId);
         if (refreshedUser) {
           login(refreshedUser);
         }
@@ -109,8 +183,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }), [isAuthenticated, user, login, logout, refreshUser]);
 
 
-  // Show a loading screen only when trying to access a protected route without being authenticated yet.
-  if (isLoading && isProtectedRoute(pathname)) {
+  const combinedIsLoading = isLoading || isFirebaseUserLoading;
+
+  if (combinedIsLoading && isProtectedRoute(pathname)) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">

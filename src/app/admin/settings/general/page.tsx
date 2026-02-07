@@ -158,23 +158,37 @@ export default function GeneralSettingsPage() {
 
                     <Separator />
 
-                    <div className="space-y-2">
-                        <Label htmlFor="timezone">Restaurant Timezone</Label>
-                        <Select name="timezone" defaultValue={branch.timezone || 'Asia/Kolkata'}>
-                            <SelectTrigger id="timezone">
-                                <SelectValue placeholder="Select timezone" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {COMMON_TIMEZONES.map((tz) => (
-                                    <SelectItem key={tz.value} value={tz.value}>
-                                        {tz.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <p className="text-sm text-muted-foreground">
-                            Set your restaurant's timezone. Meal sessions will activate based on this timezone.
-                        </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="timezone">Restaurant Timezone</Label>
+                            <Select name="timezone" defaultValue={branch.timezone || 'Asia/Kolkata'}>
+                                <SelectTrigger id="timezone">
+                                    <SelectValue placeholder="Select timezone" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {COMMON_TIMEZONES.map((tz) => (
+                                        <SelectItem key={tz.value} value={tz.value}>
+                                            {tz.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-sm text-muted-foreground">
+                                Controls when daily reports and meal sessions activate.
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="endOfDayTime">End of Day Reporting Time</Label>
+                            <Input 
+                                id="endOfDayTime" 
+                                name="endOfDayTime" 
+                                type="time" 
+                                defaultValue={branch.endOfDayTime || '00:00'}
+                            />
+                            <p className="text-sm text-muted-foreground">
+                                Set the time your business day ends for sales reports (e.g., 02:00 for 2 AM).
+                            </p>
+                        </div>
                     </div>
 
                     <Separator />

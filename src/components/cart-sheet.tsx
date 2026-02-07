@@ -1,18 +1,17 @@
 
-
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useActionState } from 'react';
 import type { Order, OrderItem, RestaurantSettings } from '@/lib/definitions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ShoppingCart, Trash2, LoaderCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { placeOrder } from '@/lib/actions';
+import { placeOrder, type PlaceOrderState } from '@/lib/actions';
 import { useFormStatus } from 'react-dom';
 import { ScrollArea } from './ui/scroll-area';
 import { useRouter } from 'next/navigation';
@@ -46,37 +45,36 @@ type CartSheetProps = {
 export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, onNotesChange, onOrderPlaced, existingOrder, branchId, settings, customerInfo, restaurantId }: CartSheetProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
+  const formRef = useRef<HTMLFormElement>(null);
 
-  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const [state, formAction] = useActionState(placeOrder, null);
 
-  const handleFormSubmit = async (formData: FormData) => {
-    setError(null);
-
-    if (user?.id) {
-      formData.append('createdBy', user.id);
-    }
-
-    const state = await placeOrder(null, formData);
-
+  useEffect(() => {
     if (state?.success && state.orderId) {
       onOrderPlaced();
       setOpen(false);
-
+      formRef.current?.reset();
       if (!isCustomerFacing) {
         toast({
           title: 'Order Placed Successfully!',
           description: 'The order has been sent to the kitchen.',
         });
+        // The redirect in server action is for customer-facing, for admin we navigate here.
+        // but placeOrder doesn't redirect for admin, so this is fine.
         router.push('/admin/table-order');
       }
-    } else {
-      setError(state?.message || 'An unexpected error occurred.');
+    } else if (state?.message && !state.success) {
+      toast({
+        variant: "destructive",
+        title: "Order Failed",
+        description: state.message,
+      });
     }
-  };
+  }, [state, onOrderPlaced, isCustomerFacing, router, toast]);
 
+  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const renderCartContent = () => {
     if (!settings) {
@@ -107,7 +105,7 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
     }
 
     return (
-      <form action={handleFormSubmit} className="flex h-full flex-col">
+      <form ref={formRef} action={formAction} className="flex h-full flex-col">
         <div className="flex-1 overflow-y-auto">
           <ScrollArea className="h-full pr-6">
             <div className="space-y-4">
@@ -163,6 +161,7 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
           {existingOrder?.id && <input type="hidden" name="existingOrderId" value={existingOrder.id} />}
           {branchId && <input type="hidden" name="branchId" value={branchId} />}
           {restaurantId && <input type="hidden" name="restaurantId" value={restaurantId} />}
+          {user?.id && <input type="hidden" name="createdBy" value={user.id} />}
           
           {isCustomerFacing && customerInfo?.name && <input type="hidden" name="customerName" value={customerInfo.name} />}
           {isCustomerFacing && customerInfo?.phone && <input type="hidden" name="customerPhone" value={customerInfo.phone} />}
@@ -186,7 +185,7 @@ export function CartSheet({ cart, tableId, isCustomerFacing, onRemoveFromCart, o
           </div>
 
           <SubmitButton isCustomerFacing={isCustomerFacing} />
-          {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+          {state?.message && !state.success && <p className="text-sm font-medium text-destructive">{state.message}</p>}
         </div>
       </form>
     );

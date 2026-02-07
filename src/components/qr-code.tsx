@@ -1,9 +1,10 @@
+
 'use client';
 import React, { useEffect, useState } from 'react';
 import ReactQRCode from 'qrcode.react';
-import type { RestaurantSettings } from '@/lib/definitions';
+import type { RestaurantSettings, Table } from '@/lib/definitions';
 
-export function QRCode({ tableId, settings }: { tableId: string, settings: RestaurantSettings | null }) {
+export function QRCode({ table, settings }: { table: Table, settings: RestaurantSettings | null }) {
   const [baseUrl, setBaseUrl] = useState('');
   useEffect(() => {
     setBaseUrl(window.location.origin);
@@ -13,7 +14,10 @@ export function QRCode({ tableId, settings }: { tableId: string, settings: Resta
     return <div className="h-[150px] w-[150px] bg-muted animate-pulse rounded-md" />;
   }
 
-  const orderUrl = `${baseUrl}/order/${tableId}`;
+  let orderUrl = `${baseUrl}/order/${table.id}?restaurantId=${table.restaurantId}`;
+    if (table.isDynamicQR && table.qrToken) {
+        orderUrl += `&token=${table.qrToken}`;
+    }
 
   return (
     <ReactQRCode

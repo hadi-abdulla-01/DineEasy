@@ -1,8 +1,8 @@
 
 'use client';
 import { useEffect, useState } from 'react';
-import { updateKitchenUserAction } from '@/lib/actions';
-import type { ActivityLog, KitchenUser } from '@/lib/definitions';
+import { updateUserAction } from '@/lib/actions';
+import type { ActivityLog, AppUser } from '@/lib/definitions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function EditProfilePage() {
     const { user: currentUser, login } = useAuth();
-    const [user, setUser] = useState<KitchenUser | null>(null);
+    const [user, setUser] = useState<AppUser | null>(null);
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
@@ -52,7 +52,7 @@ export default function EditProfilePage() {
         }
         if (!user) return;
         
-        await updateKitchenUserAction(user.id, formData);
+        await updateUserAction(user.id, formData);
         
         toast({
             title: "Profile Updated",
@@ -212,4 +212,3 @@ export default function EditProfilePage() {
         </div>
     );
 }
-
