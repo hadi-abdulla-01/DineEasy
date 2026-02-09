@@ -374,7 +374,7 @@ export default function EmployeePerformancePage() {
                                                 nameKey="name"
                                             />}
                                         />
-                                        <Bar dataKey="totalRevenue" name="Total Revenue" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+                                        <Bar dataKey="totalRevenue" name="Total Revenue" fill="var(--color-primary)" radius={[4, 4, 0, 0]} maxBarSize={80} />
                                     </RechartsBarChart>
                                 </ResponsiveContainer>
                             </ChartContainer>
