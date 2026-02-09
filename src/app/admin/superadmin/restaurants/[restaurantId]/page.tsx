@@ -10,31 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Building2, Users, GitBranch, User, Eye, EyeOff, BookOpen, Clock } from 'lucide-react';
-import { getRestaurantById } from '@/lib/server-actions';
+import { ArrowLeft, Building2, Users, GitBranch, User, Eye, EyeOff, BookOpen, Clock, Edit } from 'lucide-react';
+import { getRestaurantById, getAdminForRestaurant } from '@/lib/server-actions';
 import { formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
-
-// New component to handle password visibility
-function PasswordCell({ password }: { password?: string }) {
-    const [showPassword, setShowPassword] = useState(false);
-
-    if (!password) {
-        return <TableCell className="text-slate-500">N/A</TableCell>;
-    }
-
-    return (
-        <TableCell className="font-mono">
-            <div className="flex items-center gap-2">
-                <span>{showPassword ? password : '••••••••'}</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowPassword(!showPassword)}>
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-            </div>
-        </TableCell>
-    );
-}
-
+import { PasswordCell } from '@/components/password-cell';
 
 export default function RestaurantDetailsPage() {
     const { user } = useAuth();
@@ -43,6 +23,7 @@ export default function RestaurantDetailsPage() {
     const restaurantId = params.restaurantId as string;
 
     const [restaurant, setRestaurant] = useState<{ id: string; name: string } | null>(null);
+    const [adminUser, setAdminUser] = useState<AppUser | null>(null);
     const [usersList, setUsersList] = useState<AppUser[]>([]);
     const [branches, setBranches] = useState<Branch[]>([]);
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
@@ -58,11 +39,12 @@ export default function RestaurantDetailsPage() {
             const fetchData = async () => {
                 setIsLoading(true);
                 try {
-                    const [restaurantData, usersData, branchesData, logsData] = await Promise.all([
+                    const [restaurantData, usersData, branchesData, logsData, adminData] = await Promise.all([
                         getRestaurantById(restaurantId),
                         getUsers(restaurantId),
                         getBranches(restaurantId),
-                        getActivityLogs(50, restaurantId)
+                        getActivityLogs(50, restaurantId),
+                        getAdminForRestaurant(restaurantId)
                     ]);
 
                     if (!restaurantData) {
@@ -70,6 +52,7 @@ export default function RestaurantDetailsPage() {
                         return;
                     }
                     setRestaurant(restaurantData);
+                    setAdminUser(adminData);
                     setUsersList(usersData);
                     setBranches(branchesData);
                     setActivityLogs(logsData);
@@ -102,7 +85,9 @@ export default function RestaurantDetailsPage() {
                             <TableCell className="font-medium">{u.username}</TableCell>
                             <TableCell>{u.email}</TableCell>
                             <TableCell>{u.role}</TableCell>
-                            <PasswordCell password={u.password} />
+                            <TableCell>
+                                <PasswordCell password={u.password} />
+                            </TableCell>
                         </TableRow>
                     ))
                 ) : (
@@ -135,21 +120,31 @@ export default function RestaurantDetailsPage() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-6">
             <div className="max-w-7xl mx-auto space-y-6">
-                <div className="flex items-center gap-4">
-                    <Button variant="outline" size="icon" asChild>
-                        <Link href="/admin/superadmin">
-                            <ArrowLeft className="h-4 w-4" />
-                        </Link>
-                    </Button>
-                    <div>
-                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
-                            <Building2 className="w-8 h-8 text-red-600" />
-                            {restaurant.name}
-                        </h1>
-                        <p className="text-slate-600 dark:text-slate-400">
-                            Details for restaurant ID: <span className="font-mono text-xs">{restaurant.id}</span>
-                        </p>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-4">
+                        <Button variant="outline" size="icon" asChild>
+                            <Link href="/admin/superadmin">
+                                <ArrowLeft className="h-4 w-4" />
+                            </Link>
+                        </Button>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                                <Building2 className="w-8 h-8 text-red-600" />
+                                {restaurant.name}
+                            </h1>
+                            <p className="text-slate-600 dark:text-slate-400">
+                                Details for restaurant ID: <span className="font-mono text-xs">{restaurant.id}</span>
+                            </p>
+                        </div>
                     </div>
+                     {adminUser && (
+                        <Button asChild variant="outline" size="sm">
+                            <Link href={`/admin/user-management/${adminUser.id}/edit`}>
+                                <Edit className="w-4 h-4 mr-2" />
+                                Edit Admin Permissions
+                            </Link>
+                        </Button>
+                    )}
                 </div>
 
                 {usersWithoutBranch.length > 0 && (
