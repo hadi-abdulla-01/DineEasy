@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { initializeFirebase } from '@/firebase/server';
@@ -12,6 +13,7 @@ import {
     deleteDoc
 } from 'firebase/firestore';
 import type { AppUser } from './definitions';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 /**
  * Create a new restaurant (tenant) in the multi-tenant SaaS structure
@@ -27,8 +29,8 @@ export async function createRestaurant(
 
         // Create restaurant document
         const restaurantRef = doc(firestore, 'restaurants', restaurantId);
-
-        await setDoc(restaurantRef, {
+        
+        const restaurantData = {
             name: restaurantName,
             createdAt: serverTimestamp(),
             isActive: true,
@@ -49,7 +51,8 @@ export async function createRestaurant(
                 online: { prefix: 'ON-', nextNumber: 1 },
                 takeAway: { prefix: 'TA-', nextNumber: 1 },
             }
-        });
+        };
+        await setDoc(restaurantRef, restaurantData);
 
         // Create main branch for this restaurant
         const mainBranchRef = doc(collection(firestore, `restaurants/${restaurantId}/branches`));
@@ -79,6 +82,14 @@ export async function createRestaurant(
             restaurantId: restaurantId
         };
     } catch (error: any) {
+        if (error.code === 'permission-denied') {
+            const permissionError = new FirestorePermissionError({
+                path: `restaurants/${restaurantId}`,
+                operation: 'create',
+                requestResourceData: { name: restaurantName, createdAt: 'serverTimestamp()', isActive: true }
+            });
+            return { success: false, restaurantId: '', error: permissionError.message };
+        }
         console.error('Error creating restaurant:', error);
         return {
             success: false,
@@ -111,9 +122,15 @@ export async function getAllRestaurants(): Promise<Array<{
                 isActive: data.isActive ?? true,
             };
         });
-    } catch (error) {
+    } catch (error: any) {
+        if (error.code === 'permission-denied') {
+            throw new FirestorePermissionError({
+                path: 'restaurants',
+                operation: 'list',
+            });
+        }
         console.error('Error getting restaurants:', error);
-        return [];
+        throw error;
     }
 }
 
@@ -134,9 +151,15 @@ export async function getRestaurantById(restaurantId: string): Promise<{ id: str
             };
         }
         return null;
-    } catch (error) {
+    } catch (error: any) {
+        if (error.code === 'permission-denied') {
+            throw new FirestorePermissionError({
+                path: `restaurants/${restaurantId}`,
+                operation: 'get',
+            });
+        }
         console.error('Error getting restaurant by ID:', error);
-        return null;
+        throw error;
     }
 }
 
@@ -190,6 +213,13 @@ export async function deleteRestaurant(restaurantId: string): Promise<{ success:
 
         return { success: true };
     } catch (error: any) {
+         if (error.code === 'permission-denied') {
+            const permissionError = new FirestorePermissionError({
+                path: `restaurants/${restaurantId}`,
+                operation: 'delete',
+            });
+            return { success: false, error: permissionError.message };
+        }
         console.error('Error deleting restaurant:', error);
         return {
             success: false,
