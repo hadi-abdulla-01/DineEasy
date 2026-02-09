@@ -66,8 +66,6 @@ export default function SuperAdminPanel() {
 
     // Dashboard state
     const [dashboardData, setDashboardData] = useState<{
-        totalSales: number;
-        totalOrders: number;
         newOrdersCount: number;
         totalRestaurants: number;
         totalUsers: number;
@@ -115,7 +113,7 @@ export default function SuperAdminPanel() {
             const sortedRestaurants = allRestaurants.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
             setDashboardData({
-                ...stats,
+                newOrdersCount: stats.newOrdersCount,
                 totalRestaurants: allRestaurants.length,
                 totalUsers: userCount,
                 leaderboard: board,
@@ -267,11 +265,10 @@ export default function SuperAdminPanel() {
 
     const renderDashboard = () => (
         <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatCard title="Total Sales" value={`$${(dashboardData?.totalSales || 0).toFixed(2)}`} icon={<DollarSign className="h-4 w-4 text-muted-foreground" />} description="Across all restaurants" />
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <StatCard title="Total Restaurants" value={String(dashboardData?.totalRestaurants || 0)} icon={<Building2 className="h-4 w-4 text-muted-foreground" />} description="Currently on the platform" />
-                <StatCard title="Total Orders" value={String(dashboardData?.totalOrders || 0)} icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />} description="Lifetime orders placed" />
                 <StatCard title="Active Users" value={String(dashboardData?.totalUsers || 0)} icon={<Users className="h-4 w-4 text-muted-foreground" />} description="Staff accounts created" />
+                <StatCard title="New Orders (24h)" value={String(dashboardData?.newOrdersCount || 0)} icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />} description="New orders in the last day" />
             </div>
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
@@ -562,4 +559,5 @@ export default function SuperAdminPanel() {
         </div>
     );
 }
+
 

@@ -1346,13 +1346,17 @@ export async function getActivityLogsByUser(userId: string, limitCount: number =
     const collections = await getCollections(restaurantId);
     const activityLogsRef = collections.activityLogs;
     
-    const q = query(activityLogsRef, where('userId', '==', userId));
+    // Sort by timestamp on the server
+    const q = query(
+        activityLogsRef,
+        where('userId', '==', userId),
+        orderBy('timestamp', 'desc'),
+        limit(limitCount)
+    );
     const snapshot = await getDocs(q);
     const logs = snapshot.docs.map(d => docToObj<ActivityLog>(d));
     
-    logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    
-    return logs.slice(0, limitCount);
+    return logs;
 }
 
 // --- OTP Management ---
@@ -1478,32 +1482,22 @@ export async function getGlobalStats() {
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
     
-    // Using multiple queries and merging is more robust than a single complex query
-    // that would require specific composite indexes to be pre-configured.
-    const completedOrdersQuery = query(ordersRef, where('status', '==', 'completed'));
     const newOrdersQuery = query(ordersRef, where('createdAt', '>=', twentyFourHoursAgo));
     const newRemoteOrdersQuery = query(remoteOrdersRef, where('createdAt', '>=', twentyFourHoursAgo));
 
     const [
-        completedOrdersSnap, 
-        remoteOrdersSnap,
         newOrdersSnap,
         newRemoteOrdersSnap
     ] = await Promise.all([
-        getDocs(completedOrdersQuery),
-        getDocs(remoteOrdersRef),
         getDocs(newOrdersQuery),
         getDocs(newRemoteOrdersQuery)
     ]);
 
-    const totalSales = 
-        completedOrdersSnap.docs.reduce((sum, doc) => sum + (doc.data().total || 0), 0) +
-        remoteOrdersSnap.docs.reduce((sum, doc) => sum + (doc.data().total || 0), 0);
-
-    const totalOrders = completedOrdersSnap.size + remoteOrdersSnap.size;
     const newOrdersCount = newOrdersSnap.size + newRemoteOrdersSnap.size;
     
-    return { totalSales, totalOrders, newOrdersCount };
+    // Removed expensive global total queries for sales and orders.
+    // Returning 0 for type compatibility as a safe fallback.
+    return { totalSales: 0, totalOrders: 0, newOrdersCount };
 }
 
 
