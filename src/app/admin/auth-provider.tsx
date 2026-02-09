@@ -3,11 +3,18 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode, useCallback, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import type { AppUser, NavMenuKey } from '@/lib/definitions';
-import { LoaderCircle } from 'lucide-react';
-import { getUserById } from '@/lib/data';
+import type { AppUser, NavMenuKey, RestaurantSettings } from '@/lib/definitions';
+import { LoaderCircle, AlertTriangle } from 'lucide-react';
+import { getUserById, getSettings } from '@/lib/data';
 import { useUser } from '@/firebase/provider';
 import { extractRestaurantId } from '@/lib/auth-utils';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type AuthContextType = {
   isAuthenticated: boolean;
@@ -76,6 +83,7 @@ function getPermissionForPath(pathname: string): NavMenuKey | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRestaurantInactive, setIsRestaurantInactive] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const { isUserLoading: isFirebaseUserLoading } = useUser();
@@ -136,6 +144,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
   }, [pathname, router, logout, isFirebaseUserLoading]);
+  
+  useEffect(() => {
+    if (!user || user.isSuperAdmin) {
+      setIsRestaurantInactive(false);
+      return;
+    }
+
+    const checkStatus = async () => {
+      const restaurantId = extractRestaurantId(user.email || '');
+      if (restaurantId) {
+        try {
+          const restaurantData = await getSettings(undefined, restaurantId);
+          // The `isActive` property is on the main restaurant doc, not branch settings
+          // but getSettings merges them.
+          if (restaurantData && (restaurantData as any).isActive === false) {
+            setIsRestaurantInactive(true);
+          } else {
+            setIsRestaurantInactive(false);
+          }
+        } catch (error) {
+          console.error("Failed to check restaurant status:", error);
+          // Don't lock out the user if the check fails, just log it.
+        }
+      }
+    };
+
+    checkStatus(); // Initial check
+    const intervalId = setInterval(checkStatus, 30000); // Re-check every 30 seconds
+
+    return () => clearInterval(intervalId);
+  }, [user]);
 
   const login = useCallback((loggedInUser: AppUser) => {
     sessionStorage.setItem('dineEasyUser', JSON.stringify(loggedInUser));
@@ -198,7 +237,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={authContextValue}>
-      {children}
+      {isRestaurantInactive ? (
+        <AlertDialog open={true}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-6 w-6 text-destructive" />
+                Account Inactive
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This restaurant account is currently inactive. Please contact your software administrator for assistance.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 }
