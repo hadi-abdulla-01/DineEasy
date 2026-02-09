@@ -137,14 +137,16 @@ export default function RestaurantDetailsPage() {
                             </p>
                         </div>
                     </div>
-                     {adminUser && (
-                        <Button asChild variant="outline" size="sm">
-                            <Link href={`/admin/user-management/${adminUser.id}/edit`}>
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit Admin Permissions
-                            </Link>
-                        </Button>
-                    )}
+                     <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!adminUser}
+                        onClick={() => adminUser && router.push(`/admin/user-management/${adminUser.id}/edit`)}
+                        title={!adminUser ? "No user with 'Admin' role found for this restaurant." : "Edit administrator permissions"}
+                    >
+                        <Edit className="w-4 h-4 mr-2" />
+                        {adminUser ? 'Edit Admin Permissions' : 'No Admin Found'}
+                    </Button>
                 </div>
 
                 {usersWithoutBranch.length > 0 && (
