@@ -177,22 +177,18 @@ export default function UserManagementPage() {
 
             if (right === 'view') {
                 if (value) {
-                    // When 'view' is checked, enable all available rights for that menu
                     const menuConfig = ALL_PERMISSIONS_CONFIG.find(p => p.key === menu);
                     menuConfig?.rights.forEach(r => {
                         (menuPermissions as any)[r] = true;
                     });
                 } else {
-                    // When 'view' is unchecked, disable all rights for that menu
                     Object.keys(menuPermissions).forEach(key => {
                         (menuPermissions as any)[key] = false;
                     });
                 }
             } else {
-                // For 'create', 'edit', 'delete'
                 (menuPermissions as any)[right] = value;
                 if (value) {
-                    // Checking any other right automatically checks 'view'
                     menuPermissions.view = true;
                 }
             }
@@ -206,10 +202,15 @@ export default function UserManagementPage() {
     const newPermissions: UserPermissions = {};
     if (checked) {
       ALL_PERMISSIONS_CONFIG.forEach(menu => {
-        newPermissions[menu.key] = {};
-        menu.rights.forEach(right => {
-          (newPermissions[menu.key] as any)[right] = true;
-        });
+        // Only grant permissions that the current user has
+        if(currentUser?.isSuperAdmin || currentUser?.role === 'Admin' || currentUser?.permissions?.[menu.key]?.view) {
+            newPermissions[menu.key] = {};
+            menu.rights.forEach(right => {
+                 if(currentUser?.isSuperAdmin || currentUser?.role === 'Admin' || currentUser?.permissions?.[menu.key]?.[right]) {
+                    (newPermissions[menu.key] as any)[right] = true;
+                 }
+            });
+        }
       });
     }
     setPermissions(newPermissions);
@@ -247,6 +248,14 @@ export default function UserManagementPage() {
       return nameMatch && branchMatch && roleMatch && isVisibleForManager;
     });
   }, [users, nameFilter, branchFilter, roleFilter, isGlobalAdmin, currentUser?.branchId]);
+  
+  const availablePermissionsConfig = useMemo(() => {
+    if (currentUser?.isSuperAdmin || currentUser?.role === 'Admin') {
+      return ALL_PERMISSIONS_CONFIG;
+    }
+    return ALL_PERMISSIONS_CONFIG.filter(p => currentUser?.permissions?.[p.key]?.view);
+  }, [currentUser]);
+
 
   return (
     <div className="space-y-8">
@@ -455,6 +464,7 @@ export default function UserManagementPage() {
                               id="select-all-perms-add"
                               checked={selectAllPermissions}
                               onCheckedChange={handleSelectAllPermissionsChange}
+                              disabled={!(currentUser?.isSuperAdmin || currentUser?.role === 'Admin')}
                             />
                             <label htmlFor="select-all-perms-add" className="text-sm font-medium">Select All</label>
                           </div>
@@ -473,7 +483,7 @@ export default function UserManagementPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {(selectedRole === 'Kitchen' ? ALL_PERMISSIONS_CONFIG.filter(p => p.key === 'kitchen') : ALL_PERMISSIONS_CONFIG).map(menu => {
+                                {availablePermissionsConfig.map(menu => {
                                     const availableRights = ['view', 'create', 'edit', 'delete'];
                                     const currentPerms = permissions[menu.key] || {};
                                     return (
@@ -486,7 +496,11 @@ export default function UserManagementPage() {
                                                             id={`perm-${right}-${menu.key}-add`}
                                                             checked={currentPerms[right as keyof typeof currentPerms] || false}
                                                             onCheckedChange={(checked) => handlePermissionChange(menu.key, right as any, !!checked)}
-                                                            disabled={selectedRole === 'Kitchen' || (right !== 'view' && !currentPerms.view)}
+                                                            disabled={
+                                                                selectedRole === 'Kitchen' || 
+                                                                (right !== 'view' && !currentPerms.view) ||
+                                                                !(currentUser?.isSuperAdmin || currentUser?.role === 'Admin' || currentUser?.permissions?.[menu.key]?.[right])
+                                                            }
                                                         />
                                                     ) : <span className="text-muted-foreground">-</span>}
                                                 </TableCell>
@@ -557,3 +571,4 @@ export default function UserManagementPage() {
     </div>
   );
 }
+

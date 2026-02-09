@@ -1,7 +1,7 @@
 
 
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { updateUserAction } from '@/lib/actions';
 import type { AppUser, MenuItem, UserRole, NavMenuKey, UserPermissions, Branch, Table } from '@/lib/definitions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -84,7 +84,6 @@ export default function EditUserPage() {
 
         await updateUserAction(userId, formData);
         
-        // If the admin is editing their own profile, refresh the session
         if (currentUser?.id === userId) {
            await refreshUser();
         }
@@ -100,7 +99,6 @@ export default function EditUserPage() {
         );
     }
     
-    // Determine if sensitive fields (role, branch, permissions) should be editable.
     const isEditingSelf = currentUser.id === userId;
     const canEditSensitiveFields = currentUser.role === 'Admin' || !isEditingSelf;
 
@@ -132,22 +130,18 @@ export default function EditUserPage() {
 
             if (right === 'view') {
                 if (value) {
-                    // When 'view' is checked, enable all available rights for that menu
                     const menuConfig = ALL_PERMISSIONS_CONFIG.find(p => p.key === menu);
                     menuConfig?.rights.forEach(r => {
                         (menuPermissions as any)[r] = true;
                     });
                 } else {
-                    // When 'view' is unchecked, disable all rights for that menu
                     Object.keys(menuPermissions).forEach(key => {
                         (menuPermissions as any)[key] = false;
                     });
                 }
             } else {
-                // For 'create', 'edit', 'delete'
                 (menuPermissions as any)[right] = value;
                 if (value) {
-                    // Checking any other right automatically checks 'view'
                     menuPermissions.view = true;
                 }
             }
@@ -161,10 +155,14 @@ export default function EditUserPage() {
         const newPermissions: UserPermissions = {};
         if (checked) {
             ALL_PERMISSIONS_CONFIG.forEach(menu => {
-                newPermissions[menu.key] = {};
-                menu.rights.forEach(right => {
-                    (newPermissions[menu.key] as any)[right] = true;
-                });
+                if(currentUser?.isSuperAdmin || currentUser?.role === 'Admin' || currentUser?.permissions?.[menu.key]?.view) {
+                    newPermissions[menu.key] = {};
+                    menu.rights.forEach(right => {
+                        if(currentUser?.isSuperAdmin || currentUser?.role === 'Admin' || currentUser?.permissions?.[menu.key]?.[right]) {
+                            (newPermissions[menu.key] as any)[right] = true;
+                        }
+                    });
+                }
             });
         }
         setPermissions(newPermissions);
@@ -185,6 +183,13 @@ export default function EditUserPage() {
     const showCategorySelector = selectedRole === 'Kitchen';
 
     const canManageAllBranches = currentUser?.role === 'Admin';
+    
+    const availablePermissionsConfig = useMemo(() => {
+        if (currentUser?.isSuperAdmin || currentUser?.role === 'Admin') {
+          return ALL_PERMISSIONS_CONFIG;
+        }
+        return ALL_PERMISSIONS_CONFIG.filter(p => currentUser?.permissions?.[p.key]?.view);
+    }, [currentUser]);
 
 
     return (
@@ -269,6 +274,7 @@ export default function EditUserPage() {
                                             id="select-all-perms"
                                             checked={selectAllPermissions}
                                             onCheckedChange={handleSelectAllPermissionsChange}
+                                            disabled={!(currentUser?.isSuperAdmin || currentUser?.role === 'Admin')}
                                         />
                                         <label htmlFor="select-all-perms" className="text-sm font-medium">Select All</label>
                                     </div>
@@ -287,7 +293,7 @@ export default function EditUserPage() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {(selectedRole === 'Kitchen' ? ALL_PERMISSIONS_CONFIG.filter(p => p.key === 'kitchen') : ALL_PERMISSIONS_CONFIG).map(menu => {
+                                        {availablePermissionsConfig.map(menu => {
                                             const availableRights = ['view', 'create', 'edit', 'delete'];
                                             const currentPerms = permissions[menu.key] || {};
                                             return (
@@ -299,7 +305,11 @@ export default function EditUserPage() {
                                                                 <Checkbox
                                                                     checked={currentPerms[right as keyof typeof currentPerms] || false}
                                                                     onCheckedChange={(checked) => handlePermissionChange(menu.key, right as any, !!checked)}
-                                                                    disabled={right !== 'view' && !currentPerms.view}
+                                                                    disabled={
+                                                                        (right !== 'view' && !currentPerms.view) ||
+                                                                        !canEditSensitiveFields ||
+                                                                        !(currentUser?.isSuperAdmin || currentUser?.role === 'Admin' || currentUser?.permissions?.[menu.key]?.[right])
+                                                                    }
                                                                 />
                                                             ) : <span className="text-muted-foreground">-</span>}
                                                         </TableCell>
@@ -375,3 +385,4 @@ export default function EditUserPage() {
         </Card>
     );
 }
+

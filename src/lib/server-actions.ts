@@ -2,7 +2,7 @@
 
 'use server';
 
-import { getAdminApp } from '@/firebase/admin';
+import { getAdminApp, getAdminAuth } from '@/firebase/admin';
 import { getFirestore as getAdminFirestore, FieldValue, query as adminQuery, where as adminWhere, limit as adminLimit } from 'firebase-admin/firestore';
 import type { AppUser, Order, RemoteOrder, RestaurantSettings } from './definitions';
 import { createAuthUser } from '@/lib/auth';
@@ -136,37 +136,65 @@ export async function updateDefaultRestaurantSettings(settings: Partial<Restaura
 export async function createRestaurant(
     restaurantId: string,
     restaurantName: string,
-    adminUser: Omit<AppUser, 'id'>
+    adminUser: Omit<AppUser, 'id' | 'email' | 'firebaseUid'> & { password: string }
 ): Promise<{ success: boolean; restaurantId: string; error?: string }> {
     try {
         const firestore = await getAdminFirestoreInstance();
         const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
+
+        const existingRestaurant = await restaurantRef.get();
+        if (existingRestaurant.exists) {
+            return { success: false, restaurantId: '', error: `Restaurant ID "${restaurantId}" already exists.` };
+        }
         
+        // 1. Create Firebase Auth user
+        const adminEmail = generateUserEmail('admin', restaurantId, true);
+        const adminAuth = getAdminAuth();
+        if (!adminAuth) {
+            throw new Error("Firebase Admin Auth SDK is not initialized.");
+        }
+        let authUserRecord;
+        try {
+            authUserRecord = await adminAuth.createUser({
+                email: adminEmail,
+                password: adminUser.password,
+                displayName: adminUser.username,
+            });
+        } catch (authError: any) {
+            if (authError.code === 'auth/email-already-exists') {
+                return { success: false, restaurantId: '', error: `An authentication account for ${adminEmail} already exists. Please choose a different Restaurant ID.` };
+            }
+            throw authError;
+        }
+
+        // 2. Create Restaurant Doc
         const defaultSettings = await getDefaultRestaurantSettings();
         
-        const restaurantData = {
+        const restaurantData: Partial<RestaurantSettings> & { name: string; createdAt: FieldValue; isActive: boolean } = {
             ...defaultSettings,
             name: restaurantName,
             restaurantName: restaurantName,
             createdAt: FieldValue.serverTimestamp(),
             isActive: true,
         };
-        // Ensure nested objects from defaults are handled if they don't exist
-        restaurantData.invoiceSettings = restaurantData.invoiceSettings || {
+
+        restaurantData.invoiceSettings = {
+            ...(defaultSettings.invoiceSettings || {}),
             useUnifiedNumbering: true,
             unified: { prefix: 'INV-', nextNumber: 1 },
             dineIn: { prefix: 'DI-', nextNumber: 1 },
             online: { prefix: 'ON-', nextNumber: 1 },
             takeAway: { prefix: 'TA-', nextNumber: 1 },
         };
+
         await restaurantRef.set(restaurantData);
 
+        // 3. Create Main Branch
         const mainBranchRef = firestore.collection(`restaurants/${restaurantId}/branches`).doc();
         await mainBranchRef.set({
             name: 'Main Branch',
             isMain: true,
             createdAt: FieldValue.serverTimestamp(),
-            // Apply defaults to the main branch as well
             restaurantName: restaurantName,
             restaurantAddress: defaultSettings.restaurantAddress || '',
             currencySymbol: defaultSettings.currencySymbol || '$',
@@ -175,9 +203,13 @@ export async function createRestaurant(
             taxes: defaultSettings.taxes || [],
         });
 
+        // 4. Create Firestore User Doc (omitting password)
+        const { password, ...adminUserDataForFirestore } = adminUser;
         const adminUserRef = firestore.collection(`restaurants/${restaurantId}/kitchenUsers`).doc();
         await adminUserRef.set({
-            ...adminUser,
+            ...adminUserDataForFirestore,
+            email: adminEmail,
+            firebaseUid: authUserRecord.uid,
             branchId: mainBranchRef.id,
             createdAt: FieldValue.serverTimestamp(),
         });
@@ -362,4 +394,5 @@ export async function getAdminForRestaurant(restaurantId: string): Promise<AppUs
         return null;
     }
 }
+
 

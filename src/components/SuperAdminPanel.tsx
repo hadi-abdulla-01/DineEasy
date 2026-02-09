@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,7 +12,6 @@ import {
     DollarSign, ShoppingCart, TrendingUp, Activity, LayoutDashboard, List,
     LoaderCircle, Edit, Save, X, KeyRound, Settings, ClipboardList, ToggleRight, Megaphone
 } from 'lucide-react';
-import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
 import {
     createRestaurant, getAllRestaurants, deleteRestaurant, getGlobalStats,
@@ -19,13 +19,16 @@ import {
     updateRestaurantName, getAdminForRestaurant
 } from '@/lib/server-actions';
 import Link from 'next/link';
-import type { AppUser } from '@/lib/definitions';
+import type { AppUser, NavMenuKey, UserPermissions } from '@/lib/definitions';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDistanceToNow } from 'date-fns';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { PasswordCell } from './password-cell';
+import { ALL_PERMISSIONS_CONFIG } from '@/lib/permissions';
+import { Checkbox } from './ui/checkbox';
+import { Separator } from './ui/separator';
 
 
 function StatCard({ title, value, icon, description }: { title: string, value: string, icon: React.ReactNode, description: string }) {
@@ -81,6 +84,47 @@ export default function SuperAdminPanel() {
     const [newName, setNewName] = useState('');
     const [credentialsToShow, setCredentialsToShow] = useState<AppUser | null>(null);
     const [isCredentialsLoading, setIsCredentialsLoading] = useState(false);
+    
+    // New state for admin permissions
+    const [adminPermissions, setAdminPermissions] = useState<UserPermissions>(() => {
+        const allPerms: UserPermissions = {};
+        ALL_PERMISSIONS_CONFIG.forEach(p => {
+            allPerms[p.key] = {};
+            p.rights.forEach(r => {
+                (allPerms[p.key] as any)[r] = true;
+            });
+        });
+        return allPerms;
+    });
+
+    const handlePermissionChange = (menu: NavMenuKey, right: 'view' | 'create' | 'edit' | 'delete', value: boolean) => {
+        setAdminPermissions(prev => {
+            const newPermissions = JSON.parse(JSON.stringify(prev)); // Deep copy
+            if (!newPermissions[menu]) {
+                newPermissions[menu] = {};
+            }
+            const menuPermissions = newPermissions[menu]!;
+
+            if (right === 'view') {
+                if (value) {
+                    const menuConfig = ALL_PERMISSIONS_CONFIG.find(p => p.key === menu);
+                    menuConfig?.rights.forEach(r => {
+                        (menuPermissions as any)[r] = true;
+                    });
+                } else {
+                    Object.keys(menuPermissions).forEach(key => {
+                        (menuPermissions as any)[key] = false;
+                    });
+                }
+            } else {
+                (menuPermissions as any)[right] = value;
+                if (value) {
+                    menuPermissions.view = true;
+                }
+            }
+            return newPermissions;
+        });
+    };
 
 
     const loadRestaurants = async () => {
@@ -166,37 +210,6 @@ export default function SuperAdminPanel() {
         setIsCreating(true);
 
         try {
-            const adminEmail = generateUserEmail('admin', restaurantId, true);
-
-            const authResult = await createAuthUser(adminEmail, adminPassword, {
-                username: 'admin',
-                password: adminPassword,
-                role: 'Admin',
-                categories: ['All'],
-                branchId: '',
-                permissions: {
-                    dashboard: { view: true },
-                    pos: { view: true },
-                    tableOrder: { view: true },
-                    tables: { view: true, create: true, edit: true, delete: true },
-                    menu: { view: true, create: true, edit: true, delete: true },
-                    kitchen: { view: true },
-                    sales: { view: true },
-                    salesHistory: { view: true, edit: true, delete: true },
-                    menuPerformance: { view: true },
-                    onlineOrders: { view: true, create: true },
-                    takeAway: { view: true, create: true },
-                    userManagement: { view: true, create: true, edit: true, delete: true },
-                    settings: { view: true, edit: true },
-                }
-            }, restaurantId);
-
-            if (!authResult.success) {
-                setError(authResult.error || 'Failed to create admin user');
-                setIsCreating(false);
-                return;
-            }
-
             const restaurantResult = await createRestaurant(
                 restaurantId,
                 restaurantName,
@@ -205,28 +218,13 @@ export default function SuperAdminPanel() {
                     password: adminPassword,
                     role: 'Admin',
                     categories: ['All'],
-                    branchId: '',
-                    email: adminEmail,
-                    firebaseUid: authResult.user?.firebaseUid || '',
-                    permissions: {
-                        dashboard: { view: true },
-                        pos: { view: true },
-                        tableOrder: { view: true },
-                        tables: { view: true, create: true, edit: true, delete: true },
-                        menu: { view: true, create: true, edit: true, delete: true },
-                        kitchen: { view: true },
-                        sales: { view: true },
-                        salesHistory: { view: true, edit: true, delete: true },
-                        menuPerformance: { view: true },
-                        onlineOrders: { view: true, create: true },
-                        takeAway: { view: true, create: true },
-                        userManagement: { view: true, create: true, edit: true, delete: true },
-                        settings: { view: true, edit: true },
-                    }
+                    permissions: adminPermissions,
+                    branchId: '', // This will be replaced in the action
                 }
             );
 
             if (restaurantResult.success) {
+                const adminEmail = generateUserEmail('admin', restaurantId, true);
                 setSuccess(`Restaurant created successfully! Admin can login with: ${adminEmail}`);
                 setRestaurantName('');
                 setRestaurantId('');
@@ -590,7 +588,7 @@ export default function SuperAdminPanel() {
                                 Create New Restaurant
                             </CardTitle>
                             <CardDescription>
-                                Create a new restaurant and generate admin credentials
+                                Create a new restaurant and generate admin credentials with specific permissions.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -642,6 +640,47 @@ export default function SuperAdminPanel() {
                                         </button>
                                     </div>
                                 </div>
+                                
+                                <Separator className="my-4" />
+                                <div>
+                                    <Label className="text-base">Admin Permissions</Label>
+                                    <p className="text-xs text-slate-500 mb-2">Select the permissions for the new restaurant's administrator.</p>
+                                    <div className="border rounded-lg max-h-60 overflow-y-auto">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead className="w-1/3">Feature</TableHead>
+                                                    <TableHead className="text-center">View</TableHead>
+                                                    <TableHead className="text-center">Create</TableHead>
+                                                    <TableHead className="text-center">Edit</TableHead>
+                                                    <TableHead className="text-center">Delete</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {ALL_PERMISSIONS_CONFIG.map(menu => {
+                                                    const availableRights = ['view', 'create', 'edit', 'delete'];
+                                                    const currentPerms = adminPermissions[menu.key] || {};
+                                                    return (
+                                                        <TableRow key={menu.key}>
+                                                            <TableCell className="font-medium">{menu.label}</TableCell>
+                                                            {availableRights.map(right => (
+                                                                <TableCell key={right} className="text-center">
+                                                                    {menu.rights.includes(right as any) ? (
+                                                                        <Checkbox
+                                                                            checked={currentPerms[right as keyof typeof currentPerms] || false}
+                                                                            onCheckedChange={(checked) => handlePermissionChange(menu.key, right as any, !!checked)}
+                                                                        />
+                                                                    ) : <span className="text-muted-foreground">-</span>}
+                                                                </TableCell>
+                                                            ))}
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </div>
+
 
                                 <div className="flex gap-3 pt-4">
                                     <Button
@@ -649,7 +688,7 @@ export default function SuperAdminPanel() {
                                         disabled={isCreating}
                                         className="bg-red-600 hover:bg-red-700"
                                     >
-                                        {isCreating ? 'Creating...' : 'Create Restaurant'}
+                                        {isCreating ? <><LoaderCircle className="animate-spin mr-2"/> Creating...</> : 'Create Restaurant'}
                                     </Button>
                                     <Button
                                         type="button"
@@ -713,3 +752,4 @@ export default function SuperAdminPanel() {
         </div>
     );
 }
+
