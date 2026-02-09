@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../auth-provider';
+import { useAuth } from '@/app/admin/auth-provider';
 import SuperAdminPanel from '@/components/SuperAdminPanel';
 import { isSuperAdmin } from '@/lib/auth-utils';
 

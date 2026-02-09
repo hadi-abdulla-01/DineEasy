@@ -1,39 +1,32 @@
-
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/app/admin/auth-provider';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-    Building2,
-    Plus,
-    Mail,
-    Users,
-    Trash2,
-    Eye,
-    EyeOff,
-    LogOut,
-    DollarSign,
-    ShoppingCart,
-    TrendingUp,
-    Activity,
-    LayoutDashboard,
-    List,
-    LoaderCircle,
-    User,
+    Building2, Plus, Mail, Users, Trash2, Eye, EyeOff, LogOut,
+    DollarSign, ShoppingCart, TrendingUp, Activity, LayoutDashboard, List,
+    LoaderCircle, Edit, Save, X, KeyRound
 } from 'lucide-react';
 import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
-import { createRestaurant, getAllRestaurants, deleteRestaurant } from '@/lib/server-actions';
+import {
+    createRestaurant, getAllRestaurants, deleteRestaurant, getGlobalStats,
+    getGlobalUserCount, getRestaurantLeaderboard, updateRestaurantStatus,
+    updateRestaurantName, getAdminForRestaurant
+} from '@/lib/server-actions';
 import Link from 'next/link';
 import type { AppUser } from '@/lib/definitions';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDistanceToNow } from 'date-fns';
-import { getGlobalStats, getGlobalUserCount, getRestaurantLeaderboard } from '@/lib/server-actions';
+import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { PasswordCell } from './password-cell';
+
 
 function StatCard({ title, value, icon, description }: { title: string, value: string, icon: React.ReactNode, description: string }) {
     return (
@@ -52,6 +45,7 @@ function StatCard({ title, value, icon, description }: { title: string, value: s
 
 export default function SuperAdminPanel() {
     const { logout } = useAuth();
+    const { toast } = useToast();
     const [restaurants, setRestaurants] = useState<Array<{
         id: string;
         name: string;
@@ -81,6 +75,13 @@ export default function SuperAdminPanel() {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [isCreating, setIsCreating] = useState(false);
+
+    // Edit and Impersonate State
+    const [editingRestaurant, setEditingRestaurant] = useState<{ id: string; name: string } | null>(null);
+    const [newName, setNewName] = useState('');
+    const [credentialsToShow, setCredentialsToShow] = useState<AppUser | null>(null);
+    const [isCredentialsLoading, setIsCredentialsLoading] = useState(false);
+
 
     const loadRestaurants = async () => {
         setIsLoading(true);
@@ -163,16 +164,14 @@ export default function SuperAdminPanel() {
         setIsCreating(true);
 
         try {
-            // Generate admin email
             const adminEmail = generateUserEmail('admin', restaurantId, true);
 
-            // Create Firebase Auth user first
             const authResult = await createAuthUser(adminEmail, adminPassword, {
                 username: 'admin',
-                password: adminPassword, // Stored for reference
+                password: adminPassword,
                 role: 'Admin',
                 categories: ['All'],
-                branchId: '', // Will be set after restaurant creation
+                branchId: '',
                 permissions: {
                     dashboard: { view: true },
                     pos: { view: true },
@@ -188,7 +187,7 @@ export default function SuperAdminPanel() {
                     userManagement: { view: true, create: true, edit: true, delete: true },
                     settings: { view: true, edit: true },
                 }
-            });
+            }, restaurantId);
 
             if (!authResult.success) {
                 setError(authResult.error || 'Failed to create admin user');
@@ -196,7 +195,6 @@ export default function SuperAdminPanel() {
                 return;
             }
 
-            // Create restaurant with admin user
             const restaurantResult = await createRestaurant(
                 restaurantId,
                 restaurantName,
@@ -263,6 +261,63 @@ export default function SuperAdminPanel() {
         }
     };
 
+    const handleStatusToggle = async (restaurantId: string, currentStatus: boolean) => {
+        const originalStatus = currentStatus;
+        setRestaurants(prev => prev.map(r => r.id === restaurantId ? { ...r, isActive: !originalStatus } : r));
+
+        const result = await updateRestaurantStatus(restaurantId, !originalStatus);
+
+        if (!result.success) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update status.' });
+            setRestaurants(prev => prev.map(r => r.id === restaurantId ? { ...r, isActive: originalStatus } : r));
+        } else {
+            toast({ title: 'Success', description: 'Restaurant status updated.' });
+        }
+    };
+
+    const handleStartEditing = (restaurant: { id: string; name: string; }) => {
+        setEditingRestaurant(restaurant);
+        setNewName(restaurant.name);
+    };
+
+    const handleCancelEditing = () => {
+        setEditingRestaurant(null);
+        setNewName('');
+    };
+
+    const handleSaveName = async (restaurantId: string) => {
+        if (!newName.trim() || !editingRestaurant) {
+            toast({ variant: 'destructive', title: 'Name cannot be empty' });
+            return;
+        }
+        const originalName = editingRestaurant.name;
+        // Optimistic update
+        setRestaurants(prev => prev.map(r => r.id === restaurantId ? { ...r, name: newName } : r));
+        setEditingRestaurant(null);
+        
+        const result = await updateRestaurantName(restaurantId, newName);
+
+        if (result.success) {
+            toast({ title: 'Success', description: 'Restaurant name updated.' });
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+            // Revert on failure
+            setRestaurants(prev => prev.map(r => r.id === restaurantId ? { ...r, name: originalName } : r));
+        }
+    };
+
+    const handleImpersonate = async (restaurantId: string) => {
+        setIsCredentialsLoading(true);
+        setCredentialsToShow(null);
+        const admin = await getAdminForRestaurant(restaurantId);
+        if (admin) {
+            setCredentialsToShow(admin);
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not find an admin user for this restaurant.' });
+        }
+        setIsCredentialsLoading(false);
+    };
+
     const renderDashboard = () => (
         <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -326,9 +381,9 @@ export default function SuperAdminPanel() {
     const renderRestaurantList = () => (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {isLoading ? (
-                <Card>
-                    <CardContent className="pt-6">
-                        <p className="text-center text-slate-500">Loading restaurants...</p>
+                <Card className="col-span-full">
+                    <CardContent className="pt-6 flex justify-center items-center h-48">
+                        <LoaderCircle className="w-8 h-8 animate-spin text-red-600" />
                     </CardContent>
                 </Card>
             ) : restaurants.length === 0 ? (
@@ -343,50 +398,66 @@ export default function SuperAdminPanel() {
                 restaurants.map((restaurant) => {
                     const adminEmail = `admin@${restaurant.id}.dineezee`;
                     return (
-                        <Link href={`/admin/superadmin/restaurants/${restaurant.id}`} key={restaurant.id} className="block rounded-lg transition-all hover:shadow-xl hover:-translate-y-1">
-                            <Card className="h-full cursor-pointer">
-                                <CardHeader>
+                         <Card key={restaurant.id} className="flex flex-col">
+                            <CardHeader>
+                                {editingRestaurant?.id === restaurant.id ? (
+                                    <div className="flex items-center gap-2">
+                                        <Building2 className="w-5 h-5 text-red-600" />
+                                        <Input value={newName} onChange={(e) => setNewName(e.target.value)} className="h-9 flex-1" autoFocus onKeyDown={(e) => e.key === 'Enter' && handleSaveName(restaurant.id)} />
+                                        <Button size="icon" className="h-9 w-9 bg-green-600 hover:bg-green-700" onClick={() => handleSaveName(restaurant.id)}><Save className="w-4 h-4" /></Button>
+                                        <Button size="icon" variant="ghost" className="h-9 w-9" onClick={handleCancelEditing}><X className="w-4 h-4" /></Button>
+                                    </div>
+                                ) : (
                                     <div className="flex items-start justify-between">
-                                        <div className="flex-1">
-                                            <CardTitle className="flex items-center gap-2">
+                                        <Link href={`/admin/superadmin/restaurants/${restaurant.id}`} className="block">
+                                            <CardTitle className="flex items-center gap-2 hover:underline">
                                                 <Building2 className="w-5 h-5 text-red-600" />
                                                 {restaurant.name}
                                             </CardTitle>
-                                            <p className="text-sm text-slate-500 mt-1">Restaurant</p>
-                                        </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                handleDeleteRestaurant(restaurant.id);
-                                            }}
-                                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
+                                        </Link>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleStartEditing(restaurant)}>
+                                            <Edit className="w-4 h-4" />
                                         </Button>
                                     </div>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                        <Mail className="w-4 h-4" />
-                                        <span className="font-mono text-xs">
-                                            {adminEmail}
-                                        </span>
+                                )}
+                            </CardHeader>
+                            <CardContent className="flex-grow space-y-3">
+                                <p className="text-sm text-slate-500">
+                                    Created: {formatDistanceToNow(new Date(restaurant.createdAt), { addSuffix: true })}
+                                </p>
+                                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                                    <Mail className="w-4 h-4" />
+                                    <span className="font-mono text-xs break-all">
+                                        {adminEmail}
+                                    </span>
+                                </div>
+                            </CardContent>
+                            <CardFooter className="flex flex-col items-start gap-4 p-4 border-t">
+                                <div className="flex justify-between items-center w-full">
+                                    <Label htmlFor={`active-switch-${restaurant.id}`} className="font-medium text-sm">
+                                        Status
+                                    </Label>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground">{restaurant.isActive ? 'Active' : 'Inactive'}</span>
+                                        <Switch
+                                            id={`active-switch-${restaurant.id}`}
+                                            checked={restaurant.isActive}
+                                            onCheckedChange={() => handleStatusToggle(restaurant.id, restaurant.isActive)}
+                                        />
                                     </div>
-                                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                        <Users className="w-4 h-4" />
-                                        <span>
-                                            Admin can create branches & users
-                                        </span>
-                                    </div>
-                                    <div className="pt-3 border-t">
-                                        <p className="text-xs text-slate-500">Restaurant ID: {restaurant.id}</p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </Link>
+                                </div>
+                                <div className="flex items-center gap-2 w-full">
+                                    <Button variant="outline" size="sm" className="w-full" onClick={() => handleImpersonate(restaurant.id)}>
+                                        <KeyRound className="w-4 h-4 mr-2" />
+                                        Impersonate
+                                    </Button>
+                                    <Button variant="destructive" size="sm" className="w-full" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteRestaurant(restaurant.id); }}>
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Delete
+                                    </Button>
+                                </div>
+                            </CardFooter>
+                        </Card>
                     );
                 })
             )}
@@ -556,9 +627,35 @@ export default function SuperAdminPanel() {
                 )}
 
             </div>
+            
+            <Dialog open={!!credentialsToShow} onOpenChange={() => setCredentialsToShow(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Admin Credentials for {credentialsToShow?.username}</DialogTitle>
+                        <DialogDescription>Use these credentials in a separate incognito window to log in as this restaurant's admin.</DialogDescription>
+                    </DialogHeader>
+                    {isCredentialsLoading ? (
+                        <div className="flex justify-center items-center h-24">
+                             <LoaderCircle className="w-8 h-8 animate-spin text-red-600" />
+                        </div>
+                    ) : (
+                        <div className="space-y-4 pt-4">
+                            <div>
+                                <Label>Admin Email</Label>
+                                <Input readOnly value={credentialsToShow?.email} />
+                            </div>
+                            <div>
+                                <Label>Password</Label>
+                                <PasswordCell password={credentialsToShow?.password} />
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button onClick={() => setCredentialsToShow(null)}>Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
         </div>
     );
 }
-
-
-

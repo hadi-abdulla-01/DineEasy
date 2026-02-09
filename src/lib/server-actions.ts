@@ -1,12 +1,13 @@
 
+
 'use server';
 
 import { getAdminApp } from '@/firebase/admin';
-import { getFirestore as getAdminFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore as getAdminFirestore, FieldValue, query as adminQuery, where as adminWhere, limit as adminLimit } from 'firebase-admin/firestore';
 import type { AppUser, Order, RemoteOrder } from './definitions';
 import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
-import { unstable_noStore as noStore } from 'next/cache';
+import { unstable_noStore as noStore, revalidatePath } from 'next/cache';
 
 /**
  * Get an instance of the Admin Firestore SDK.
@@ -20,12 +21,24 @@ async function getAdminFirestoreInstance() {
 
 export async function getGlobalStats() {
     noStore();
-    // This function is temporarily disabled to prevent a Firestore index error.
-    // It requires a composite index on the 'orders' and 'remoteOrders' collection groups.
-    // In a real production environment, you would create this index via the Firebase Console.
-    // The link to do so is usually provided in the FAILED_PRECONDITION error message.
-    // For now, we return dummy data to allow the rest of the dashboard to load.
-    return { totalSales: 0, totalOrders: 0, newOrdersCount: 0 };
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        // Temporarily disable the collectionGroup query to avoid index errors on setup
+        // In a production environment with the correct index, this would be re-enabled.
+        // const thirtyDaysAgo = new Date();
+        // thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        // const ordersRef = firestore.collectionGroup('orders').where('createdAt', '>=', thirtyDaysAgo);
+        // const snapshot = await ordersRef.get();
+        // const totalSales = snapshot.docs.reduce((sum, doc) => sum + (doc.data().total || 0), 0);
+        // return { totalSales, totalOrders: snapshot.size };
+        return { totalSales: 0, totalOrders: 0, newOrdersCount: 0 };
+
+    } catch (e: any) {
+        console.error("Error fetching global stats:", e);
+        // Instead of re-throwing, which halts the page, we return a default/error state
+        // that the component can handle gracefully.
+        throw new Error(`Could not fetch global stats. Original error: ${e.message}. This might be due to a missing Firestore index for collection group queries.`);
+    }
 }
 
 
@@ -263,5 +276,64 @@ export async function deleteRestaurant(restaurantId: string): Promise<{ success:
             success: false,
             error: error.message || 'Failed to delete restaurant'
         };
+    }
+}
+
+export async function updateRestaurantStatus(restaurantId: string, isActive: boolean): Promise<{ success: boolean; error?: string }> {
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
+        await restaurantRef.update({ isActive });
+        revalidatePath('/admin/superadmin');
+        return { success: true };
+    } catch (error: any) {
+        console.error('Error updating restaurant status:', error);
+        return { success: false, error: error.message || 'Failed to update status' };
+    }
+}
+
+export async function updateRestaurantName(restaurantId: string, newName: string): Promise<{ success: boolean; error?: string }> {
+    if (!newName.trim()) {
+        return { success: false, error: "Restaurant name cannot be empty." };
+    }
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
+        await restaurantRef.update({ name: newName, restaurantName: newName });
+        revalidatePath('/admin/superadmin');
+        return { success: true };
+    } catch (error: any) {
+        console.error('Error updating restaurant name:', error);
+        return { success: false, error: error.message || 'Failed to update name' };
+    }
+}
+
+export async function getAdminForRestaurant(restaurantId: string): Promise<AppUser | null> {
+    noStore();
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const usersRef = firestore.collection(`restaurants/${restaurantId}/kitchenUsers`);
+        const q = adminQuery(usersRef, adminWhere('role', '==', 'Admin'), adminLimit(1));
+        const snapshot = await q.get();
+
+        if (snapshot.empty) {
+            return null;
+        }
+
+        const adminDoc = snapshot.docs[0];
+        const data = adminDoc.data();
+        
+        return {
+            id: adminDoc.id,
+            username: data.username,
+            email: data.email,
+            password: data.password,
+            role: data.role,
+            categories: data.categories,
+            branchId: data.branchId,
+        } as AppUser;
+    } catch (e: any) {
+        console.error("Error fetching admin for restaurant:", e);
+        return null;
     }
 }
