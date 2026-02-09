@@ -3,7 +3,7 @@
 'use server';
 
 import { getAdminApp, getAdminAuth } from '@/firebase/admin';
-import { getFirestore as getAdminFirestore, FieldValue, query as adminQuery, where as adminWhere, limit as adminLimit } from 'firebase-admin/firestore';
+import { getFirestore as getAdminFirestore, FieldValue, query as adminQuery, where as adminWhere, limit as adminLimit, Timestamp } from 'firebase-admin/firestore';
 import type { AppUser, Order, RemoteOrder, RestaurantSettings } from './definitions';
 import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
@@ -203,11 +203,10 @@ export async function createRestaurant(
             taxes: defaultSettings.taxes || [],
         });
 
-        // 4. Create Firestore User Doc (omitting password)
-        const { password, ...adminUserDataForFirestore } = adminUser;
+        // 4. Create Firestore User Doc
         const adminUserRef = firestore.collection(`restaurants/${restaurantId}/kitchenUsers`).doc();
         await adminUserRef.set({
-            ...adminUserDataForFirestore,
+            ...adminUser, // This includes the password
             email: adminEmail,
             firebaseUid: authUserRecord.uid,
             branchId: mainBranchRef.id,
@@ -374,21 +373,29 @@ export async function getAdminForRestaurant(restaurantId: string): Promise<AppUs
         const snapshot = await q.get();
 
         if (snapshot.empty) {
+            console.log(`[getAdminForRestaurant] No admin user found for restaurant: ${restaurantId}`);
             return null;
         }
 
         const adminDoc = snapshot.docs[0];
         const data = adminDoc.data();
         
-        return {
+        const appUser: AppUser = {
             id: adminDoc.id,
-            username: data.username,
-            email: data.email,
-            password: data.password,
-            role: data.role,
-            categories: data.categories,
-            branchId: data.branchId,
-        } as AppUser;
+            username: data.username || '',
+            email: data.email || '',
+            password: data.password || '',
+            role: data.role || 'Kitchen',
+            categories: data.categories || [],
+            branchId: data.branchId || '',
+            permissions: data.permissions || {},
+            firebaseUid: data.firebaseUid,
+            restaurantId: restaurantId,
+            isSuperAdmin: data.isSuperAdmin || false,
+            assignedTableId: data.assignedTableId
+        };
+        
+        return appUser;
     } catch (e: any) {
         console.error("Error fetching admin for restaurant:", e);
         return null;
@@ -396,3 +403,6 @@ export async function getAdminForRestaurant(restaurantId: string): Promise<AppUs
 }
 
 
+
+
+    
