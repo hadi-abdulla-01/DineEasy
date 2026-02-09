@@ -183,9 +183,9 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
         }
         
         await updateTableStatus(tableId, 'occupied', restaurantId);
-        if (createdByForm) {
-            await logActivity(createdByForm, createdByName, 'Order Placed', `Placed order for ${customerName} at table.`, restaurantId);
-        }
+        
+        const action = isCustomerFacing ? 'QR Order Placed' : 'POS Order Placed';
+        await logActivity(createdByForm || 'customer', createdByName, action, `Order ID: ${finalOrder.id.slice(-6)}`, restaurantId);
 
     } catch (error) {
         console.error(error);
@@ -1300,4 +1300,3 @@ export async function verifyOtpAction(
         return { error: e.message || 'An unexpected error occurred during verification.' };
     }
 }
-

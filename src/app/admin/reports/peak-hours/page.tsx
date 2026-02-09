@@ -37,7 +37,7 @@ const chartConfig = {
 
 export default function PeakHoursPage() {
     const { user } = useAuth();
-    const { getOrders, getRemoteOrders, getSettings, getBranches, getMainBranch, getBranchById } = useRestaurantData();
+    const { getOrders, getRemoteOrders, getSettings, getBranches, getMainBranch, getBranchById, logActivity, restaurantId } = useRestaurantData();
     const [allOrders, setAllOrders] = useState<CombinedOrder[]>([]);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [branches, setBranches] = useState<Branch[]>([]);
@@ -54,6 +54,12 @@ export default function PeakHoursPage() {
     });
 
     const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
+
+    useEffect(() => {
+        if (user && restaurantId) {
+            logActivity(user.id, user.username, 'Viewed Report', `Viewed Peak Hours Report`, restaurantId);
+        }
+    }, [user, logActivity, restaurantId]);
 
     useEffect(() => {
         async function fetchInitialData() {

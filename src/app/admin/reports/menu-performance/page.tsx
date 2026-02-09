@@ -77,7 +77,7 @@ function PerformanceCategoryCard({ title, description, icon, items, currencySymb
 
 export default function MenuPerformancePage() {
     const { user } = useAuth();
-    const { getOrders, getRemoteOrders, getSettings, getBranches, getMainBranch, getMenuItems } = useRestaurantData();
+    const { getOrders, getRemoteOrders, getSettings, getBranches, getMainBranch, getMenuItems, logActivity, restaurantId } = useRestaurantData();
     const [allOrders, setAllOrders] = useState<CombinedOrder[]>([]);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
@@ -87,6 +87,12 @@ export default function MenuPerformancePage() {
     const [isLoading, setIsLoading] = useState(true);
 
     const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.username?.toLowerCase() === 'admin';
+
+    useEffect(() => {
+        if (user && restaurantId) {
+            logActivity(user.id, user.username, 'Viewed Report', `Viewed Menu Performance Report`, restaurantId);
+        }
+    }, [user, logActivity, restaurantId]);
 
     useEffect(() => {
         async function fetchInitialData() {
