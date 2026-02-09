@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import {
     Building2, Plus, Mail, Users, Trash2, Eye, EyeOff, LogOut,
     DollarSign, ShoppingCart, TrendingUp, Activity, LayoutDashboard, List,
-    LoaderCircle, Edit, Save, X, KeyRound
+    LoaderCircle, Edit, Save, X, KeyRound, Settings, ClipboardList, ToggleRight, Megaphone
 } from 'lucide-react';
 import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
@@ -56,7 +56,7 @@ export default function SuperAdminPanel() {
     const [showCreateForm, setShowCreateForm] = useState(false);
 
     // View state
-    const [view, setView] = useState<'dashboard' | 'restaurants'>('dashboard');
+    const [view, setView] = useState<'dashboard' | 'restaurants' | 'settings'>('dashboard');
 
     // Dashboard state
     const [dashboardData, setDashboardData] = useState<{
@@ -132,8 +132,10 @@ export default function SuperAdminPanel() {
     useEffect(() => {
         if (view === 'dashboard') {
             loadDashboardData();
-        } else {
+        } else if (view === 'restaurants') {
             loadRestaurants();
+        } else {
+            setIsLoading(false);
         }
     }, [view]);
 
@@ -230,7 +232,11 @@ export default function SuperAdminPanel() {
                 setRestaurantId('');
                 setAdminPassword('');
                 setShowCreateForm(false);
-                loadRestaurants();
+                if (view === 'restaurants') {
+                    loadRestaurants();
+                } else {
+                    setView('restaurants');
+                }
             } else {
                 setError(restaurantResult.error || 'Failed to create restaurant');
             }
@@ -463,6 +469,49 @@ export default function SuperAdminPanel() {
             )}
         </div>
     );
+    
+    const renderSettings = () => (
+        <div className="space-y-4">
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">System &amp; Configuration</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <Link href="/admin/superadmin/defaults">
+                    <Card className="h-full hover:shadow-lg hover:-translate-y-1 transition-transform">
+                        <CardHeader className="flex flex-row items-center gap-4">
+                            <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                               <ClipboardList className="h-6 w-6 text-red-600" />
+                            </div>
+                            <div>
+                                <CardTitle>Default Templates</CardTitle>
+                                <CardDescription>Manage default settings for new restaurants.</CardDescription>
+                            </div>
+                        </CardHeader>
+                    </Card>
+                </Link>
+                <Card className="h-full cursor-not-allowed opacity-60">
+                    <CardHeader className="flex flex-row items-center gap-4">
+                        <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                            <ToggleRight className="h-6 w-6 text-slate-500" />
+                        </div>
+                        <div>
+                            <CardTitle>Feature Flags</CardTitle>
+                            <CardDescription>Enable or disable features for the platform. (Coming Soon)</CardDescription>
+                        </div>
+                    </CardHeader>
+                </Card>
+                <Card className="h-full cursor-not-allowed opacity-60">
+                    <CardHeader className="flex flex-row items-center gap-4">
+                        <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                            <Megaphone className="h-6 w-6 text-slate-500" />
+                        </div>
+                        <div>
+                            <CardTitle>Broadcast Announcements</CardTitle>
+                            <CardDescription>Send messages to all restaurant admins. (Coming Soon)</CardDescription>
+                        </div>
+                    </CardHeader>
+                </Card>
+            </div>
+        </div>
+    );
 
 
     return (
@@ -508,6 +557,9 @@ export default function SuperAdminPanel() {
                     </Button>
                     <Button variant={view === 'restaurants' ? 'default' : 'ghost'} size="sm" onClick={() => setView('restaurants')} className="gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
                         <List className="w-4 h-4" /> Restaurants
+                    </Button>
+                    <Button variant={view === 'settings' ? 'default' : 'ghost'} size="sm" onClick={() => setView('settings')} className="gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
+                        <Settings className="w-4 h-4" /> System Config
                     </Button>
                 </div>
 
@@ -622,8 +674,10 @@ export default function SuperAdminPanel() {
                     </div>
                 ) : view === 'dashboard' ? (
                     renderDashboard()
-                ) : (
+                ) : view === 'restaurants' ? (
                     renderRestaurantList()
+                ) : (
+                    renderSettings()
                 )}
 
             </div>

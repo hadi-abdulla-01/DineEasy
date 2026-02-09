@@ -4,7 +4,7 @@
 
 import { getAdminApp } from '@/firebase/admin';
 import { getFirestore as getAdminFirestore, FieldValue, query as adminQuery, where as adminWhere, limit as adminLimit } from 'firebase-admin/firestore';
-import type { AppUser, Order, RemoteOrder } from './definitions';
+import type { AppUser, Order, RemoteOrder, RestaurantSettings } from './definitions';
 import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
 import { unstable_noStore as noStore, revalidatePath } from 'next/cache';
@@ -25,18 +25,15 @@ export async function getGlobalStats() {
         const firestore = await getAdminFirestoreInstance();
         // Temporarily disable the collectionGroup query to avoid index errors on setup
         // In a production environment with the correct index, this would be re-enabled.
-        // const thirtyDaysAgo = new Date();
-        // thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        // const ordersRef = firestore.collectionGroup('orders').where('createdAt', '>=', thirtyDaysAgo);
-        // const snapshot = await ordersRef.get();
-        // const totalSales = snapshot.docs.reduce((sum, doc) => sum + (doc.data().total || 0), 0);
-        // return { totalSales, totalOrders: snapshot.size };
-        return { totalSales: 0, totalOrders: 0, newOrdersCount: 0 };
+        // const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        // const newOrdersRef = firestore.collectionGroup('orders').where('createdAt', '>=', twentyFourHoursAgo);
+        // const newOrdersSnapshot = await newOrdersRef.get();
+        // return { newOrdersCount: newOrdersSnapshot.size };
+        return { newOrdersCount: 0 };
 
     } catch (e: any) {
         console.error("Error fetching global stats:", e);
-        // Instead of re-throwing, which halts the page, we return a default/error state
-        // that the component can handle gracefully.
+        // We throw a more informative error that includes the original message
         throw new Error(`Could not fetch global stats. Original error: ${e.message}. This might be due to a missing Firestore index for collection group queries.`);
     }
 }
@@ -106,6 +103,33 @@ export async function getRestaurantLeaderboard(limit = 5): Promise<{id: string, 
     }
 }
 
+export async function getDefaultRestaurantSettings(): Promise<Partial<RestaurantSettings>> {
+    noStore();
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const settingsRef = firestore.doc('platform/default-settings');
+        const docSnap = await settingsRef.get();
+        if (docSnap.exists) {
+            return docSnap.data() as Partial<RestaurantSettings>;
+        }
+        return {}; // Return empty object if not configured yet
+    } catch (e: any) {
+        console.error("Error fetching default restaurant settings:", e);
+        return {};
+    }
+}
+
+export async function updateDefaultRestaurantSettings(settings: Partial<RestaurantSettings>): Promise<{ success: boolean; error?: string }> {
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const settingsRef = firestore.doc('platform/default-settings');
+        await settingsRef.set(settings, { merge: true });
+        return { success: true };
+    } catch (e: any) {
+        console.error("Error updating default restaurant settings:", e);
+        return { success: false, error: e.message || 'Failed to update default settings.' };
+    }
+}
 
 // --- Restaurant Management from restaurant-management.ts ---
 
@@ -118,26 +142,22 @@ export async function createRestaurant(
         const firestore = await getAdminFirestoreInstance();
         const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
         
+        const defaultSettings = await getDefaultRestaurantSettings();
+        
         const restaurantData = {
+            ...defaultSettings,
             name: restaurantName,
+            restaurantName: restaurantName,
             createdAt: FieldValue.serverTimestamp(),
             isActive: true,
-            restaurantName: restaurantName,
-            restaurantAddress: '',
-            currencySymbol: '$',
-            currencyDecimalPlaces: 2,
-            taxes: [],
-            menuCategories: [],
-            onlineOrderingEnabled: true,
-            deliveryFee: 0,
-            minimumOrderValue: 0,
-            invoiceSettings: {
-                useUnifiedNumbering: true,
-                unified: { prefix: 'INV-', nextNumber: 1 },
-                dineIn: { prefix: 'DI-', nextNumber: 1 },
-                online: { prefix: 'ON-', nextNumber: 1 },
-                takeAway: { prefix: 'TA-', nextNumber: 1 },
-            }
+        };
+        // Ensure nested objects from defaults are handled if they don't exist
+        restaurantData.invoiceSettings = restaurantData.invoiceSettings || {
+            useUnifiedNumbering: true,
+            unified: { prefix: 'INV-', nextNumber: 1 },
+            dineIn: { prefix: 'DI-', nextNumber: 1 },
+            online: { prefix: 'ON-', nextNumber: 1 },
+            takeAway: { prefix: 'TA-', nextNumber: 1 },
         };
         await restaurantRef.set(restaurantData);
 
@@ -146,12 +166,13 @@ export async function createRestaurant(
             name: 'Main Branch',
             isMain: true,
             createdAt: FieldValue.serverTimestamp(),
+            // Apply defaults to the main branch as well
             restaurantName: restaurantName,
-            restaurantAddress: '',
-            currencySymbol: '$',
-            currencyDecimalPlaces: 2,
-            menuCategories: ['Meals', 'Snacks', 'Beverages', 'Desserts'],
-            taxes: [],
+            restaurantAddress: defaultSettings.restaurantAddress || '',
+            currencySymbol: defaultSettings.currencySymbol || '$',
+            currencyDecimalPlaces: defaultSettings.currencyDecimalPlaces ?? 2,
+            menuCategories: defaultSettings.menuCategories || ['Meals', 'Snacks', 'Beverages', 'Desserts'],
+            taxes: defaultSettings.taxes || [],
         });
 
         const adminUserRef = firestore.collection(`restaurants/${restaurantId}/kitchenUsers`).doc();
@@ -182,6 +203,7 @@ export async function getAllRestaurants(): Promise<Array<{
     createdAt: string;
     isActive: boolean;
 }>> {
+    noStore();
     try {
         const firestore = await getAdminFirestoreInstance();
         const restaurantsRef = firestore.collection('restaurants');
@@ -204,7 +226,8 @@ export async function getAllRestaurants(): Promise<Array<{
 }
 
 
-export async function getRestaurantById(restaurantId: string): Promise<{ id: string; name: string } | null> {
+export async function getRestaurantById(restaurantId: string): Promise<{ id: string; name: string, isActive: boolean; } | null> {
+    noStore();
     try {
         const firestore = await getAdminFirestoreInstance();
         const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
@@ -216,6 +239,7 @@ export async function getRestaurantById(restaurantId: string): Promise<{ id: str
                 return {
                     id: docSnap.id,
                     name: data.name || 'Unnamed Restaurant',
+                    isActive: data.isActive ?? true,
                 };
             }
         }
@@ -269,6 +293,7 @@ export async function deleteRestaurant(restaurantId: string): Promise<{ success:
         const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
         await restaurantRef.delete();
 
+        revalidatePath('/admin/superadmin');
         return { success: true };
     } catch (error: any) {
         console.error('Error deleting restaurant:', error);
@@ -337,3 +362,4 @@ export async function getAdminForRestaurant(restaurantId: string): Promise<AppUs
         return null;
     }
 }
+
