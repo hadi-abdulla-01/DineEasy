@@ -3,18 +3,17 @@ import { initializeApp, getApps, getApp, cert, type App } from 'firebase-admin/a
 import { getAuth } from 'firebase-admin/auth';
 import { getMessaging } from 'firebase-admin/messaging';
 
+const ADMIN_APP_NAME = 'DineEzeeAdmin';
+
 export function getAdminApp(): App {
-    if (getApps().length > 0) {
-        return getApp();
+    const existingApp = getApps().find(app => app.name === ADMIN_APP_NAME);
+    if (existingApp) {
+        return existingApp;
     }
 
     const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
     if (!serviceAccountKey) {
-        // If we are strictly server-side, this error should be caught.
-        // However, during build or without proper env, this might crash.
-        // We return a partially working app or throw?
-        // User request implies they want this functionality.
         throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY is not defined in environment variables.');
     }
 
@@ -27,7 +26,7 @@ export function getAdminApp(): App {
 
     return initializeApp({
         credential: cert(serviceAccount),
-    });
+    }, ADMIN_APP_NAME);
 }
 
 export function getAdminAuth() {
