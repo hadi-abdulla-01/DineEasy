@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -10,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ArrowLeft, Building2, Users, GitBranch, User, Eye, EyeOff, BookOpen, Clock } from 'lucide-react';
-import { getRestaurantById } from '@/lib/restaurant-management';
+import { getRestaurantById } from '@/lib/server-actions';
 import { formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 

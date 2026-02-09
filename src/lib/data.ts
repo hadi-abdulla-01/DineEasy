@@ -3,8 +3,6 @@
 'use server';
 import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, AppUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, SelectedAddon, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, Discount, DiscountApplicability, OTPRequest } from './definitions';
 import { initializeFirebase } from '@/firebase/server';
-import { getAdminApp } from '@/firebase/admin';
-import { getFirestore as getAdminFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAdminMessaging } from '@/firebase/admin';
 import {
     collection,
@@ -28,15 +26,9 @@ import {
     getDocFromServer,
 } from 'firebase/firestore';
 import { unstable_noStore as noStore } from 'next/cache';
-import { getAllRestaurants } from './restaurant-management';
 
 export async function getFirestoreInstance() {
     return initializeFirebase().firestore;
-}
-
-async function getAdminFirestoreInstance() {
-    const app = getAdminApp();
-    return getAdminFirestore(app);
 }
 
 const getCollections = async (restaurantId: string) => {
@@ -1475,96 +1467,3 @@ export async function sendOtpNotification(otpRequest: OTPRequest): Promise<void>
         console.error('Error sending OTP notification:', error);
     }
 }
-
-
-// --- Global Super Admin Functions ---
-
-export async function getGlobalStats() {
-    noStore();
-    try {
-        const firestore = await getAdminFirestoreInstance();
-        
-        const ordersRef = firestore.collectionGroup('orders');
-        const remoteOrdersRef = firestore.collectionGroup('remoteOrders');
-        
-        const now = new Date();
-        const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
-        
-        const newOrdersQuery = ordersRef.where('createdAt', '>=', twentyFourHoursAgo);
-        const newRemoteOrdersQuery = remoteOrdersRef.where('createdAt', '>=', twentyFourHoursAgo);
-
-        const [
-            newOrdersSnap,
-            newRemoteOrdersSnap
-        ] = await Promise.all([
-            newOrdersQuery.get(),
-            newRemoteOrdersQuery.get()
-        ]);
-
-        const newOrdersCount = newOrdersSnap.size + newRemoteOrdersSnap.size;
-        
-        return { totalSales: 0, totalOrders: 0, newOrdersCount };
-    } catch(e: any) {
-        console.error("Error fetching global stats:", e.message);
-        // This is a super admin function. If it fails, it's likely a config issue.
-        // We'll throw so it's visible, rather than returning bad data.
-        throw new Error("Could not fetch global stats. Ensure Firebase Admin SDK is configured correctly.");
-    }
-}
-
-
-export async function getGlobalUserCount() {
-    noStore();
-    const firestore = await getAdminFirestoreInstance();
-    const usersRef = firestore.collectionGroup('kitchenUsers');
-    const snapshot = await usersRef.get();
-    return snapshot.size;
-}
-
-export async function getRestaurantLeaderboard(limit = 5): Promise<{id: string, name: string, totalSales: number, orderCount: number}[]> {
-    noStore();
-    const firestore = await getAdminFirestoreInstance();
-    const restaurants = await getAllRestaurants();
-    const leaderboard: {id: string, name: string, totalSales: number, orderCount: number}[] = [];
-
-    for (const restaurant of restaurants) {
-        const ordersRef = firestore.collection(`restaurants/${restaurant.id}/orders`);
-        const remoteOrdersRef = firestore.collection(`restaurants/${restaurant.id}/remoteOrders`);
-
-        const [ordersSnapshot, remoteOrdersSnapshot] = await Promise.all([
-            ordersRef.where('status', '==', 'completed').get(),
-            remoteOrdersRef.get(),
-        ]);
-
-        const allCompletedOrders: (Order | RemoteOrder)[] = [];
-        
-        ordersSnapshot.forEach(doc => {
-            const data = doc.data();
-            allCompletedOrders.push({
-                ...data,
-                createdAt: (data.createdAt as FirebaseFirestore.Timestamp).toDate().toISOString()
-            } as Order);
-        });
-        remoteOrdersSnapshot.forEach(doc => {
-            const data = doc.data();
-            allCompletedOrders.push({
-                ...data,
-                createdAt: (data.createdAt as FirebaseFirestore.Timestamp).toDate().toISOString()
-            } as RemoteOrder);
-        });
-        
-        const totalSales = allCompletedOrders.reduce((sum, order) => sum + (order.total || 0), 0);
-        const orderCount = allCompletedOrders.length;
-
-        leaderboard.push({
-            id: restaurant.id,
-            name: restaurant.name,
-            totalSales,
-            orderCount
-        });
-    }
-
-    return leaderboard.sort((a, b) => b.totalSales - a.totalSales).slice(0, limit);
-}
-
-    

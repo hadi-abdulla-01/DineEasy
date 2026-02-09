@@ -28,12 +28,12 @@ import {
 } from 'lucide-react';
 import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
-import { createRestaurant, getAllRestaurants, deleteRestaurant } from '@/lib/restaurant-management';
+import { createRestaurant, getAllRestaurants, deleteRestaurant } from '@/lib/server-actions';
 import Link from 'next/link';
 import type { AppUser } from '@/lib/definitions';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatDistanceToNow } from 'date-fns';
-import { getGlobalStats, getGlobalUserCount, getRestaurantLeaderboard } from '@/lib/data';
+import { getGlobalStats, getGlobalUserCount, getRestaurantLeaderboard } from '@/lib/server-actions';
 
 function StatCard({ title, value, icon, description }: { title: string, value: string, icon: React.ReactNode, description: string }) {
     return (
@@ -559,5 +559,6 @@ export default function SuperAdminPanel() {
         </div>
     );
 }
+
 
 
