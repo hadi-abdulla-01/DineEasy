@@ -3,6 +3,32 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    function isSuperAdmin() {
+      // This email should be configured in your app's environment variables.
+      // For security, it's better to use custom claims in a real production app.
+      return request.auth != null && request.auth.token.email == 'your-email@gmail.com';
+    }
+
+    // --- Super Admin Rules ---
+    
+    // Allow super admin to list and get all restaurant documents for the dashboard.
+    match /restaurants/{restaurantId} {
+       allow list, get: if isSuperAdmin();
+    }
+
+    // Allow super admin to perform collection group queries for global stats.
+    match /{path=**}/orders/{orderId} {
+      allow read: if isSuperAdmin();
+    }
+    match /{path=**}/remoteOrders/{orderId} {
+      allow read: if isSuperAdmin();
+    }
+    match /{path=**}/kitchenUsers/{userId} {
+      allow read: if isSuperAdmin();
+    }
+
+    // --- Standard Application Rules ---
 
     // Unauthenticated users can ONLY read single table documents.
     // This is required for the initial QR code scan to validate the table and token.
