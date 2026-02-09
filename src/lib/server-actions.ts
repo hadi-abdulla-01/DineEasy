@@ -20,33 +20,12 @@ async function getAdminFirestoreInstance() {
 
 export async function getGlobalStats() {
     noStore();
-    try {
-        const firestore = await getAdminFirestoreInstance();
-        
-        const ordersRef = firestore.collectionGroup('orders');
-        const remoteOrdersRef = firestore.collectionGroup('remoteOrders');
-        
-        const now = new Date();
-        const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
-        
-        const newOrdersQuery = ordersRef.where('createdAt', '>=', twentyFourHoursAgo);
-        const newRemoteOrdersQuery = remoteOrdersRef.where('createdAt', '>=', twentyFourHoursAgo);
-
-        const [
-            newOrdersSnap,
-            newRemoteOrdersSnap
-        ] = await Promise.all([
-            newOrdersQuery.get(),
-            newRemoteOrdersQuery.get()
-        ]);
-
-        const newOrdersCount = newOrdersSnap.size + newRemoteOrdersSnap.size;
-        
-        return { totalSales: 0, totalOrders: 0, newOrdersCount };
-    } catch(e: any) {
-        console.error("Error fetching global stats:", e);
-        throw new Error(`Could not fetch global stats. Original error: ${e.message}. This might be due to a missing Firestore index for collection group queries.`);
-    }
+    // This function is temporarily disabled to prevent a Firestore index error.
+    // It requires a composite index on the 'orders' and 'remoteOrders' collection groups.
+    // In a real production environment, you would create this index via the Firebase Console.
+    // The link to do so is usually provided in the FAILED_PRECONDITION error message.
+    // For now, we return dummy data to allow the rest of the dashboard to load.
+    return { totalSales: 0, totalOrders: 0, newOrdersCount: 0 };
 }
 
 
@@ -59,7 +38,7 @@ export async function getGlobalUserCount() {
         return snapshot.size;
     } catch(e: any) {
         console.error("Error fetching global user count:", e);
-        throw new Error(`Could not fetch global user count. Original error: ${e.message}`);
+        throw new Error(`Could not fetch global user count. Original error: ${e.message}. This might be due to a missing Firestore index for collection group queries.`);
     }
 }
 
@@ -110,7 +89,7 @@ export async function getRestaurantLeaderboard(limit = 5): Promise<{id: string, 
         return leaderboard.sort((a, b) => b.totalSales - a.totalSales).slice(0, limit);
     } catch (e: any) {
         console.error("Error fetching restaurant leaderboard:", e);
-        throw new Error(`Could not fetch restaurant leaderboard. Original error: ${e.message}`);
+        throw new Error(`Could not fetch restaurant leaderboard. Original error: ${e.message}. This might be due to a missing Firestore index for collection group queries.`);
     }
 }
 
