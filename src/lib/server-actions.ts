@@ -44,66 +44,74 @@ export async function getGlobalStats() {
         
         return { totalSales: 0, totalOrders: 0, newOrdersCount };
     } catch(e: any) {
-        console.error("Error fetching global stats:", e.message);
-        // This is a super admin function. If it fails, it's likely a config issue.
-        // We'll throw so it's visible, rather than returning bad data.
-        throw new Error("Could not fetch global stats. Ensure Firebase Admin SDK is configured correctly.");
+        console.error("Error fetching global stats:", e);
+        throw new Error(`Could not fetch global stats. Original error: ${e.message}. This might be due to a missing Firestore index for collection group queries.`);
     }
 }
 
 
 export async function getGlobalUserCount() {
     noStore();
-    const firestore = await getAdminFirestoreInstance();
-    const usersRef = firestore.collectionGroup('kitchenUsers');
-    const snapshot = await usersRef.get();
-    return snapshot.size;
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const usersRef = firestore.collectionGroup('kitchenUsers');
+        const snapshot = await usersRef.get();
+        return snapshot.size;
+    } catch(e: any) {
+        console.error("Error fetching global user count:", e);
+        throw new Error(`Could not fetch global user count. Original error: ${e.message}`);
+    }
 }
 
 export async function getRestaurantLeaderboard(limit = 5): Promise<{id: string, name: string, totalSales: number, orderCount: number}[]> {
     noStore();
-    const firestore = await getAdminFirestoreInstance();
-    const restaurants = await getAllRestaurants();
-    const leaderboard: {id: string, name: string, totalSales: number, orderCount: number}[] = [];
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const restaurants = await getAllRestaurants();
+        const leaderboard: {id: string, name: string, totalSales: number, orderCount: number}[] = [];
 
-    for (const restaurant of restaurants) {
-        const ordersRef = firestore.collection(`restaurants/${restaurant.id}/orders`);
-        const remoteOrdersRef = firestore.collection(`restaurants/${restaurant.id}/remoteOrders`);
+        for (const restaurant of restaurants) {
+            const ordersRef = firestore.collection(`restaurants/${restaurant.id}/orders`);
+            const remoteOrdersRef = firestore.collection(`restaurants/${restaurant.id}/remoteOrders`);
 
-        const [ordersSnapshot, remoteOrdersSnapshot] = await Promise.all([
-            ordersRef.where('status', '==', 'completed').get(),
-            remoteOrdersRef.get(),
-        ]);
+            const [ordersSnapshot, remoteOrdersSnapshot] = await Promise.all([
+                ordersRef.where('status', '==', 'completed').get(),
+                remoteOrdersRef.get(),
+            ]);
 
-        const allCompletedOrders: (Order | RemoteOrder)[] = [];
-        
-        ordersSnapshot.forEach(doc => {
-            const data = doc.data();
-            allCompletedOrders.push({
-                ...data,
-                createdAt: (data.createdAt as FirebaseFirestore.Timestamp).toDate().toISOString()
-            } as Order);
-        });
-        remoteOrdersSnapshot.forEach(doc => {
-            const data = doc.data();
-            allCompletedOrders.push({
-                ...data,
-                createdAt: (data.createdAt as FirebaseFirestore.Timestamp).toDate().toISOString()
-            } as RemoteOrder);
-        });
-        
-        const totalSales = allCompletedOrders.reduce((sum, order) => sum + (order.total || 0), 0);
-        const orderCount = allCompletedOrders.length;
+            const allCompletedOrders: (Order | RemoteOrder)[] = [];
+            
+            ordersSnapshot.forEach(doc => {
+                const data = doc.data();
+                allCompletedOrders.push({
+                    ...data,
+                    createdAt: (data.createdAt as FirebaseFirestore.Timestamp).toDate().toISOString()
+                } as Order);
+            });
+            remoteOrdersSnapshot.forEach(doc => {
+                const data = doc.data();
+                allCompletedOrders.push({
+                    ...data,
+                    createdAt: (data.createdAt as FirebaseFirestore.Timestamp).toDate().toISOString()
+                } as RemoteOrder);
+            });
+            
+            const totalSales = allCompletedOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+            const orderCount = allCompletedOrders.length;
 
-        leaderboard.push({
-            id: restaurant.id,
-            name: restaurant.name,
-            totalSales,
-            orderCount
-        });
+            leaderboard.push({
+                id: restaurant.id,
+                name: restaurant.name,
+                totalSales,
+                orderCount
+            });
+        }
+
+        return leaderboard.sort((a, b) => b.totalSales - a.totalSales).slice(0, limit);
+    } catch (e: any) {
+        console.error("Error fetching restaurant leaderboard:", e);
+        throw new Error(`Could not fetch restaurant leaderboard. Original error: ${e.message}`);
     }
-
-    return leaderboard.sort((a, b) => b.totalSales - a.totalSales).slice(0, limit);
 }
 
 
@@ -199,7 +207,7 @@ export async function getAllRestaurants(): Promise<Array<{
         });
     } catch (error: any) {
         console.error('Error getting restaurants:', error);
-        throw error;
+        throw new Error(`Could not get all restaurants. Original error: ${error.message}`);
     }
 }
 
