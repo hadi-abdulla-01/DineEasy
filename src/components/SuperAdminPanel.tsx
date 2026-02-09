@@ -16,13 +16,39 @@ import {
     Trash2,
     Eye,
     EyeOff,
-    LogOut
+    LogOut,
+    DollarSign,
+    ShoppingCart,
+    TrendingUp,
+    Activity,
+    LayoutDashboard,
+    List,
+    LoaderCircle,
+    User,
 } from 'lucide-react';
 import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
 import { createRestaurant, getAllRestaurants, deleteRestaurant } from '@/lib/restaurant-management';
 import Link from 'next/link';
 import type { AppUser } from '@/lib/definitions';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatDistanceToNow } from 'date-fns';
+import { getGlobalStats, getGlobalUserCount, getRestaurantLeaderboard } from '@/lib/data';
+
+function StatCard({ title, value, icon, description }: { title: string, value: string, icon: React.ReactNode, description: string }) {
+    return (
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                {icon}
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{value}</div>
+                <p className="text-xs text-muted-foreground">{description}</p>
+            </CardContent>
+        </Card>
+    );
+}
 
 export default function SuperAdminPanel() {
     const { logout } = useAuth();
@@ -35,6 +61,20 @@ export default function SuperAdminPanel() {
     const [isLoading, setIsLoading] = useState(true);
     const [showCreateForm, setShowCreateForm] = useState(false);
 
+    // View state
+    const [view, setView] = useState<'dashboard' | 'restaurants'>('dashboard');
+
+    // Dashboard state
+    const [dashboardData, setDashboardData] = useState<{
+        totalSales: number;
+        totalOrders: number;
+        newOrdersCount: number;
+        totalRestaurants: number;
+        totalUsers: number;
+        leaderboard: { id: string; name: string; totalSales: number; orderCount: number }[];
+        recentRestaurants: any[];
+    } | null>(null);
+
     // Form state
     const [restaurantName, setRestaurantName] = useState('');
     const [restaurantId, setRestaurantId] = useState('');
@@ -44,21 +84,59 @@ export default function SuperAdminPanel() {
     const [success, setSuccess] = useState('');
     const [isCreating, setIsCreating] = useState(false);
 
-    useEffect(() => {
-        loadRestaurants();
-    }, []);
-
     const loadRestaurants = async () => {
+        setIsLoading(true);
         try {
-            setIsLoading(true);
             const data = await getAllRestaurants();
             setRestaurants(data);
         } catch (err) {
             console.error('Error loading restaurants:', err);
+            setError('Failed to load restaurants.');
         } finally {
             setIsLoading(false);
         }
     };
+
+    const loadDashboardData = async () => {
+        setIsLoading(true);
+        try {
+            const [
+                stats,
+                allRestaurants,
+                userCount,
+                board
+            ] = await Promise.all([
+                getGlobalStats(),
+                getAllRestaurants(),
+                getGlobalUserCount(),
+                getRestaurantLeaderboard()
+            ]);
+
+            const sortedRestaurants = allRestaurants.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+            setDashboardData({
+                ...stats,
+                totalRestaurants: allRestaurants.length,
+                totalUsers: userCount,
+                leaderboard: board,
+                recentRestaurants: sortedRestaurants.slice(0, 5),
+            });
+
+        } catch (err) {
+            console.error('Error loading dashboard data:', err);
+            setError("Failed to load dashboard data.");
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    useEffect(() => {
+        if (view === 'dashboard') {
+            loadDashboardData();
+        } else {
+            loadRestaurants();
+        }
+    }, [view]);
 
     const handleRestaurantIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const sanitizedId = e.target.value
@@ -187,11 +265,143 @@ export default function SuperAdminPanel() {
         }
     };
 
+    const renderDashboard = () => (
+        <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <StatCard title="Total Sales" value={`$${(dashboardData?.totalSales || 0).toFixed(2)}`} icon={<DollarSign className="h-4 w-4 text-muted-foreground" />} description="Across all restaurants" />
+                <StatCard title="Total Restaurants" value={String(dashboardData?.totalRestaurants || 0)} icon={<Building2 className="h-4 w-4 text-muted-foreground" />} description="Currently on the platform" />
+                <StatCard title="Total Orders" value={String(dashboardData?.totalOrders || 0)} icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />} description="Lifetime orders placed" />
+                <StatCard title="Active Users" value={String(dashboardData?.totalUsers || 0)} icon={<Users className="h-4 w-4 text-muted-foreground" />} description="Staff accounts created" />
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+                <Card className="lg:col-span-4">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-red-600" /> Restaurant Leaderboard</CardTitle>
+                        <CardDescription>Top performing restaurants by total sales.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Restaurant</TableHead>
+                                    <TableHead className="text-right">Total Sales</TableHead>
+                                    <TableHead className="text-right">Total Orders</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {dashboardData?.leaderboard.map(r => (
+                                    <TableRow key={r.id}>
+                                        <TableCell>
+                                            <Link href={`/admin/superadmin/restaurants/${r.id}`} className="font-medium hover:underline">{r.name}</Link>
+                                        </TableCell>
+                                        <TableCell className="text-right font-mono">${r.totalSales.toFixed(2)}</TableCell>
+                                        <TableCell className="text-right">{r.orderCount}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+                <Card className="lg:col-span-3">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><Activity className="w-5 h-5 text-red-600" /> Recent Activity</CardTitle>
+                        <CardDescription>Latest restaurants to join the platform.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {dashboardData?.recentRestaurants.map(r => (
+                            <div key={r.id} className="flex items-center gap-4">
+                                <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full">
+                                    <Building2 className="w-4 h-4 text-slate-500"/>
+                                </div>
+                                <div>
+                                    <p className="font-medium text-sm">{r.name} joined</p>
+                                    <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(r.createdAt), { addSuffix: true })}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            </div>
+        </div>
+    );
+
+    const renderRestaurantList = () => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {isLoading ? (
+                <Card>
+                    <CardContent className="pt-6">
+                        <p className="text-center text-slate-500">Loading restaurants...</p>
+                    </CardContent>
+                </Card>
+            ) : restaurants.length === 0 ? (
+                <Card className="col-span-full">
+                    <CardContent className="pt-6">
+                        <p className="text-center text-slate-500">
+                            No restaurants yet. Create your first one!
+                        </p>
+                    </CardContent>
+                </Card>
+            ) : (
+                restaurants.map((restaurant) => {
+                    const adminEmail = `admin@${restaurant.id}.dineezee`;
+                    return (
+                        <Link href={`/admin/superadmin/restaurants/${restaurant.id}`} key={restaurant.id} className="block rounded-lg transition-all hover:shadow-xl hover:-translate-y-1">
+                            <Card className="h-full cursor-pointer">
+                                <CardHeader>
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <CardTitle className="flex items-center gap-2">
+                                                <Building2 className="w-5 h-5 text-red-600" />
+                                                {restaurant.name}
+                                            </CardTitle>
+                                            <p className="text-sm text-slate-500 mt-1">Restaurant</p>
+                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                handleDeleteRestaurant(restaurant.id);
+                                            }}
+                                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                                        <Mail className="w-4 h-4" />
+                                        <span className="font-mono text-xs">
+                                            {adminEmail}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                                        <Users className="w-4 h-4" />
+                                        <span>
+                                            Admin can create branches & users
+                                        </span>
+                                    </div>
+                                    <div className="pt-3 border-t">
+                                        <p className="text-xs text-slate-500">Restaurant ID: {restaurant.id}</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </Link>
+                    );
+                })
+            )}
+        </div>
+    );
+
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-6">
             <div className="max-w-7xl mx-auto space-y-6">
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between flex-wrap gap-4">
                     <div>
                         <h1 className="text-4xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
                             <Building2 className="w-10 h-10 text-red-600" />
@@ -201,7 +411,7 @@ export default function SuperAdminPanel() {
                             Manage all restaurants and their main administrators
                         </p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex items-center gap-3">
                         <Button
                             onClick={() => setShowCreateForm(!showCreateForm)}
                             className="bg-red-600 hover:bg-red-700"
@@ -223,6 +433,16 @@ export default function SuperAdminPanel() {
                         </Button>
                     </div>
                 </div>
+                 {/* View Toggler */}
+                 <div className="flex items-center gap-1 bg-slate-200 dark:bg-slate-800 p-1 rounded-lg w-fit">
+                    <Button variant={view === 'dashboard' ? 'default' : 'ghost'} size="sm" onClick={() => setView('dashboard')} className="gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
+                        <LayoutDashboard className="w-4 h-4" /> Dashboard
+                    </Button>
+                    <Button variant={view === 'restaurants' ? 'default' : 'ghost'} size="sm" onClick={() => setView('restaurants')} className="gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">
+                        <List className="w-4 h-4" /> Restaurants
+                    </Button>
+                </div>
+
 
                 {/* Success/Error Messages */}
                 {success && (
@@ -328,76 +548,18 @@ export default function SuperAdminPanel() {
                     </Card>
                 )}
 
-                {/* Restaurants List */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {isLoading ? (
-                        <Card>
-                            <CardContent className="pt-6">
-                                <p className="text-center text-slate-500">Loading restaurants...</p>
-                            </CardContent>
-                        </Card>
-                    ) : restaurants.length === 0 ? (
-                        <Card className="col-span-full">
-                            <CardContent className="pt-6">
-                                <p className="text-center text-slate-500">
-                                    No restaurants yet. Create your first one!
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        restaurants.map((restaurant) => {
-                            const adminEmail = `admin@${restaurant.id}.dineezee`;
+                {isLoading ? (
+                    <div className="flex justify-center items-center h-64">
+                        <LoaderCircle className="w-8 h-8 animate-spin text-red-600" />
+                    </div>
+                ) : view === 'dashboard' ? (
+                    renderDashboard()
+                ) : (
+                    renderRestaurantList()
+                )}
 
-                            return (
-                                <Link href={`/admin/superadmin/restaurants/${restaurant.id}`} key={restaurant.id} className="block rounded-lg transition-all hover:shadow-xl hover:-translate-y-1">
-                                    <Card className="h-full cursor-pointer">
-                                        <CardHeader>
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex-1">
-                                                    <CardTitle className="flex items-center gap-2">
-                                                        <Building2 className="w-5 h-5 text-red-600" />
-                                                        {restaurant.name}
-                                                    </CardTitle>
-                                                    <p className="text-sm text-slate-500 mt-1">Restaurant</p>
-                                                </div>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        handleDeleteRestaurant(restaurant.id);
-                                                    }}
-                                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="space-y-3">
-                                            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                                <Mail className="w-4 h-4" />
-                                                <span className="font-mono text-xs">
-                                                    {adminEmail}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                                <Users className="w-4 h-4" />
-                                                <span>
-                                                    Admin can create branches & users
-                                                </span>
-                                            </div>
-                                            <div className="pt-3 border-t">
-                                                <p className="text-xs text-slate-500">Restaurant ID: {restaurant.id}</p>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                </Link>
-                            );
-                        })
-                    )}
-                </div>
             </div>
         </div>
     );
 }
+

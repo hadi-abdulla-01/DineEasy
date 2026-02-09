@@ -26,6 +26,7 @@ import {
     getDocFromServer,
 } from 'firebase/firestore';
 import { unstable_noStore as noStore } from 'next/cache';
+import { getAllRestaurants } from './restaurant-management';
 
 export async function getFirestoreInstance() {
     return initializeFirebase().firestore;
@@ -1345,14 +1346,10 @@ export async function getActivityLogsByUser(userId: string, limitCount: number =
     const collections = await getCollections(restaurantId);
     const activityLogsRef = collections.activityLogs;
     
-    // The query with `where` and `orderBy` on different fields requires a composite index.
-    // To avoid this, we fetch all documents for the user and sort/limit on the server.
-    // This is less performant for users with many activity logs but avoids the error.
     const q = query(activityLogsRef, where('userId', '==', userId));
     const snapshot = await getDocs(q);
     const logs = snapshot.docs.map(d => docToObj<ActivityLog>(d));
     
-    // Sort logs by timestamp descending and take the most recent 'limitCount'
     logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     
     return logs.slice(0, limitCount);
@@ -1468,4 +1465,88 @@ export async function sendOtpNotification(otpRequest: OTPRequest): Promise<void>
     }
 }
 
+
+// --- Global Super Admin Functions ---
+
+export async function getGlobalStats() {
+    noStore();
+    const firestore = await getFirestoreInstance();
     
+    const ordersRef = collectionGroup(firestore, 'orders');
+    const remoteOrdersRef = collectionGroup(firestore, 'remoteOrders');
+    
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+    
+    // Using multiple queries and merging is more robust than a single complex query
+    // that would require specific composite indexes to be pre-configured.
+    const completedOrdersQuery = query(ordersRef, where('status', '==', 'completed'));
+    const newOrdersQuery = query(ordersRef, where('createdAt', '>=', twentyFourHoursAgo));
+    const newRemoteOrdersQuery = query(remoteOrdersRef, where('createdAt', '>=', twentyFourHoursAgo));
+
+    const [
+        completedOrdersSnap, 
+        remoteOrdersSnap,
+        newOrdersSnap,
+        newRemoteOrdersSnap
+    ] = await Promise.all([
+        getDocs(completedOrdersQuery),
+        getDocs(remoteOrdersRef),
+        getDocs(newOrdersQuery),
+        getDocs(newRemoteOrdersQuery)
+    ]);
+
+    const totalSales = 
+        completedOrdersSnap.docs.reduce((sum, doc) => sum + (doc.data().total || 0), 0) +
+        remoteOrdersSnap.docs.reduce((sum, doc) => sum + (doc.data().total || 0), 0);
+
+    const totalOrders = completedOrdersSnap.size + remoteOrdersSnap.size;
+    const newOrdersCount = newOrdersSnap.size + newRemoteOrdersSnap.size;
+    
+    return { totalSales, totalOrders, newOrdersCount };
+}
+
+
+export async function getGlobalUserCount() {
+    noStore();
+    const firestore = await getFirestoreInstance();
+    const usersRef = collectionGroup(firestore, 'kitchenUsers');
+    const snapshot = await getDocs(usersRef);
+    return snapshot.size;
+}
+
+export async function getRestaurantLeaderboard(limit = 5): Promise<{id: string, name: string, totalSales: number, orderCount: number}[]> {
+    noStore();
+    const firestore = await getFirestoreInstance();
+    const restaurants = await getAllRestaurants();
+    const leaderboard: {id: string, name: string, totalSales: number, orderCount: number}[] = [];
+
+    // This is inefficient but necessary without a dedicated aggregation collection.
+    // For a real-world app, a Cloud Function would update totals on a separate collection.
+    for (const restaurant of restaurants) {
+        const ordersRef = collection(firestore, `restaurants/${restaurant.id}/orders`);
+        const remoteOrdersRef = collection(firestore, `restaurants/${restaurant.id}/remoteOrders`);
+
+        const [ordersSnapshot, remoteOrdersSnapshot] = await Promise.all([
+            getDocs(query(ordersRef, where('status', '==', 'completed'))),
+            getDocs(remoteOrdersRef),
+        ]);
+
+        const allCompletedOrders = [
+            ...ordersSnapshot.docs.map(d => d.data() as Order),
+            ...remoteOrdersSnapshot.docs.map(d => d.data() as RemoteOrder)
+        ];
+
+        const totalSales = allCompletedOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+        const orderCount = allCompletedOrders.length;
+
+        leaderboard.push({
+            id: restaurant.id,
+            name: restaurant.name,
+            totalSales,
+            orderCount
+        });
+    }
+
+    return leaderboard.sort((a, b) => b.totalSales - a.totalSales).slice(0, limit);
+}
