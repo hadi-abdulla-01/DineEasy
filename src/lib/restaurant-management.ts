@@ -2,18 +2,17 @@
 
 'use server';
 
-import { initializeFirebase } from '@/firebase/server';
-import {
-    collection,
-    doc,
-    setDoc,
-    serverTimestamp,
-    getDocs,
-    getDoc,
-    deleteDoc
-} from 'firebase/firestore';
+import { getAdminApp } from '@/firebase/admin';
+import { getFirestore, serverTimestamp, FieldValue } from 'firebase-admin/firestore';
 import type { AppUser } from './definitions';
-import { FirestorePermissionError } from '@/firebase/errors';
+
+/**
+ * Get an instance of the Admin Firestore SDK.
+ */
+async function getAdminFirestoreInstance() {
+    const app = getAdminApp();
+    return getFirestore(app);
+}
 
 /**
  * Create a new restaurant (tenant) in the multi-tenant SaaS structure
@@ -25,16 +24,13 @@ export async function createRestaurant(
     adminUser: Omit<AppUser, 'id'>
 ): Promise<{ success: boolean; restaurantId: string; error?: string }> {
     try {
-        const firestore = initializeFirebase().firestore;
-
-        // Create restaurant document
-        const restaurantRef = doc(firestore, 'restaurants', restaurantId);
+        const firestore = await getAdminFirestoreInstance();
+        const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
         
         const restaurantData = {
             name: restaurantName,
             createdAt: serverTimestamp(),
             isActive: true,
-            // Default settings
             restaurantName: restaurantName,
             restaurantAddress: '',
             currencySymbol: '$',
@@ -52,15 +48,13 @@ export async function createRestaurant(
                 takeAway: { prefix: 'TA-', nextNumber: 1 },
             }
         };
-        await setDoc(restaurantRef, restaurantData);
+        await restaurantRef.set(restaurantData);
 
-        // Create main branch for this restaurant
-        const mainBranchRef = doc(collection(firestore, `restaurants/${restaurantId}/branches`));
-        await setDoc(mainBranchRef, {
+        const mainBranchRef = firestore.collection(`restaurants/${restaurantId}/branches`).doc();
+        await mainBranchRef.set({
             name: 'Main Branch',
             isMain: true,
             createdAt: serverTimestamp(),
-            // Inherit restaurant settings
             restaurantName: restaurantName,
             restaurantAddress: '',
             currencySymbol: '$',
@@ -69,9 +63,8 @@ export async function createRestaurant(
             taxes: [],
         });
 
-        // Create admin user for this restaurant
-        const adminUserRef = doc(collection(firestore, `restaurants/${restaurantId}/kitchenUsers`));
-        await setDoc(adminUserRef, {
+        const adminUserRef = firestore.collection(`restaurants/${restaurantId}/kitchenUsers`).doc();
+        await adminUserRef.set({
             ...adminUser,
             branchId: mainBranchRef.id,
             createdAt: serverTimestamp(),
@@ -82,14 +75,6 @@ export async function createRestaurant(
             restaurantId: restaurantId
         };
     } catch (error: any) {
-        if (error.code === 'permission-denied') {
-            const permissionError = new FirestorePermissionError({
-                path: `restaurants/${restaurantId}`,
-                operation: 'create',
-                requestResourceData: { name: restaurantName, createdAt: 'serverTimestamp()', isActive: true }
-            });
-            return { success: false, restaurantId: '', error: permissionError.message };
-        }
         console.error('Error creating restaurant:', error);
         return {
             success: false,
@@ -109,26 +94,21 @@ export async function getAllRestaurants(): Promise<Array<{
     isActive: boolean;
 }>> {
     try {
-        const firestore = initializeFirebase().firestore;
-        const restaurantsRef = collection(firestore, 'restaurants');
-        const snapshot = await getDocs(restaurantsRef);
+        const firestore = await getAdminFirestoreInstance();
+        const restaurantsRef = firestore.collection('restaurants');
+        const snapshot = await restaurantsRef.get();
 
         return snapshot.docs.map(doc => {
             const data = doc.data();
+            const createdAtDate = (data.createdAt as FirebaseFirestore.Timestamp)?.toDate() || new Date();
             return {
                 id: doc.id,
                 name: data.name || 'Unnamed Restaurant',
-                createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+                createdAt: createdAtDate.toISOString(),
                 isActive: data.isActive ?? true,
             };
         });
     } catch (error: any) {
-        if (error.code === 'permission-denied') {
-            throw new FirestorePermissionError({
-                path: 'restaurants',
-                operation: 'list',
-            });
-        }
         console.error('Error getting restaurants:', error);
         throw error;
     }
@@ -139,25 +119,21 @@ export async function getAllRestaurants(): Promise<Array<{
  */
 export async function getRestaurantById(restaurantId: string): Promise<{ id: string; name: string } | null> {
     try {
-        const firestore = initializeFirebase().firestore;
-        const restaurantRef = doc(firestore, 'restaurants', restaurantId);
-        const docSnap = await getDoc(restaurantRef);
+        const firestore = await getAdminFirestoreInstance();
+        const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
+        const docSnap = await restaurantRef.get();
 
-        if (docSnap.exists()) {
+        if (docSnap.exists) {
             const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                name: data.name || 'Unnamed Restaurant',
-            };
+            if (data) {
+                return {
+                    id: docSnap.id,
+                    name: data.name || 'Unnamed Restaurant',
+                };
+            }
         }
         return null;
     } catch (error: any) {
-        if (error.code === 'permission-denied') {
-            throw new FirestorePermissionError({
-                path: `restaurants/${restaurantId}`,
-                operation: 'get',
-            });
-        }
         console.error('Error getting restaurant by ID:', error);
         throw error;
     }
@@ -168,15 +144,14 @@ export async function getRestaurantById(restaurantId: string): Promise<{ id: str
  */
 export async function deleteRestaurant(restaurantId: string): Promise<{ success: boolean; error?: string }> {
     try {
-        const firestore = initializeFirebase().firestore;
+        const firestore = await getAdminFirestoreInstance();
 
-        // 1. Delete all users from Firebase Authentication
         try {
             const { getAdminAuth } = await import('@/firebase/admin');
             const adminAuth = getAdminAuth();
             if (adminAuth) {
-                const usersRef = collection(firestore, `restaurants/${restaurantId}/kitchenUsers`);
-                const usersSnapshot = await getDocs(usersRef);
+                const usersRef = firestore.collection(`restaurants/${restaurantId}/kitchenUsers`);
+                const usersSnapshot = await usersRef.get();
 
                 const authDeletePromises = usersSnapshot.docs.map(async (doc) => {
                     const userData = doc.data();
@@ -193,33 +168,24 @@ export async function deleteRestaurant(restaurantId: string): Promise<{ success:
             }
         } catch (authError) {
             console.error('Error dealing with Firebase Auth deletion:', authError);
-            // Continue to delete Firestore data even if Auth deletion fails partially
         }
 
-        // 2. Delete all subcollections
-        const subcollections = ['branches', 'kitchenUsers', 'menuItems', 'orders', 'remoteOrders', 'tables', 'activityLogs'];
-
+        const subcollections = ['branches', 'kitchenUsers', 'menuItems', 'orders', 'remoteOrders', 'tables', 'activityLogs', 'discounts', 'fcmTokens', 'otpRequests'];
         for (const subcollection of subcollections) {
-            const subcollectionRef = collection(firestore, `restaurants/${restaurantId}/${subcollection}`);
-            const snapshot = await getDocs(subcollectionRef);
-
-            const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
-            await Promise.all(deletePromises);
+            const subcollectionRef = firestore.collection(`restaurants/${restaurantId}/${subcollection}`);
+            const snapshot = await subcollectionRef.get();
+            if (!snapshot.empty) {
+                const batch = firestore.batch();
+                snapshot.docs.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+            }
         }
 
-        // 3. Delete restaurant document
-        const restaurantRef = doc(firestore, 'restaurants', restaurantId);
-        await deleteDoc(restaurantRef);
+        const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
+        await restaurantRef.delete();
 
         return { success: true };
     } catch (error: any) {
-         if (error.code === 'permission-denied') {
-            const permissionError = new FirestorePermissionError({
-                path: `restaurants/${restaurantId}`,
-                operation: 'delete',
-            });
-            return { success: false, error: permissionError.message };
-        }
         console.error('Error deleting restaurant:', error);
         return {
             success: false,
@@ -227,3 +193,4 @@ export async function deleteRestaurant(restaurantId: string): Promise<{ success:
         };
     }
 }
+    
