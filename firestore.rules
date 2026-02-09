@@ -7,7 +7,7 @@ service cloud.firestore {
     function isSuperAdmin() {
       // This email should be configured in your app's environment variables.
       // For security, it's better to use custom claims in a real production app.
-      return request.auth != null && request.auth.token.email == 'your-email@gmail.com';
+      return request.auth != null && request.auth.token.email == 'your-super-admin@example.com';
     }
 
     // --- Super Admin Rules ---
