@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import {
@@ -12,7 +11,7 @@ import { initializeFirebase } from '@/firebase/server';
 import { getUserByEmail, createUserInFirestore } from './data';
 import type { AppUser } from './definitions';
 import { isSuperAdmin, extractRestaurantId } from './auth-utils';
-
+import { createRestaurant, getRestaurantById } from './server-actions';
 
 
 /**
@@ -28,21 +27,8 @@ export async function signInWithEmail(email: string, password: string): Promise<
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
         // Get user data from Firestore
-        // Note: For multi-tenant, you might need to determine restaurantId differently
         const restaurantId = extractRestaurantId(email);
-        if (!restaurantId && !isSuperAdmin(email)) {
-            return { success: false, error: 'Invalid email format for restaurant user.' };
-        }
-
-        const userData = await getUserByEmail(email, restaurantId || 'dineeasee-restaurant'); // Fallback to default for now
-
-        if (!userData && !isSuperAdmin(email)) {
-            return {
-                success: false,
-                error: 'User not found in database'
-            };
-        }
-
+        
         if (isSuperAdmin(email)) {
             return {
                 success: true,
@@ -65,12 +51,33 @@ export async function signInWithEmail(email: string, password: string): Promise<
                         sales: { view: true },
                         salesHistory: { view: true, edit: true, delete: true },
                         menuPerformance: { view: true },
+                        employeePerformance: { view: true },
+                        peakHours: { view: true },
                         onlineOrders: { view: true, create: true },
                         takeAway: { view: true, create: true },
                         userManagement: { view: true, create: true, edit: true, delete: true },
                         settings: { view: true, edit: true },
                     }
                 }
+            };
+        }
+        
+        if (!restaurantId) {
+            return { success: false, error: 'Invalid email format for restaurant user.' };
+        }
+
+        // Check if the restaurant is active before proceeding
+        const restaurant = await getRestaurantById(restaurantId);
+        if (!restaurant || !restaurant.isActive) {
+            return { success: false, error: 'This restaurant account is currently inactive. Please contact support.' };
+        }
+        
+        const userData = await getUserByEmail(email, restaurantId); 
+
+        if (!userData) {
+            return {
+                success: false,
+                error: 'User not found in database'
             };
         }
 
