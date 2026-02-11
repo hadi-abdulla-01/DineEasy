@@ -1,5 +1,3 @@
-
-
 'use server';
 import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, AppUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, SelectedAddon, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, Discount, DiscountApplicability, OTPRequest } from './definitions';
 import { initializeFirebase } from '@/firebase/server';
@@ -1363,17 +1361,20 @@ export async function getActivityLogsByUser(userId: string, limitCount: number =
     const collections = await getCollections(restaurantId);
     const activityLogsRef = collections.activityLogs;
     
-    // Sort by timestamp on the server
+    // This query fails without a composite index. We'll fetch and sort in code.
     const q = query(
         activityLogsRef,
-        where('userId', '==', userId),
-        orderBy('timestamp', 'desc'),
-        limit(limitCount)
+        where('userId', '==', userId)
     );
+
     const snapshot = await getDocs(q);
     const logs = snapshot.docs.map(d => docToObj<ActivityLog>(d));
     
-    return logs;
+    // Sort logs by timestamp descending in code
+    logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    // Apply the limit after sorting
+    return logs.slice(0, limitCount);
 }
 
 // --- OTP Management ---
