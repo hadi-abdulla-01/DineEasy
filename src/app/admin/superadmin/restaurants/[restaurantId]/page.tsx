@@ -1,12 +1,9 @@
-
-
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/app/admin/auth-provider';
-import { getBranches, getActivityLogs, getUsers } from '@/lib/data';
-import { getAdminForRestaurant } from '@/lib/data';
+import { getBranches, getActivityLogs, getUsers, getAdminForRestaurant } from '@/lib/data';
 import type { AppUser, Branch, ActivityLog } from '@/lib/definitions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -143,11 +140,13 @@ export default function RestaurantDetailsPage() {
                         variant="outline"
                         size="sm"
                         disabled={!adminUser}
-                        onClick={() => adminUser && router.push(`/admin/user-management/${adminUser.id}/edit`)}
+                        asChild
                         title={!adminUser ? "No user with 'Admin' role found for this restaurant." : "Edit administrator permissions"}
                     >
-                        <Edit className="w-4 h-4 mr-2" />
-                        {adminUser ? 'Edit Admin Permissions' : 'No Admin Found'}
+                        <Link href={adminUser ? `/admin/superadmin/restaurants/${restaurantId}/edit-admin` : '#'}>
+                            <Edit className="w-4 h-4 mr-2" />
+                            {adminUser ? 'Edit Admin Permissions' : 'No Admin Found'}
+                        </Link>
                     </Button>
                 </div>
 
