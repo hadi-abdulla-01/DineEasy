@@ -3,11 +3,12 @@
 'use server';
 
 import { getAdminApp, getAdminAuth } from '@/firebase/admin';
-import { getFirestore as getAdminFirestore, FieldValue, query as adminQuery, where as adminWhere, limit as adminLimit, Timestamp } from 'firebase-admin/firestore';
+import { getFirestore as getAdminFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { AppUser, Order, RemoteOrder, RestaurantSettings } from './definitions';
 import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
 import { unstable_noStore as noStore, revalidatePath } from 'next/cache';
+import { getAdminForRestaurant } from './data';
 
 /**
  * Get an instance of the Admin Firestore SDK.
@@ -361,44 +362,6 @@ export async function updateRestaurantName(restaurantId: string, newName: string
     } catch (error: any) {
         console.error('Error updating restaurant name:', error);
         return { success: false, error: error.message || 'Failed to update name' };
-    }
-}
-
-export async function getAdminForRestaurant(restaurantId: string): Promise<AppUser | null> {
-    noStore();
-    try {
-        const firestore = await getAdminFirestoreInstance();
-        const usersRef = firestore.collection(`restaurants/${restaurantId}/kitchenUsers`);
-        const q = adminQuery(usersRef, adminWhere('role', '==', 'Admin'), adminLimit(1));
-        const snapshot = await q.get();
-
-        if (snapshot.empty) {
-            console.log(`[getAdminForRestaurant] No admin user found for restaurant: ${restaurantId}`);
-            return null;
-        }
-
-        const adminDoc = snapshot.docs[0];
-        const data = adminDoc.data();
-        
-        const appUser: AppUser = {
-            id: adminDoc.id,
-            username: data.username || '',
-            email: data.email || '',
-            password: data.password || '',
-            role: data.role || 'Kitchen',
-            categories: data.categories || [],
-            branchId: data.branchId || '',
-            permissions: data.permissions || {},
-            firebaseUid: data.firebaseUid,
-            restaurantId: restaurantId,
-            isSuperAdmin: data.isSuperAdmin || false,
-            assignedTableId: data.assignedTableId
-        };
-        
-        return appUser;
-    } catch (e: any) {
-        console.error("Error fetching admin for restaurant:", e);
-        return null;
     }
 }
 

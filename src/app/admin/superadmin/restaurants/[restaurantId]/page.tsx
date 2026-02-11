@@ -1,17 +1,18 @@
 
+
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/app/admin/auth-provider';
-import { getUsers, getBranches, getActivityLogs } from '@/lib/data';
+import { getBranches, getActivityLogs, getAdminForRestaurant, getUsers } from '@/lib/data';
 import type { AppUser, Branch, ActivityLog } from '@/lib/definitions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ArrowLeft, Building2, Users, GitBranch, User, Eye, EyeOff, BookOpen, Clock, Edit } from 'lucide-react';
-import { getRestaurantById, getAdminForRestaurant } from '@/lib/server-actions';
+import { getRestaurantById } from '@/lib/server-actions';
 import { formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { PasswordCell } from '@/components/password-cell';

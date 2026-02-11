@@ -81,6 +81,8 @@ async function seedInitialAdminUser(restaurantId: string) {
                     sales: { view: true },
                     salesHistory: { view: true, edit: true, delete: true },
                     menuPerformance: { view: true },
+                    employeePerformance: { view: true },
+                    peakHours: { view: true },
                     onlineOrders: { view: true, create: true },
                     takeAway: { view: true, create: true },
                     userManagement: { view: true, create: true, edit: true, delete: true },
