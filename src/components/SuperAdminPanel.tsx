@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -16,8 +17,9 @@ import { generateUserEmail } from '@/lib/auth-utils';
 import {
     createRestaurant, getAllRestaurants, deleteRestaurant, getGlobalStats,
     getGlobalUserCount, getRestaurantLeaderboard, updateRestaurantStatus,
-    updateRestaurantName, getAdminForRestaurant
+    updateRestaurantName
 } from '@/lib/server-actions';
+import { getAdminForRestaurant } from '@/lib/data';
 import Link from 'next/link';
 import type { AppUser, NavMenuKey, UserPermissions } from '@/lib/definitions';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -752,4 +754,5 @@ export default function SuperAdminPanel() {
         </div>
     );
 }
+
 

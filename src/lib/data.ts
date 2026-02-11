@@ -1096,6 +1096,22 @@ export async function getUserByEmail(email: string, restaurantId: string = 'dine
     return user;
 }
 
+export async function getAdminForRestaurant(restaurantId: string = 'dineeasee-restaurant'): Promise<AppUser | null> {
+    noStore();
+    const collections = await getCollections(restaurantId);
+    const usersRef = collections.kitchenUsers;
+    const q = query(usersRef, where('role', '==', 'Admin'), limit(1));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) {
+        return null;
+    }
+    const user = docToObj<AppUser>(snapshot.docs[0]);
+    if (user && !user.restaurantId) {
+        user.restaurantId = restaurantId;
+    }
+    return user;
+}
+
 export async function createUserInFirestore(userData: Omit<AppUser, 'id'>, restaurantId: string = 'dineeasee-restaurant'): Promise<AppUser> {
     const collections = await getCollections(restaurantId);
     const usersRef = collections.kitchenUsers;
