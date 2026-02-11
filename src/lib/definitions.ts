@@ -97,6 +97,9 @@ export type RestaurantSettings = {
         enabled: boolean;
         sessionId: string | null;
     };
+    subscriptionPlanId?: string;
+    billingStatus?: BillingStatus;
+    nextBillingDate?: string;
 };
 
 export type Branch = {
@@ -310,4 +313,14 @@ export type OTPRequest = {
   customerName: string;
   customerPhone: string;
   createdAt: any; // Firestore Timestamp
+};
+
+export type BillingStatus = 'active' | 'trial' | 'overdue' | 'cancelled';
+
+export type SubscriptionPlan = {
+  id: string;
+  name: string;
+  price: number; // In cents/smallest currency unit for accuracy
+  description: string;
+  permissions: UserPermissions;
 };

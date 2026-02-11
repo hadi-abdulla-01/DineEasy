@@ -4,7 +4,7 @@
 
 import { getAdminApp, getAdminAuth } from '@/firebase/admin';
 import { getFirestore as getAdminFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
-import type { AppUser, Order, RemoteOrder, RestaurantSettings } from './definitions';
+import type { AppUser, Order, RemoteOrder, RestaurantSettings, SubscriptionPlan } from './definitions';
 import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
 import { unstable_noStore as noStore, revalidatePath } from 'next/cache';
@@ -137,7 +137,8 @@ export async function updateDefaultRestaurantSettings(settings: Partial<Restaura
 export async function createRestaurant(
     restaurantId: string,
     restaurantName: string,
-    adminUser: Omit<AppUser, 'id' | 'email' | 'firebaseUid'> & { password: string }
+    adminUser: Omit<AppUser, 'id' | 'email' | 'firebaseUid' | 'permissions'> & { password: string },
+    subscriptionPlanId: string
 ): Promise<{ success: boolean; restaurantId: string; error?: string }> {
     try {
         const firestore = await getAdminFirestoreInstance();
@@ -148,7 +149,11 @@ export async function createRestaurant(
             return { success: false, restaurantId: '', error: `Restaurant ID "${restaurantId}" already exists.` };
         }
         
-        // 1. Create Firebase Auth user
+        const plan = await getSubscriptionPlanById(subscriptionPlanId);
+        if (!plan) {
+            return { success: false, restaurantId: '', error: 'Selected subscription plan not found.' };
+        }
+
         const adminEmail = generateUserEmail('admin', restaurantId, true);
         const adminAuth = getAdminAuth();
         if (!adminAuth) {
@@ -156,11 +161,7 @@ export async function createRestaurant(
         }
         let authUserRecord;
         try {
-            authUserRecord = await adminAuth.createUser({
-                email: adminEmail,
-                password: adminUser.password,
-                displayName: adminUser.username,
-            });
+            authUserRecord = await adminAuth.createUser({ email: adminEmail, password: adminUser.password, displayName: adminUser.username });
         } catch (authError: any) {
             if (authError.code === 'auth/email-already-exists') {
                 return { success: false, restaurantId: '', error: `An authentication account for ${adminEmail} already exists. Please choose a different Restaurant ID.` };
@@ -168,29 +169,24 @@ export async function createRestaurant(
             throw authError;
         }
 
-        // 2. Create Restaurant Doc
         const defaultSettings = await getDefaultRestaurantSettings();
         
-        const restaurantData: Partial<RestaurantSettings> & { name: string; createdAt: FieldValue; isActive: boolean } = {
+        const nextBillingDate = new Date();
+        nextBillingDate.setDate(nextBillingDate.getDate() + 30); // 30-day trial/billing cycle
+
+        const restaurantData = {
             ...defaultSettings,
             name: restaurantName,
             restaurantName: restaurantName,
             createdAt: FieldValue.serverTimestamp(),
             isActive: true,
-        };
-
-        restaurantData.invoiceSettings = {
-            ...(defaultSettings.invoiceSettings || {}),
-            useUnifiedNumbering: true,
-            unified: { prefix: 'INV-', nextNumber: 1 },
-            dineIn: { prefix: 'DI-', nextNumber: 1 },
-            online: { prefix: 'ON-', nextNumber: 1 },
-            takeAway: { prefix: 'TA-', nextNumber: 1 },
+            subscriptionPlanId: subscriptionPlanId,
+            billingStatus: 'trial',
+            nextBillingDate: Timestamp.fromDate(nextBillingDate),
         };
 
         await restaurantRef.set(restaurantData);
 
-        // 3. Create Main Branch
         const mainBranchRef = firestore.collection(`restaurants/${restaurantId}/branches`).doc();
         await mainBranchRef.set({
             name: 'Main Branch',
@@ -204,29 +200,23 @@ export async function createRestaurant(
             taxes: defaultSettings.taxes || [],
         });
 
-        // 4. Create Firestore User Doc
         const adminUserRef = firestore.collection(`restaurants/${restaurantId}/kitchenUsers`).doc();
         await adminUserRef.set({
-            ...adminUser, // This includes the password
+            ...adminUser,
+            permissions: plan.permissions,
             email: adminEmail,
             firebaseUid: authUserRecord.uid,
             branchId: mainBranchRef.id,
             createdAt: FieldValue.serverTimestamp(),
         });
 
-        return {
-            success: true,
-            restaurantId: restaurantId
-        };
+        return { success: true, restaurantId: restaurantId };
     } catch (error: any) {
         console.error('Error creating restaurant:', error);
-        return {
-            success: false,
-            restaurantId: '',
-            error: error.message || 'Failed to create restaurant'
-        };
+        return { success: false, restaurantId: '', error: error.message || 'Failed to create restaurant' };
     }
 }
+
 
 
 export async function getAllRestaurants(): Promise<Array<{
@@ -234,6 +224,9 @@ export async function getAllRestaurants(): Promise<Array<{
     name: string;
     createdAt: string;
     isActive: boolean;
+    subscriptionPlanId?: string;
+    billingStatus?: string;
+    nextBillingDate?: string;
 }>> {
     noStore();
     try {
@@ -244,11 +237,16 @@ export async function getAllRestaurants(): Promise<Array<{
         return snapshot.docs.map(doc => {
             const data = doc.data();
             const createdAtDate = (data.createdAt as FirebaseFirestore.Timestamp)?.toDate() || new Date();
+            const nextBillingDate = (data.nextBillingDate as FirebaseFirestore.Timestamp)?.toDate();
+
             return {
                 id: doc.id,
                 name: data.name || 'Unnamed Restaurant',
                 createdAt: createdAtDate.toISOString(),
                 isActive: data.isActive ?? true,
+                subscriptionPlanId: data.subscriptionPlanId,
+                billingStatus: data.billingStatus,
+                nextBillingDate: nextBillingDate ? nextBillingDate.toISOString() : undefined,
             };
         });
     } catch (error: any) {
@@ -365,7 +363,61 @@ export async function updateRestaurantName(restaurantId: string, newName: string
     }
 }
 
+// --- Subscription Plan Management ---
+export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+    noStore();
+    const firestore = await getAdminFirestoreInstance();
+    const snapshot = await firestore.collection('subscriptionPlans').orderBy('price').get();
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubscriptionPlan));
+}
 
+export async function getSubscriptionPlanById(planId: string): Promise<SubscriptionPlan | null> {
+    noStore();
+    const firestore = await getAdminFirestoreInstance();
+    const docRef = firestore.doc(`subscriptionPlans/${planId}`);
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
+        return { id: docSnap.id, ...docSnap.data() } as SubscriptionPlan;
+    }
+    return null;
+}
 
+export async function createSubscriptionPlan(data: Omit<SubscriptionPlan, 'id'>): Promise<{ success: boolean; error?: string }> {
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        await firestore.collection('subscriptionPlans').add({
+            ...data,
+            createdAt: FieldValue.serverTimestamp(),
+        });
+        revalidatePath('/admin/superadmin/plans');
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || 'Failed to create plan.' };
+    }
+}
 
+export async function updateSubscriptionPlan(planId: string, data: Partial<Omit<SubscriptionPlan, 'id'>>): Promise<{ success: boolean; error?: string }> {
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        await firestore.doc(`subscriptionPlans/${planId}`).update({
+            ...data,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        revalidatePath('/admin/superadmin/plans');
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || 'Failed to update plan.' };
+    }
+}
+
+export async function deleteSubscriptionPlan(planId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        await firestore.doc(`subscriptionPlans/${planId}`).delete();
+        revalidatePath('/admin/superadmin/plans');
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || 'Failed to delete plan.' };
+    }
+}
     

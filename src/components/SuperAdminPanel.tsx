@@ -11,19 +11,19 @@ import { Label } from '@/components/ui/label';
 import {
     Building2, Plus, Mail, Users, Trash2, Eye, EyeOff, LogOut,
     DollarSign, ShoppingCart, TrendingUp, Activity, LayoutDashboard, List,
-    LoaderCircle, Edit, Save, X, KeyRound, Settings, ClipboardList, ToggleRight, Megaphone
+    LoaderCircle, Edit, Save, X, KeyRound, Settings, ClipboardList, ToggleRight, Megaphone, Check, CircleDollarSign, FileText, Star
 } from 'lucide-react';
 import { generateUserEmail } from '@/lib/auth-utils';
 import {
     createRestaurant, getAllRestaurants, deleteRestaurant, getGlobalStats,
     getGlobalUserCount, getRestaurantLeaderboard, updateRestaurantStatus,
-    updateRestaurantName
+    updateRestaurantName, getSubscriptionPlans, type SubscriptionPlan
 } from '@/lib/server-actions';
 import { getAdminForRestaurant } from '@/lib/data';
 import Link from 'next/link';
-import type { AppUser, NavMenuKey, UserPermissions } from '@/lib/definitions';
+import type { AppUser, NavMenuKey, UserPermissions, BillingStatus } from '@/lib/definitions';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -31,6 +31,9 @@ import { PasswordCell } from './password-cell';
 import { ALL_PERMISSIONS_CONFIG } from '@/lib/permissions';
 import { Checkbox } from './ui/checkbox';
 import { Separator } from './ui/separator';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
+import { Badge } from './ui/badge';
+import { cn } from '@/lib/utils';
 
 
 function StatCard({ title, value, icon, description }: { title: string, value: string, icon: React.ReactNode, description: string }) {
@@ -51,12 +54,7 @@ function StatCard({ title, value, icon, description }: { title: string, value: s
 export default function SuperAdminPanel() {
     const { logout } = useAuth();
     const { toast } = useToast();
-    const [restaurants, setRestaurants] = useState<Array<{
-        id: string;
-        name: string;
-        createdAt: string;
-        isActive: boolean;
-    }>>([]);
+    const [restaurants, setRestaurants] = useState<Awaited<ReturnType<typeof getAllRestaurants>>>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -80,6 +78,9 @@ export default function SuperAdminPanel() {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [isCreating, setIsCreating] = useState(false);
+    const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
+    const [selectedPlanId, setSelectedPlanId] = useState('');
+
 
     // Edit and Impersonate State
     const [editingRestaurant, setEditingRestaurant] = useState<{ id: string; name: string } | null>(null);
@@ -87,48 +88,6 @@ export default function SuperAdminPanel() {
     const [credentialsToShow, setCredentialsToShow] = useState<AppUser | null>(null);
     const [isCredentialsLoading, setIsCredentialsLoading] = useState(false);
     
-    // New state for admin permissions
-    const [adminPermissions, setAdminPermissions] = useState<UserPermissions>(() => {
-        const allPerms: UserPermissions = {};
-        ALL_PERMISSIONS_CONFIG.forEach(p => {
-            allPerms[p.key] = {};
-            p.rights.forEach(r => {
-                (allPerms[p.key] as any)[r] = true;
-            });
-        });
-        return allPerms;
-    });
-
-    const handlePermissionChange = (menu: NavMenuKey, right: 'view' | 'create' | 'edit' | 'delete', value: boolean) => {
-        setAdminPermissions(prev => {
-            const newPermissions = JSON.parse(JSON.stringify(prev)); // Deep copy
-            if (!newPermissions[menu]) {
-                newPermissions[menu] = {};
-            }
-            const menuPermissions = newPermissions[menu]!;
-
-            if (right === 'view') {
-                if (value) {
-                    const menuConfig = ALL_PERMISSIONS_CONFIG.find(p => p.key === menu);
-                    menuConfig?.rights.forEach(r => {
-                        (menuPermissions as any)[r] = true;
-                    });
-                } else {
-                    Object.keys(menuPermissions).forEach(key => {
-                        (menuPermissions as any)[key] = false;
-                    });
-                }
-            } else {
-                (menuPermissions as any)[right] = value;
-                if (value) {
-                    menuPermissions.view = true;
-                }
-            }
-            return newPermissions;
-        });
-    };
-
-
     const loadRestaurants = async () => {
         setIsLoading(true);
         try {
@@ -174,16 +133,31 @@ export default function SuperAdminPanel() {
             setIsLoading(false);
         }
     }
+    
+    const loadPlans = async () => {
+        const plans = await getSubscriptionPlans();
+        setSubscriptionPlans(plans);
+        if (plans.length > 0 && !selectedPlanId) {
+            setSelectedPlanId(plans[0].id);
+        }
+    }
 
     useEffect(() => {
         if (view === 'dashboard') {
             loadDashboardData();
         } else if (view === 'restaurants') {
             loadRestaurants();
+            loadPlans(); // Also load plans for the restaurant list view
         } else {
             setIsLoading(false);
         }
     }, [view]);
+    
+    useEffect(() => {
+        if (showCreateForm) {
+            loadPlans();
+        }
+    }, [showCreateForm]);
 
     const handleRestaurantIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const sanitizedId = e.target.value
@@ -199,7 +173,7 @@ export default function SuperAdminPanel() {
         setError('');
         setSuccess('');
 
-        if (!restaurantName || !restaurantId || !adminPassword) {
+        if (!restaurantName || !restaurantId || !adminPassword || !selectedPlanId) {
             setError('All fields are required');
             return;
         }
@@ -215,14 +189,8 @@ export default function SuperAdminPanel() {
             const restaurantResult = await createRestaurant(
                 restaurantId,
                 restaurantName,
-                {
-                    username: 'admin',
-                    password: adminPassword,
-                    role: 'Admin',
-                    categories: ['All'],
-                    permissions: adminPermissions,
-                    branchId: '', // This will be replaced in the action
-                }
+                { username: 'admin', password: adminPassword, role: 'Admin', categories: ['All'], branchId: '' },
+                selectedPlanId
             );
 
             if (restaurantResult.success) {
@@ -247,6 +215,7 @@ export default function SuperAdminPanel() {
             setIsCreating(false);
         }
     };
+
 
     const handleDeleteRestaurant = async (restaurantId: string) => {
         if (!confirm('Are you sure you want to delete this restaurant? This action cannot be undone and will delete all data.')) {
@@ -323,6 +292,16 @@ export default function SuperAdminPanel() {
         }
         setIsCredentialsLoading(false);
     };
+    
+    const getBillingStatusBadge = (status: BillingStatus | undefined) => {
+        switch (status) {
+            case 'active': return <Badge variant="default" className="bg-green-600 hover:bg-green-700">Active</Badge>;
+            case 'trial': return <Badge variant="secondary" className="bg-blue-600 text-white hover:bg-blue-700">Trial</Badge>;
+            case 'overdue': return <Badge variant="destructive">Overdue</Badge>;
+            case 'cancelled': return <Badge variant="outline">Cancelled</Badge>;
+            default: return <Badge variant="outline">N/A</Badge>;
+        }
+    };
 
     const renderDashboard = () => (
         <div className="space-y-6">
@@ -385,96 +364,91 @@ export default function SuperAdminPanel() {
     );
 
     const renderRestaurantList = () => (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {isLoading ? (
-                <Card className="col-span-full">
-                    <CardContent className="pt-6 flex justify-center items-center h-48">
-                        <LoaderCircle className="w-8 h-8 animate-spin text-red-600" />
-                    </CardContent>
-                </Card>
-            ) : restaurants.length === 0 ? (
-                <Card className="col-span-full">
-                    <CardContent className="pt-6">
-                        <p className="text-center text-slate-500">
-                            No restaurants yet. Create your first one!
-                        </p>
-                    </CardContent>
-                </Card>
-            ) : (
-                restaurants.map((restaurant) => {
-                    const adminEmail = `admin@${restaurant.id}.dineezee`;
-                    return (
-                         <Card key={restaurant.id} className="flex flex-col">
-                            <CardHeader>
-                                {editingRestaurant?.id === restaurant.id ? (
-                                    <div className="flex items-center gap-2">
-                                        <Building2 className="w-5 h-5 text-red-600" />
-                                        <Input value={newName} onChange={(e) => setNewName(e.target.value)} className="h-9 flex-1" autoFocus onKeyDown={(e) => e.key === 'Enter' && handleSaveName(restaurant.id)} />
-                                        <Button size="icon" className="h-9 w-9 bg-green-600 hover:bg-green-700" onClick={() => handleSaveName(restaurant.id)}><Save className="w-4 h-4" /></Button>
-                                        <Button size="icon" variant="ghost" className="h-9 w-9" onClick={handleCancelEditing}><X className="w-4 h-4" /></Button>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-start justify-between">
-                                        <Link href={`/admin/superadmin/restaurants/${restaurant.id}`} className="block">
-                                            <CardTitle className="flex items-center gap-2 hover:underline">
-                                                <Building2 className="w-5 h-5 text-red-600" />
-                                                {restaurant.name}
-                                            </CardTitle>
-                                        </Link>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleStartEditing(restaurant)}>
-                                            <Edit className="w-4 h-4" />
-                                        </Button>
-                                    </div>
-                                )}
-                            </CardHeader>
-                            <CardContent className="flex-grow space-y-3">
-                                <p className="text-sm text-slate-500">
-                                    Created: {formatDistanceToNow(new Date(restaurant.createdAt), { addSuffix: true })}
-                                </p>
-                                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                    <Mail className="w-4 h-4" />
-                                    <span className="font-mono text-xs break-all">
-                                        {adminEmail}
-                                    </span>
-                                </div>
-                            </CardContent>
-                            <CardFooter className="flex flex-col items-start gap-4 p-4 border-t">
-                                <div className="flex justify-between items-center w-full">
-                                    <Label htmlFor={`active-switch-${restaurant.id}`} className="font-medium text-sm">
-                                        Status
-                                    </Label>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-muted-foreground">{restaurant.isActive ? 'Active' : 'Inactive'}</span>
-                                        <Switch
-                                            id={`active-switch-${restaurant.id}`}
-                                            checked={restaurant.isActive}
-                                            onCheckedChange={() => handleStatusToggle(restaurant.id, restaurant.isActive)}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2 w-full">
-                                    <Button variant="outline" size="sm" className="w-full" onClick={() => handleImpersonate(restaurant.id)}>
-                                        <KeyRound className="w-4 h-4 mr-2" />
-                                        Impersonate
-                                    </Button>
-                                    <Button variant="destructive" size="sm" className="w-full" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteRestaurant(restaurant.id); }}>
-                                        <Trash2 className="w-4 h-4 mr-2" />
-                                        Delete
-                                    </Button>
-                                </div>
-                            </CardFooter>
-                        </Card>
-                    );
-                })
-            )}
-        </div>
+        <Card>
+            <CardHeader>
+                 <CardTitle>All Restaurants</CardTitle>
+                 <CardDescription>Manage all restaurant accounts on the platform.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Subscription</TableHead>
+                            <TableHead>Billing</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {isLoading ? (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center h-24">
+                                    <LoaderCircle className="mx-auto animate-spin" />
+                                </TableCell>
+                            </TableRow>
+                        ) : restaurants.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center h-24">
+                                    No restaurants found.
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            restaurants.map((restaurant) => {
+                                const plan = subscriptionPlans.find(p => p.id === restaurant.subscriptionPlanId);
+                                return (
+                                <TableRow key={restaurant.id}>
+                                    <TableCell>
+                                        <div className="flex flex-col">
+                                            <Link href={`/admin/superadmin/restaurants/${restaurant.id}`} className="font-medium hover:underline">{restaurant.name}</Link>
+                                            <span className="text-xs text-muted-foreground font-mono">{restaurant.id}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <Switch
+                                                checked={restaurant.isActive}
+                                                onCheckedChange={() => handleStatusToggle(restaurant.id, restaurant.isActive)}
+                                                id={`status-switch-${restaurant.id}`}
+                                            />
+                                            <Label htmlFor={`status-switch-${restaurant.id}`} className={cn(restaurant.isActive ? 'text-green-600' : 'text-red-600')}>{restaurant.isActive ? 'Active' : 'Inactive'}</Label>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>{plan?.name || 'N/A'}</TableCell>
+                                    <TableCell>
+                                        {getBillingStatusBadge(restaurant.billingStatus as BillingStatus | undefined)}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="sm" onClick={() => handleImpersonate(restaurant.id)}><KeyRound className="w-4 h-4 mr-2"/>Impersonate</Button>
+                                        <Button variant="ghost" size="sm" onClick={() => handleDeleteRestaurant(restaurant.id)}><Trash2 className="w-4 h-4 mr-2"/>Delete</Button>
+                                    </TableCell>
+                                </TableRow>
+                            )})
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
     );
     
     const renderSettings = () => (
         <div className="space-y-4">
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">System &amp; Configuration</h2>
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">System, Configuration & Financials</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <Link href="/admin/superadmin/defaults">
+                <Link href="/admin/superadmin/plans">
+                    <Card className="h-full hover:shadow-lg hover:-translate-y-1 transition-transform">
+                        <CardHeader className="flex flex-row items-center gap-4">
+                            <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                               <Star className="h-6 w-6 text-red-600" />
+                            </div>
+                            <div>
+                                <CardTitle>Subscription Plans</CardTitle>
+                                <CardDescription>Manage subscription tiers and permissions.</CardDescription>
+                            </div>
+                        </CardHeader>
+                    </Card>
+                </Link>
+                 <Link href="/admin/superadmin/defaults">
                     <Card className="h-full hover:shadow-lg hover:-translate-y-1 transition-transform">
                         <CardHeader className="flex flex-row items-center gap-4">
                             <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
@@ -487,6 +461,32 @@ export default function SuperAdminPanel() {
                         </CardHeader>
                     </Card>
                 </Link>
+                 <Link href="/admin/superadmin/billing">
+                    <Card className="h-full hover:shadow-lg hover:-translate-y-1 transition-transform">
+                        <CardHeader className="flex flex-row items-center gap-4">
+                            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                               <FileText className="h-6 w-6 text-blue-600" />
+                            </div>
+                            <div>
+                                <CardTitle>Platform Billing</CardTitle>
+                                <CardDescription>View billing status for all restaurants.</CardDescription>
+                            </div>
+                        </CardHeader>
+                    </Card>
+                </Link>
+                <Link href="/admin/superadmin/revenue">
+                    <Card className="h-full hover:shadow-lg hover:-translate-y-1 transition-transform">
+                        <CardHeader className="flex flex-row items-center gap-4">
+                            <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                               <CircleDollarSign className="h-6 w-6 text-green-600" />
+                            </div>
+                            <div>
+                                <CardTitle>Revenue Dashboard</CardTitle>
+                                <CardDescription>View platform-wide revenue analytics.</CardDescription>
+                            </div>
+                        </CardHeader>
+                    </Card>
+                </Link>
                 <Card className="h-full cursor-not-allowed opacity-60">
                     <CardHeader className="flex flex-row items-center gap-4">
                         <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
@@ -494,7 +494,7 @@ export default function SuperAdminPanel() {
                         </div>
                         <div>
                             <CardTitle>Feature Flags</CardTitle>
-                            <CardDescription>Enable or disable features for the platform. (Coming Soon)</CardDescription>
+                            <CardDescription>Enable or disable features for the platform.</CardDescription>
                         </div>
                     </CardHeader>
                 </Card>
@@ -505,7 +505,7 @@ export default function SuperAdminPanel() {
                         </div>
                         <div>
                             <CardTitle>Broadcast Announcements</CardTitle>
-                            <CardDescription>Send messages to all restaurant admins. (Coming Soon)</CardDescription>
+                            <CardDescription>Send messages to all restaurant admins.</CardDescription>
                         </div>
                     </CardHeader>
                 </Card>
@@ -589,9 +589,6 @@ export default function SuperAdminPanel() {
                                 <Plus className="w-5 h-5" />
                                 Create New Restaurant
                             </CardTitle>
-                            <CardDescription>
-                                Create a new restaurant and generate admin credentials with specific permissions.
-                            </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleCreateRestaurant} className="space-y-4">
@@ -621,69 +618,42 @@ export default function SuperAdminPanel() {
                                     </div>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="adminPassword">Admin Password</Label>
-                                    <div className="relative">
-                                        <Input
-                                            id="adminPassword"
-                                            type={showPassword ? 'text' : 'password'}
-                                            placeholder="Enter admin password (min 6 characters)"
-                                            value={adminPassword}
-                                            onChange={(e) => setAdminPassword(e.target.value)}
-                                            required
-                                            minLength={6}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPassword(!showPassword)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
-                                        >
-                                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                        </button>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="adminPassword">Admin Password</Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="adminPassword"
+                                                type={showPassword ? 'text' : 'password'}
+                                                placeholder="Enter admin password (min 6 characters)"
+                                                value={adminPassword}
+                                                onChange={(e) => setAdminPassword(e.target.value)}
+                                                required
+                                                minLength={6}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                                            >
+                                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="subscriptionPlan">Subscription Plan</Label>
+                                        <Select value={selectedPlanId} onValueChange={setSelectedPlanId} required>
+                                            <SelectTrigger id="subscriptionPlan">
+                                                <SelectValue placeholder="Select a plan..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {subscriptionPlans.map(plan => (
+                                                    <SelectItem key={plan.id} value={plan.id}>{plan.name} (${(plan.price / 100).toFixed(2)}/mo)</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
-                                
-                                <Separator className="my-4" />
-                                <div>
-                                    <Label className="text-base">Admin Permissions</Label>
-                                    <p className="text-xs text-slate-500 mb-2">Select the permissions for the new restaurant's administrator.</p>
-                                    <div className="border rounded-lg max-h-60 overflow-y-auto">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead className="w-1/3">Feature</TableHead>
-                                                    <TableHead className="text-center">View</TableHead>
-                                                    <TableHead className="text-center">Create</TableHead>
-                                                    <TableHead className="text-center">Edit</TableHead>
-                                                    <TableHead className="text-center">Delete</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {ALL_PERMISSIONS_CONFIG.map(menu => {
-                                                    const availableRights = ['view', 'create', 'edit', 'delete'];
-                                                    const currentPerms = adminPermissions[menu.key] || {};
-                                                    return (
-                                                        <TableRow key={menu.key}>
-                                                            <TableCell className="font-medium">{menu.label}</TableCell>
-                                                            {availableRights.map(right => (
-                                                                <TableCell key={right} className="text-center">
-                                                                    {menu.rights.includes(right as any) ? (
-                                                                        <Checkbox
-                                                                            checked={currentPerms[right as keyof typeof currentPerms] || false}
-                                                                            onCheckedChange={(checked) => handlePermissionChange(menu.key, right as any, !!checked)}
-                                                                        />
-                                                                    ) : <span className="text-muted-foreground">-</span>}
-                                                                </TableCell>
-                                                            ))}
-                                                        </TableRow>
-                                                    );
-                                                })}
-                                            </TableBody>
-                                        </Table>
-                                    </div>
-                                </div>
-
-
                                 <div className="flex gap-3 pt-4">
                                     <Button
                                         type="submit"
@@ -754,5 +724,7 @@ export default function SuperAdminPanel() {
         </div>
     );
 }
+
+
 
 
