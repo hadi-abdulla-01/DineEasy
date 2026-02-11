@@ -156,22 +156,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (restaurantId) {
         try {
           const restaurantData = await getSettings(undefined, restaurantId);
-          // The `isActive` property is on the main restaurant doc, not branch settings
-          // but getSettings merges them.
-          if (restaurantData && (restaurantData as any).isActive === false) {
+          
+          const isActive = (restaurantData as any).isActive ?? true;
+          const nextBillingDateString = (restaurantData as any).nextBillingDate;
+
+          let isExpired = false;
+          if (nextBillingDateString) {
+            const nextBillingDate = new Date(nextBillingDateString);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Compare against the start of today
+            
+            if (nextBillingDate < today) {
+                isExpired = true;
+            }
+          }
+
+          if (!isActive || isExpired) {
             setIsRestaurantInactive(true);
           } else {
             setIsRestaurantInactive(false);
           }
+
         } catch (error) {
           console.error("Failed to check restaurant status:", error);
-          // Don't lock out the user if the check fails, just log it.
         }
       }
     };
 
-    checkStatus(); // Initial check
-    const intervalId = setInterval(checkStatus, 30000); // Re-check every 30 seconds
+    checkStatus();
+    const intervalId = setInterval(checkStatus, 30000);
 
     return () => clearInterval(intervalId);
   }, [user]);
@@ -246,7 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 Account Inactive
               </AlertDialogTitle>
               <AlertDialogDescription>
-                This restaurant account is currently inactive. Please contact your software administrator for assistance.
+                This restaurant account is currently inactive or has expired. Please contact your software administrator for assistance.
               </AlertDialogDescription>
             </AlertDialogHeader>
           </AlertDialogContent>

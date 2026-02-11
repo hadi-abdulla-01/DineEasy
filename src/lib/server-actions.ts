@@ -363,6 +363,21 @@ export async function updateRestaurantName(restaurantId: string, newName: string
     }
 }
 
+export async function updateRestaurantValidity(restaurantId: string, nextBillingDate: Date): Promise<{ success: boolean; error?: string }> {
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
+        await restaurantRef.update({ 
+            nextBillingDate: Timestamp.fromDate(nextBillingDate),
+        });
+        revalidatePath('/admin/superadmin');
+        return { success: true };
+    } catch (error: any) {
+        console.error('Error updating restaurant validity:', error);
+        return { success: false, error: error.message || 'Failed to update validity date' };
+    }
+}
+
 // --- Subscription Plan Management ---
 export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
     noStore();

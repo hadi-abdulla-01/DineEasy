@@ -11,13 +11,14 @@ import { Label } from '@/components/ui/label';
 import {
     Building2, Plus, Mail, Users, Trash2, Eye, EyeOff, LogOut,
     DollarSign, ShoppingCart, TrendingUp, Activity, LayoutDashboard, List,
-    LoaderCircle, Edit, Save, X, KeyRound, Settings, ClipboardList, ToggleRight, Megaphone, Check, CircleDollarSign, FileText, Star
+    LoaderCircle, Edit, Save, X, KeyRound, Settings, ClipboardList, ToggleRight, Megaphone, Check, CircleDollarSign, FileText, Star,
+    Calendar as CalendarIcon
 } from 'lucide-react';
 import { generateUserEmail } from '@/lib/auth-utils';
 import {
     createRestaurant, getAllRestaurants, deleteRestaurant, getGlobalStats,
     getGlobalUserCount, getRestaurantLeaderboard, updateRestaurantStatus,
-    updateRestaurantName, getSubscriptionPlans, type SubscriptionPlan
+    updateRestaurantName, getSubscriptionPlans, type SubscriptionPlan, updateRestaurantValidity
 } from '@/lib/server-actions';
 import { getAdminForRestaurant } from '@/lib/data';
 import Link from 'next/link';
@@ -34,6 +35,8 @@ import { Separator } from './ui/separator';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 
 function StatCard({ title, value, icon, description }: { title: string, value: string, icon: React.ReactNode, description: string }) {
@@ -80,6 +83,7 @@ export default function SuperAdminPanel() {
     const [isCreating, setIsCreating] = useState(false);
     const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
     const [selectedPlanId, setSelectedPlanId] = useState('');
+    const [validityDates, setValidityDates] = useState<Record<string, Date | undefined>>({});
 
 
     // Edit and Impersonate State
@@ -93,6 +97,13 @@ export default function SuperAdminPanel() {
         try {
             const data = await getAllRestaurants();
             setRestaurants(data);
+            const initialDates: Record<string, Date | undefined> = {};
+            data.forEach(r => {
+                if (r.nextBillingDate) {
+                    initialDates[r.id] = new Date(r.nextBillingDate);
+                }
+            });
+            setValidityDates(initialDates);
         } catch (err) {
             console.error('Error loading restaurants:', err);
             setError('Failed to load restaurants.');
@@ -303,6 +314,21 @@ export default function SuperAdminPanel() {
         }
     };
 
+    const handleDateChange = async (restaurantId: string, date: Date | undefined) => {
+        if (!date) return;
+        
+        const previousDate = validityDates[restaurantId];
+        setValidityDates(prev => ({...prev, [restaurantId]: date}));
+
+        const result = await updateRestaurantValidity(restaurantId, date);
+        if(result.success) {
+            toast({ title: "Success", description: "Validity date updated." });
+        } else {
+            toast({ variant: 'destructive', title: "Error", description: result.error || "Failed to update validity date." });
+            setValidityDates(prev => ({...prev, [restaurantId]: previousDate}));
+        }
+    }
+
     const renderDashboard = () => (
         <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -376,20 +402,21 @@ export default function SuperAdminPanel() {
                             <TableHead>Name</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Subscription</TableHead>
-                            <TableHead>Billing</TableHead>
+                            <TableHead>Billing Status</TableHead>
+                            <TableHead>Validity Date</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center h-24">
+                                <TableCell colSpan={6} className="text-center h-24">
                                     <LoaderCircle className="mx-auto animate-spin" />
                                 </TableCell>
                             </TableRow>
                         ) : restaurants.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center h-24">
+                                <TableCell colSpan={6} className="text-center h-24">
                                     No restaurants found.
                                 </TableCell>
                             </TableRow>
@@ -417,6 +444,24 @@ export default function SuperAdminPanel() {
                                     <TableCell>{plan?.name || 'N/A'}</TableCell>
                                     <TableCell>
                                         {getBillingStatusBadge(restaurant.billingStatus as BillingStatus | undefined)}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="outline" className="w-[180px] justify-start text-left font-normal">
+                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                    {validityDates[restaurant.id] ? format(validityDates[restaurant.id]!, 'PP') : <span>Pick a date</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0">
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={validityDates[restaurant.id]}
+                                                    onSelect={(date) => handleDateChange(restaurant.id, date)}
+                                                    initialFocus
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="sm" onClick={() => handleImpersonate(restaurant.id)}><KeyRound className="w-4 h-4 mr-2"/>Impersonate</Button>
@@ -724,6 +769,7 @@ export default function SuperAdminPanel() {
         </div>
     );
 }
+
 
 
 
