@@ -26,6 +26,8 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+type InactiveReason = 'suspended' | 'expired' | null;
+
 const isProtectedRoute = (pathname: string) => {
   return pathname.startsWith('/admin') || pathname.startsWith('/kitchen') || pathname.startsWith('/display');
 }
@@ -83,7 +85,7 @@ function getPermissionForPath(pathname: string): NavMenuKey | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRestaurantInactive, setIsRestaurantInactive] = useState(false);
+  const [inactiveReason, setInactiveReason] = useState<InactiveReason>(null);
   const router = useRouter();
   const pathname = usePathname();
   const { isUserLoading: isFirebaseUserLoading } = useUser();
@@ -147,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   useEffect(() => {
     if (!user || user.isSuperAdmin) {
-      setIsRestaurantInactive(false);
+      setInactiveReason(null);
       return;
     }
 
@@ -158,8 +160,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const restaurantData = await getSettings(undefined, restaurantId);
           
           const isActive = (restaurantData as any).isActive ?? true;
+           if (!isActive) {
+            setInactiveReason('suspended');
+            return;
+          }
+          
           const nextBillingDateString = (restaurantData as any).nextBillingDate;
-
           let isExpired = false;
           if (nextBillingDateString) {
             const nextBillingDate = new Date(nextBillingDateString);
@@ -171,10 +177,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }
 
-          if (!isActive || isExpired) {
-            setIsRestaurantInactive(true);
+          if (isExpired) {
+            setInactiveReason('expired');
           } else {
-            setIsRestaurantInactive(false);
+            setInactiveReason(null);
           }
 
         } catch (error) {
@@ -250,16 +256,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={authContextValue}>
-      {isRestaurantInactive ? (
+      {inactiveReason ? (
         <AlertDialog open={true}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2">
                 <AlertTriangle className="h-6 w-6 text-destructive" />
-                Account Inactive
+                {inactiveReason === 'expired' ? 'Subscription Expired' : 'Account Suspended'}
               </AlertDialogTitle>
               <AlertDialogDescription>
-                This restaurant account is currently inactive or has expired. Please contact your software administrator for assistance.
+                {inactiveReason === 'expired'
+                  ? "Your subscription has ended. To continue using our services, please renew your plan by contacting your software administrator for billing details."
+                  : "This restaurant account is currently suspended. Please contact your software administrator for assistance."
+                }
               </AlertDialogDescription>
             </AlertDialogHeader>
           </AlertDialogContent>
