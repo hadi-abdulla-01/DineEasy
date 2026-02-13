@@ -285,10 +285,10 @@ export default function MenuManagementPage() {
         formData.append('availableSessions', JSON.stringify(selectedSessions));
       }
 
-      const newItem = await addMenuItemAction(formData);
+      const result = await addMenuItemAction(formData);
       
-      if (newItem) {
-        setMenuItems(prev => [...prev, newItem].sort((a, b) => a.name.localeCompare(b.name)));
+      if (result?.newItem) {
+        setMenuItems(prev => [...prev, result.newItem!].sort((a, b) => a.name.localeCompare(b.name)));
         formRef.current?.reset();
         setCategoryValue("");
         setPreviewImage(null);
@@ -296,7 +296,7 @@ export default function MenuManagementPage() {
           fileInputRef.current.value = "";
         }
       } else {
-        setError("Failed to add item, please check your inputs.");
+        setError(result?.error || "Failed to add item, please check your inputs.");
       }
 
     } catch (error) {

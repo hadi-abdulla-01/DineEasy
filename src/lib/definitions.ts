@@ -324,4 +324,6 @@ export type SubscriptionPlan = {
   currency: string; // e.g., 'USD', 'INR'
   description: string;
   permissions: UserPermissions;
+  maxUsers: number;
+  maxMenuItems: number;
 };

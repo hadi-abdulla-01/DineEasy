@@ -47,7 +47,10 @@ import {
     sendOtpNotification,
     createOtpRequest,
     verifyOtp,
+    getUsers,
+    getMenuItems,
 } from './data';
+import { getRestaurantById, getSubscriptionPlanById } from './server-actions';
 import { randomUUID } from 'crypto';
 import { doc, getDocFromServer, deleteField, runTransaction, Timestamp } from 'firebase/firestore';
 
@@ -300,7 +303,20 @@ export async function createTableAction(formData: FormData) {
     }
 }
 
-export async function addMenuItemAction(formData: FormData) {
+export async function addMenuItemAction(formData: FormData): Promise<{ newItem?: MenuItem; error?: string; }> {
+    const restaurantId = formData.get('restaurantId') as string;
+    const branchId = formData.get('branchId') as string;
+
+    const restaurant = await getRestaurantById(restaurantId);
+    if (restaurant && restaurant.subscriptionPlanId) {
+        const plan = await getSubscriptionPlanById(restaurant.subscriptionPlanId);
+        const currentMenuItems = await getMenuItems(branchId, restaurantId);
+
+        if (plan && plan.maxMenuItems > 0 && currentMenuItems.length >= plan.maxMenuItems) {
+            return { error: `Menu item limit of ${plan.maxMenuItems} reached for your current plan. Please contact the administrator.` };
+        }
+    }
+
     const name = formData.get('name') as string;
     const price = parseFloat(formData.get('price') as string);
     const description = formData.get('description') as string;
@@ -311,8 +327,6 @@ export async function addMenuItemAction(formData: FormData) {
     const isBestSeller = formData.get('isBestSeller') === 'on';
     const isRecommended = formData.get('isRecommended') === 'on';
     const recommendationNote = formData.get('recommendationNote') as string | null;
-    const branchId = formData.get('branchId') as string;
-    const restaurantId = formData.get('restaurantId') as string;
     const availableSessionsString = formData.get('availableSessions') as string | null;
 
     if (name && !isNaN(price) && description && category) {
@@ -347,16 +361,14 @@ export async function addMenuItemAction(formData: FormData) {
 
         if (!branchId) {
             console.error("Branch ID is missing for new menu item");
-            // Ideally we should return an error here, but standard form action error handling 
-            // might need refactoring to propagate it up. For now logging it.
-            return;
+            return { error: "Branch ID is missing. Could not add item." };
         }
 
         const newItem = await addMenuItem(newItemData, restaurantId);
         revalidatePath('/admin/menu');
-        return newItem;
+        return { newItem };
     }
-    return undefined;
+    return { error: "Failed to add item, please check your inputs." };
 }
 
 export async function updateMenuItemAction(itemId: string, formData: FormData) {
@@ -380,10 +392,6 @@ export async function updateMenuItemAction(itemId: string, formData: FormData) {
     if (image) updateData.imageId = image;
     if (category) updateData.category = category;
 
-    // Boolean flags - form checkboxes are only present if checked, but here we want to update explicitly?
-    // Actually, for updates, if the checkbox is unchecked in UI, formData.get() is null.
-    // If we want to support unchecking, we must assume the form sends all fields or we handle it carefully.
-    // The previous implementation likely assumed if it's an update, we override.
     updateData.isBestSeller = isBestSeller;
     updateData.isRecommended = isRecommended;
 
@@ -403,7 +411,6 @@ export async function updateMenuItemAction(itemId: string, formData: FormData) {
 
     if (addonGroupsString) {
         try {
-            // We don't have the type definition for AddonGroup handy in this context without import but it's passed to data function
             const groups = JSON.parse(addonGroupsString);
             if (Array.isArray(groups)) {
                 updateData.addonGroups = groups;
@@ -477,8 +484,6 @@ export async function createRemoteOrderAction(formData: FormData): Promise<Remot
         takeAwayTime: takeAwayTime || undefined,
     };
     
-    // Note: The original `addRemoteOrder` created two documents. The unified `createOrder`
-    // now only creates one in the `orders` collection, which is the correct behavior.
     const newOrder = await createOrder(orderData, restaurantId);
 
     const correctionForId = formData.get('correctionFor') as string;
@@ -492,9 +497,6 @@ export async function createRemoteOrderAction(formData: FormData): Promise<Remot
     revalidatePath('/admin/take-away');
     revalidatePath('/kitchen');
 
-    // Since `createOrder` returns an `Order`, we must cast it to `RemoteOrder`
-    // because the caller (`remote-order-form`) expects a `RemoteOrder`.
-    // The structure is compatible.
     return newOrder as unknown as RemoteOrder;
 }
 
@@ -529,10 +531,19 @@ export async function createUserAction(restaurantId: string, formData: FormData)
         return { message: "Password must be at least 6 characters." };
     }
 
-    // Check for unique username within the restaurant
     const existingUser = await getUserByUsername(username, restaurantId);
     if (existingUser) {
         return { message: "Username already exists. Please choose a different one." };
+    }
+
+    const restaurant = await getRestaurantById(restaurantId);
+    if (restaurant && restaurant.subscriptionPlanId) {
+        const plan = await getSubscriptionPlanById(restaurant.subscriptionPlanId);
+        const currentUsers = await getUsers(restaurantId);
+
+        if (plan && plan.maxUsers > 0 && currentUsers.length >= plan.maxUsers) {
+            return { message: `User limit of ${plan.maxUsers} reached for your current plan. Please contact the software administrator to upgrade.` };
+        }
     }
 
     let permissions: UserPermissions = {};
@@ -545,7 +556,6 @@ export async function createUserAction(restaurantId: string, formData: FormData)
         }
     }
 
-    // Remove duplicates
     const uniqueCategories = Array.from(new Set(categories));
 
     try {
@@ -554,22 +564,20 @@ export async function createUserAction(restaurantId: string, formData: FormData)
 
         const email = generateUserEmail(username, restaurantId, role === 'Admin');
 
-        // Create user in Firebase Auth and Firestore
         const authResult = await createAuthUser(email, password, {
             username,
-            password, // Stored for reference
+            password,
             categories: uniqueCategories,
             role,
             permissions,
             branchId,
             assignedTableId: assignedTableId || undefined,
-        }, restaurantId); // Pass restaurantId to auth function
+        }, restaurantId);
 
         if (!authResult.success) {
             return { message: authResult.error || "Failed to create user in Firebase Auth." };
         }
 
-        // Log activity
         if (createdBy) {
             const creator = await getUserById(createdBy, restaurantId);
             if (creator) {
@@ -605,16 +613,15 @@ export async function updateUserAction(userId: string, formData: FormData): Prom
     }
     const permissions: UserPermissions = JSON.parse(permissionsString);
 
-    // Remove duplicates
     const uniqueCategories = Array.from(new Set(categories));
 
     const updateData: Partial<AppUser> & {[key: string]: any} = {};
     if (username) updateData.username = username;
-    if (password) updateData.password = password; // In a real app, this should be hashed (kept for backward compatibility)
+    if (password) updateData.password = password;
     if (role) updateData.role = role;
     if (branchId) updateData.branchId = branchId;
     if (uniqueCategories.length > 0) updateData.categories = uniqueCategories;
-    else if (role === 'Kitchen') { // If kitchen user has no categories selected, set it to an empty array
+    else if (role === 'Kitchen') {
         updateData.categories = [];
     }
     if (permissions) updateData.permissions = permissions;
@@ -624,7 +631,6 @@ export async function updateUserAction(userId: string, formData: FormData): Prom
             updateData.assignedTableId = assignedTableId;
         }
     } else {
-        // If role is changed from Table to something else, remove assignedTableId
         updateData.assignedTableId = deleteField();
     }
 
@@ -657,11 +663,7 @@ export async function deleteUserAction(userId: string, deletedBy: string | null,
                 }
             }
 
-            // Delete from Firebase Auth
             if (userToDelete.firebaseUid) {
-                // specific dynamic import to avoid bundling admin sdk on client if this file is mixed? 
-                // 'use server' handles it, but let's be safe or just import at top. 
-                // Since actions.ts is 'use server', imports stay on server.
                 const { getAdminAuth } = await import('@/firebase/admin');
                 const adminAuth = getAdminAuth();
                 if (adminAuth) {
@@ -699,11 +701,9 @@ export async function updateSettingsAction(formData: FormData) {
 
     const newSettings: Partial<RestaurantSettings & Branch> = {};
 
-    // Global Restaurant Settings
     if (formData.has('restaurantName')) newSettings.restaurantName = formData.get('restaurantName') as string;
     if (formData.has('restaurantAddress')) newSettings.restaurantAddress = formData.get('restaurantAddress') as string;
 
-    // Branch-Specific or Global Fallback Settings
     if (formData.has('taxName')) newSettings.taxName = formData.get('taxName') as string;
     if (formData.has('taxNumber')) newSettings.taxNumber = formData.get('taxNumber') as string;
     if (formData.has('currencySymbol')) newSettings.currencySymbol = formData.get('currencySymbol') as string;

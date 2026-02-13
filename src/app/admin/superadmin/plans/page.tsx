@@ -41,7 +41,30 @@ function PlanForm({
     const [currency, setCurrency] = useState(plan?.currency || 'USD');
     const [description, setDescription] = useState(plan?.description || '');
     const [permissions, setPermissions] = useState<UserPermissions>(plan?.permissions || {});
+    const [maxUsers, setMaxUsers] = useState(plan?.maxUsers?.toString() || '5');
+    const [maxMenuItems, setMaxMenuItems] = useState(plan?.maxMenuItems?.toString() || '50');
 
+    useEffect(() => {
+        if (plan) {
+            setName(plan.name);
+            setPrice((plan.price / 100).toString());
+            setCurrency(plan.currency);
+            setDescription(plan.description || '');
+            setPermissions(plan.permissions || {});
+            setMaxUsers(plan.maxUsers?.toString() || '5');
+            setMaxMenuItems(plan.maxMenuItems?.toString() || '50');
+        } else {
+            // Reset to default for new plan
+            setName('');
+            setPrice('');
+            setCurrency('USD');
+            setDescription('');
+            setPermissions({});
+            setMaxUsers('5');
+            setMaxMenuItems('50');
+        }
+    }, [plan]);
+    
     const handlePermissionChange = (menu: NavMenuKey, right: 'view' | 'create' | 'edit' | 'delete', value: boolean) => {
         setPermissions(prev => {
             const newPermissions = JSON.parse(JSON.stringify(prev));
@@ -66,7 +89,9 @@ function PlanForm({
             price: Math.round(parseFloat(price) * 100), // Store in cents
             currency,
             description,
-            permissions
+            permissions,
+            maxUsers: parseInt(maxUsers, 10) || 0,
+            maxMenuItems: parseInt(maxMenuItems, 10) || 0,
         });
     };
 
@@ -93,6 +118,16 @@ function PlanForm({
                 <div className="space-y-2">
                     <Label htmlFor="planPrice">Price (per month)</Label>
                     <Input id="planPrice" type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} required />
+                </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label htmlFor="maxUsers">Max Users</Label>
+                    <Input id="maxUsers" type="number" value={maxUsers} onChange={e => setMaxUsers(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="maxMenuItems">Max Menu Items</Label>
+                    <Input id="maxMenuItems" type="number" value={maxMenuItems} onChange={e => setMaxMenuItems(e.target.value)} required />
                 </div>
             </div>
             <div className="space-y-2">
@@ -225,7 +260,10 @@ export default function SubscriptionPlansPage() {
                             </p>
                         </div>
                     </div>
-                     <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+                     <Dialog open={isFormOpen} onOpenChange={(isOpen) => {
+                        if (!isOpen) setEditingPlan(null);
+                        setIsFormOpen(isOpen);
+                     }}>
                         <DialogTrigger asChild>
                             <Button onClick={handleAddNewClick}>
                                 <Plus className="mr-2 h-4 w-4"/> New Plan
@@ -277,6 +315,10 @@ export default function SubscriptionPlansPage() {
                                         </CardHeader>
                                         <CardContent>
                                             <p className="text-sm">{plan.description}</p>
+                                            <div className="text-xs text-muted-foreground mt-2 flex gap-4">
+                                                <span>Users: {plan.maxUsers}</span>
+                                                <span>Menu Items: {plan.maxMenuItems}</span>
+                                            </div>
                                         </CardContent>
                                     </Card>
                                 ))}
