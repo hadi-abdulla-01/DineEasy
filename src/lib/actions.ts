@@ -53,8 +53,6 @@ import {
 import { getRestaurantById, getSubscriptionPlanById } from './server-actions';
 import { randomUUID } from 'crypto';
 import { doc, getDocFromServer, deleteField, runTransaction, Timestamp } from 'firebase/firestore';
-import Razorpay from 'razorpay';
-import shortid from 'shortid';
 
 const OrderItemSchema = z.object({
     menuItemId: z.string(),
@@ -1300,45 +1298,5 @@ export async function verifyOtpAction(
     } catch (e: any) {
         console.error(e);
         return { error: e.message || 'An unexpected error occurred during verification.' };
-    }
-}
-
-export async function createRazorpayOrderAction(planId: string, restaurantId: string, branchId: string) {
-    noStore();
-    if (!process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-        throw new Error('Razorpay API keys are not configured.');
-    }
-    const plan = await getSubscriptionPlanById(planId);
-    if (!plan) {
-        throw new Error('Subscription plan not found.');
-    }
-
-    const razorpay = new Razorpay({
-        key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        key_secret: process.env.RAZORPAY_KEY_SECRET,
-    });
-
-    const options = {
-        amount: plan.price, // amount in the smallest currency unit
-        currency: plan.currency,
-        receipt: `receipt_order_${shortid.generate()}`,
-        notes: {
-            planId: plan.id,
-            planName: plan.name,
-            restaurantId: restaurantId,
-            branchId: branchId,
-        }
-    };
-
-    try {
-        const order = await razorpay.orders.create(options);
-        return {
-            id: order.id,
-            currency: order.currency,
-            amount: order.amount,
-        };
-    } catch (error) {
-        console.error('Razorpay order creation error:', error);
-        throw new Error('Failed to create Razorpay order.');
     }
 }
