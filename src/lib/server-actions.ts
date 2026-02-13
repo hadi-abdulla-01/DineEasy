@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { getAdminApp, getAdminAuth } from '@/firebase/admin';
@@ -476,7 +475,7 @@ export async function updateRestaurantSubscriptionPlan(restaurantId: string, new
         const firestore = await getAdminFirestoreInstance();
         
         // Handle "No Plan" case
-        if (!newPlanId) {
+        if (!newPlanId || newPlanId === 'none') {
             const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
             await restaurantRef.update({
                 subscriptionPlanId: FieldValue.delete(), // Remove the plan ID
@@ -529,6 +528,8 @@ export async function updateRestaurantSubscriptionPlan(restaurantId: string, new
         return { success: false, error: e.message || 'Failed to update subscription plan.' };
     }
 }
+    
+
     
 
     
