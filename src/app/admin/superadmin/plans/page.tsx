@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -15,6 +16,14 @@ import { ALL_PERMISSIONS_CONFIG } from '@/lib/permissions';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { NavMenuKey, UserPermissions } from '@/lib/definitions';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const getCurrencySymbol = (currency: string | undefined) => {
+    if (currency === 'USD') return '$';
+    if (currency === 'INR') return '₹';
+    if (currency === 'EUR') return '€';
+    return currency ? `${currency} ` : '$';
+}
 
 function PlanForm({
     plan,
@@ -29,6 +38,7 @@ function PlanForm({
 }) {
     const [name, setName] = useState(plan?.name || '');
     const [price, setPrice] = useState(plan ? (plan.price / 100).toString() : '');
+    const [currency, setCurrency] = useState(plan?.currency || 'USD');
     const [description, setDescription] = useState(plan?.description || '');
     const [permissions, setPermissions] = useState<UserPermissions>(plan?.permissions || {});
 
@@ -54,6 +64,7 @@ function PlanForm({
         onSave({
             name,
             price: Math.round(parseFloat(price) * 100), // Store in cents
+            currency,
             description,
             permissions
         });
@@ -65,9 +76,24 @@ function PlanForm({
                 <Label htmlFor="planName">Plan Name</Label>
                 <Input id="planName" value={name} onChange={e => setName(e.target.value)} required />
             </div>
-            <div className="space-y-2">
-                <Label htmlFor="planPrice">Price (per month)</Label>
-                <Input id="planPrice" type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} required />
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label htmlFor="planCurrency">Currency</Label>
+                    <Select value={currency} onValueChange={setCurrency}>
+                        <SelectTrigger id="planCurrency">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="USD">USD ($)</SelectItem>
+                            <SelectItem value="INR">INR (₹)</SelectItem>
+                            <SelectItem value="EUR">EUR (€)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="planPrice">Price (per month)</Label>
+                    <Input id="planPrice" type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} required />
+                </div>
             </div>
             <div className="space-y-2">
                 <Label htmlFor="planDescription">Description</Label>
@@ -238,7 +264,7 @@ export default function SubscriptionPlansPage() {
                                         <CardHeader className="flex flex-row items-center justify-between">
                                             <div>
                                                 <CardTitle>{plan.name}</CardTitle>
-                                                <CardDescription>${(plan.price / 100).toFixed(2)} / month</CardDescription>
+                                                <CardDescription>{getCurrencySymbol(plan.currency)}{(plan.price / 100).toFixed(2)} / month</CardDescription>
                                             </div>
                                             <div className="flex gap-2">
                                                 <Button variant="outline" size="sm" onClick={() => handleEditClick(plan)}>

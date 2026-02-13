@@ -54,6 +54,13 @@ function StatCard({ title, value, icon, description }: { title: string, value: s
     );
 }
 
+const getCurrencySymbol = (currency: string | undefined) => {
+    if (currency === 'USD') return '$';
+    if (currency === 'INR') return '₹';
+    if (currency === 'EUR') return '€';
+    return currency ? `${currency} ` : '$';
+}
+
 export default function SuperAdminPanel() {
     const { logout } = useAuth();
     const { toast } = useToast();
@@ -733,7 +740,7 @@ export default function SuperAdminPanel() {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {subscriptionPlans.map(plan => (
-                                                    <SelectItem key={plan.id} value={plan.id}>{plan.name} (${(plan.price / 100).toFixed(2)}/mo)</SelectItem>
+                                                    <SelectItem key={plan.id} value={plan.id}>{plan.name} ({getCurrencySymbol(plan.currency)}{(plan.price / 100).toFixed(2)}/mo)</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>

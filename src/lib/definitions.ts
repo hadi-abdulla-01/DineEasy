@@ -321,6 +321,7 @@ export type SubscriptionPlan = {
   id: string;
   name: string;
   price: number; // In cents/smallest currency unit for accuracy
+  currency: string; // e.g., 'USD', 'INR'
   description: string;
   permissions: UserPermissions;
 };
