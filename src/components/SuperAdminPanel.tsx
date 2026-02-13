@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -18,9 +17,10 @@ import { generateUserEmail } from '@/lib/auth-utils';
 import {
     createRestaurant, getAllRestaurants, deleteRestaurant, getGlobalStats,
     getGlobalUserCount, getRestaurantLeaderboard, updateRestaurantStatus,
-    updateRestaurantName, getSubscriptionPlans, type SubscriptionPlan, updateRestaurantValidity
+    updateRestaurantName, getSubscriptionPlans, type SubscriptionPlan, updateRestaurantValidity,
+    updateRestaurantSubscriptionPlan,
+    getAdminForRestaurant
 } from '@/lib/server-actions';
-import { getAdminForRestaurant } from '@/lib/data';
 import Link from 'next/link';
 import type { AppUser, NavMenuKey, UserPermissions, BillingStatus } from '@/lib/definitions';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -327,7 +327,26 @@ export default function SuperAdminPanel() {
             toast({ variant: 'destructive', title: "Error", description: result.error || "Failed to update validity date." });
             setValidityDates(prev => ({...prev, [restaurantId]: previousDate}));
         }
-    }
+    };
+
+    const handlePlanChange = async (restaurantId: string, newPlanId: string) => {
+        const originalPlanId = restaurants.find(r => r.id === restaurantId)?.subscriptionPlanId;
+        
+        // Optimistic update
+        setRestaurants(prev => prev.map(r => r.id === restaurantId ? { ...r, subscriptionPlanId: newPlanId } : r));
+
+        const result = await updateRestaurantSubscriptionPlan(restaurantId, newPlanId);
+
+        if (result.success) {
+            toast({ title: 'Success', description: 'Restaurant plan updated successfully.' });
+            loadRestaurants(); 
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.error || 'Failed to update plan.' });
+            // Revert on failure
+            setRestaurants(prev => prev.map(r => r.id === restaurantId ? { ...r, subscriptionPlanId: originalPlanId } : r));
+        }
+    };
+
 
     const renderDashboard = () => (
         <div className="space-y-6">
@@ -422,7 +441,6 @@ export default function SuperAdminPanel() {
                             </TableRow>
                         ) : (
                             restaurants.map((restaurant) => {
-                                const plan = subscriptionPlans.find(p => p.id === restaurant.subscriptionPlanId);
                                 return (
                                 <TableRow key={restaurant.id}>
                                     <TableCell>
@@ -441,7 +459,29 @@ export default function SuperAdminPanel() {
                                             <Label htmlFor={`status-switch-${restaurant.id}`} className={cn(restaurant.isActive ? 'text-green-600' : 'text-red-600')}>{restaurant.isActive ? 'Active' : 'Inactive'}</Label>
                                         </div>
                                     </TableCell>
-                                    <TableCell>{plan?.name || 'N/A'}</TableCell>
+                                    <TableCell>
+                                        {subscriptionPlans.length > 0 ? (
+                                            <Select
+                                                value={restaurant.subscriptionPlanId || ''}
+                                                onValueChange={(newPlanId) => {
+                                                    if (newPlanId) {
+                                                        handlePlanChange(restaurant.id, newPlanId);
+                                                    }
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-40 text-xs h-8">
+                                                    <SelectValue placeholder="Select a plan" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {subscriptionPlans.map(p => (
+                                                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            <span>{subscriptionPlans.find(p => p.id === restaurant.subscriptionPlanId)?.name || 'N/A'}</span>
+                                        )}
+                                    </TableCell>
                                     <TableCell>
                                         {getBillingStatusBadge(restaurant.billingStatus as BillingStatus | undefined)}
                                     </TableCell>
@@ -770,7 +810,4 @@ export default function SuperAdminPanel() {
     );
 }
 
-
-
-
-
+    

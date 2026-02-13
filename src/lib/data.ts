@@ -1,3 +1,4 @@
+
 'use server';
 import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, AppUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, SelectedAddon, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, Discount, DiscountApplicability, OTPRequest } from './definitions';
 import { initializeFirebase } from '@/firebase/server';
@@ -24,6 +25,7 @@ import {
     getDocFromServer,
 } from 'firebase/firestore';
 import { unstable_noStore as noStore } from 'next/cache';
+import { getSubscriptionPlanById, getAdminForRestaurant } from './server-actions';
 
 export async function getFirestoreInstance() {
     return initializeFirebase().firestore;
@@ -1094,22 +1096,6 @@ export async function getUserByEmail(email: string, restaurantId: string = 'dine
     return user;
 }
 
-export async function getAdminForRestaurant(restaurantId: string = 'dineeasee-restaurant'): Promise<AppUser | null> {
-    noStore();
-    const collections = await getCollections(restaurantId);
-    const usersRef = collections.kitchenUsers;
-    const q = query(usersRef, where('role', '==', 'Admin'), limit(1));
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) {
-        return null;
-    }
-    const user = docToObj<AppUser>(snapshot.docs[0]);
-    if (user && !user.restaurantId) {
-        user.restaurantId = restaurantId;
-    }
-    return user;
-}
-
 export async function createUserInFirestore(userData: Omit<AppUser, 'id'>, restaurantId: string = 'dineeasee-restaurant'): Promise<AppUser> {
     const collections = await getCollections(restaurantId);
     const usersRef = collections.kitchenUsers;
@@ -1486,3 +1472,5 @@ export async function sendOtpNotification(otpRequest: OTPRequest): Promise<void>
         console.error('Error sending OTP notification:', error);
     }
 }
+
+    

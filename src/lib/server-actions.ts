@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { getAdminApp, getAdminAuth } from '@/firebase/admin';
@@ -8,7 +7,6 @@ import type { AppUser, Order, RemoteOrder, RestaurantSettings, SubscriptionPlan 
 import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
 import { unstable_noStore as noStore, revalidatePath } from 'next/cache';
-import { getAdminForRestaurant } from './data';
 
 /**
  * Get an instance of the Admin Firestore SDK.
@@ -448,4 +446,68 @@ export async function deleteSubscriptionPlan(planId: string): Promise<{ success:
         return { success: false, error: e.message || 'Failed to delete plan.' };
     }
 }
+
+export async function getAdminForRestaurant(restaurantId: string): Promise<AppUser | null> {
+    noStore();
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const usersRef = firestore.collection(`restaurants/${restaurantId}/kitchenUsers`);
+        const q = usersRef.where('role', '==', 'Admin').limit(1);
+        const snapshot = await q.get();
+        if (snapshot.empty) {
+            return null;
+        }
+        const doc = snapshot.docs[0];
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            restaurantId,
+        } as AppUser;
+    } catch (e) {
+        console.error(`Failed to get admin for restaurant ${restaurantId}`, e);
+        return null;
+    }
+}
+
+export async function updateRestaurantSubscriptionPlan(restaurantId: string, newPlanId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        
+        // 1. Get the new plan to retrieve its permissions
+        const plan = await getSubscriptionPlanById(newPlanId);
+        if (!plan) {
+            return { success: false, error: 'The selected subscription plan was not found.' };
+        }
+
+        // 2. Update the restaurant document with the new plan ID
+        const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
+        await restaurantRef.update({
+            subscriptionPlanId: newPlanId,
+        });
+
+        // 3. Find the admin user for this restaurant
+        const adminUser = await getAdminForRestaurant(restaurantId);
+        if (!adminUser) {
+            // This is a valid state if the admin was deleted, but we should log it.
+            console.warn(`No admin user found for restaurant ${restaurantId} while updating subscription plan.`);
+            revalidatePath('/admin/superadmin');
+            return { success: true }; // Restaurant plan is updated, but no admin to apply permissions to.
+        }
+
+        // 4. Update the admin user's permissions with the new plan's permissions
+        const adminUserRef = firestore.doc(`restaurants/${restaurantId}/kitchenUsers/${adminUser.id}`);
+        await adminUserRef.update({
+            permissions: plan.permissions,
+        });
+
+        revalidatePath('/admin/superadmin');
+        return { success: true };
+    } catch (e: any) {
+        console.error('Error updating restaurant subscription plan:', e);
+        return { success: false, error: e.message || 'Failed to update subscription plan.' };
+    }
+}
+    
+
     

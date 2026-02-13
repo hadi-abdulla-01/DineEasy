@@ -1,3 +1,4 @@
+
 'use client';
 import { useEffect, useState } from 'react';
 import { updateUserAction } from '@/lib/actions';
@@ -9,10 +10,9 @@ import { notFound, useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/app/admin/auth-provider';
 import { ALL_PERMISSIONS_CONFIG } from '@/lib/permissions';
-import { getAdminForRestaurant } from '@/lib/data';
+import { getRestaurantById, getAdminForRestaurant } from '@/lib/server-actions';
 import { Table as UiTable, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Shield } from 'lucide-react';
-import { getRestaurantById } from '@/lib/server-actions';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function EditAdminPermissionsPage() {
@@ -188,3 +188,5 @@ export default function EditAdminPermissionsPage() {
         </div>
     );
 }
+
+    
