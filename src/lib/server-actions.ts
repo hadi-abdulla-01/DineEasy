@@ -383,7 +383,15 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
     noStore();
     const firestore = await getAdminFirestoreInstance();
     const snapshot = await firestore.collection('subscriptionPlans').orderBy('price').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubscriptionPlan));
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        // Omit timestamp fields that are not serializable
+        const { createdAt, updatedAt, ...serializableData } = data;
+        return { 
+            id: doc.id,
+            ...serializableData
+        } as SubscriptionPlan;
+    });
 }
 
 export async function getSubscriptionPlanById(planId: string): Promise<SubscriptionPlan | null> {
@@ -392,7 +400,12 @@ export async function getSubscriptionPlanById(planId: string): Promise<Subscript
     const docRef = firestore.doc(`subscriptionPlans/${planId}`);
     const docSnap = await docRef.get();
     if (docSnap.exists) {
-        return { id: docSnap.id, ...docSnap.data() } as SubscriptionPlan;
+        const data = docSnap.data();
+        if (data) {
+            // Omit timestamp fields that are not serializable
+            const { createdAt, updatedAt, ...serializableData } = data;
+            return { id: docSnap.id, ...serializableData } as SubscriptionPlan;
+        }
     }
     return null;
 }
