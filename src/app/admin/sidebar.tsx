@@ -34,7 +34,7 @@ const settingsKeys: NavMenuKey[] = [
     'settingsRestaurant', 'settingsBranches', 'settingsGeneral', 'settingsFloors',
     'settingsCategories', 'settingsSessions', 'settingsPos', 'settingsOnline',
     'settingsInvoicing', 'settingsPrinting', 'settingsQr', 'settingsPlatforms',
-    'settingsDiscounts'
+    'settingsDiscounts', 'settingsSubscription'
 ];
 
 export default function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {

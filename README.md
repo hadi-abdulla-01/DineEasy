@@ -112,6 +112,11 @@ A comprehensive, multi-tenant restaurant management platform with QR code orderi
    # App Configuration
    NEXT_PUBLIC_SUPER_ADMIN_EMAIL=your-super-admin@example.com
    NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+   # Razorpay Payment Gateway
+   NEXT_PUBLIC_RAZORPAY_KEY_ID=your_razorpay_key_id
+   RAZORPAY_KEY_SECRET=your_razorpay_key_secret
+   RAZORPAY_WEBHOOK_SECRET=your_razorpay_webhook_secret
    ```
 
 4. **Run the development server**

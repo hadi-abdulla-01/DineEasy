@@ -2,7 +2,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Settings, ChevronRight, QrCode, ShoppingBasket, Globe, FileText, Printer, GitBranch, Building, Clock, Tag, Layers, Monitor, Percent } from "lucide-react";
+import { Settings, ChevronRight, QrCode, ShoppingBasket, Globe, FileText, Printer, GitBranch, Building, Clock, Tag, Layers, Monitor, Percent, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from '@/app/admin/auth-provider';
 import { useEffect, useState } from 'react';
@@ -36,6 +36,13 @@ const branchSettingsSections = [
         href: "/admin/settings/general",
         icon: <Settings className="h-6 w-6" />,
         permissionKey: 'settingsGeneral' as NavMenuKey
+    },
+    {
+        title: "Subscription & Billing",
+        description: "View and manage your subscription plan.",
+        href: "/admin/settings/subscription",
+        icon: <Wallet className="h-6 w-6" />,
+        permissionKey: 'settingsSubscription' as NavMenuKey
     },
      {
         title: "Floor Management",

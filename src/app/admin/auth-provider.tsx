@@ -38,7 +38,7 @@ const settingsKeys: NavMenuKey[] = [
     'settingsRestaurant', 'settingsBranches', 'settingsGeneral', 'settingsFloors',
     'settingsCategories', 'settingsSessions', 'settingsPos', 'settingsOnline',
     'settingsInvoicing', 'settingsPrinting', 'settingsQr', 'settingsPlatforms',
-    'settingsDiscounts'
+    'settingsDiscounts', 'settingsSubscription'
 ];
 
 function hasPermission(user: AppUser, key: NavMenuKey): boolean {

@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { getAdminApp, getAdminAuth } from '@/firebase/admin';
@@ -529,7 +530,48 @@ export async function updateRestaurantSubscriptionPlan(restaurantId: string, new
     }
 }
     
+export async function processSubscriptionPayment(restaurantId: string, planId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
+        const restaurantSnap = await restaurantRef.get();
 
+        if (!restaurantSnap.exists) {
+            return { success: false, error: 'Restaurant not found.' };
+        }
+        
+        const restaurantData = restaurantSnap.data();
+
+        const plan = await getSubscriptionPlanById(planId);
+        if (!plan) {
+            return { success: false, error: 'Plan not found.' };
+        }
+
+        const currentBillingDate = restaurantData?.nextBillingDate ? (restaurantData.nextBillingDate as Timestamp).toDate() : new Date();
+        const newBillingDate = new Date(currentBillingDate > new Date() ? currentBillingDate : new Date());
+        newBillingDate.setDate(newBillingDate.getDate() + 30);
+
+        await restaurantRef.update({
+            subscriptionPlanId: planId,
+            billingStatus: 'active',
+            nextBillingDate: Timestamp.fromDate(newBillingDate),
+        });
+
+        // Also update admin permissions
+        const adminUser = await getAdminForRestaurant(restaurantId);
+        if (adminUser) {
+            const adminUserRef = firestore.doc(`restaurants/${restaurantId}/kitchenUsers/${adminUser.id}`);
+            await adminUserRef.update({
+                permissions: plan.permissions,
+            });
+        }
+        
+        return { success: true };
+    } catch (e: any) {
+        console.error('Error processing subscription payment:', e);
+        return { success: false, error: e.message || 'Failed to process payment.' };
+    }
+}
     
 
     
