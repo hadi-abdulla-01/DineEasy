@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -340,7 +341,7 @@ export default function SuperAdminPanel() {
         const originalPlanId = restaurants.find(r => r.id === restaurantId)?.subscriptionPlanId;
         
         // Optimistic update
-        setRestaurants(prev => prev.map(r => r.id === restaurantId ? { ...r, subscriptionPlanId: newPlanId } : r));
+        setRestaurants(prev => prev.map(r => r.id === restaurantId ? { ...r, subscriptionPlanId: newPlanId || undefined } : r));
 
         const result = await updateRestaurantSubscriptionPlan(restaurantId, newPlanId);
 
@@ -470,16 +471,13 @@ export default function SuperAdminPanel() {
                                         {subscriptionPlans.length > 0 ? (
                                             <Select
                                                 value={restaurant.subscriptionPlanId || ''}
-                                                onValueChange={(newPlanId) => {
-                                                    if (newPlanId) {
-                                                        handlePlanChange(restaurant.id, newPlanId);
-                                                    }
-                                                }}
+                                                onValueChange={(newPlanId) => handlePlanChange(restaurant.id, newPlanId)}
                                             >
                                                 <SelectTrigger className="w-40 text-xs h-8">
                                                     <SelectValue placeholder="Select a plan" />
                                                 </SelectTrigger>
                                                 <SelectContent>
+                                                    <SelectItem value="">No Plan</SelectItem>
                                                     {subscriptionPlans.map(p => (
                                                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                                                     ))}

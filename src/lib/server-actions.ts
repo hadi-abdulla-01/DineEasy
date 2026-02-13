@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { getAdminApp, getAdminAuth } from '@/firebase/admin';
@@ -474,6 +475,26 @@ export async function updateRestaurantSubscriptionPlan(restaurantId: string, new
     try {
         const firestore = await getAdminFirestoreInstance();
         
+        // Handle "No Plan" case
+        if (!newPlanId) {
+            const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
+            await restaurantRef.update({
+                subscriptionPlanId: FieldValue.delete(), // Remove the plan ID
+            });
+
+            const adminUser = await getAdminForRestaurant(restaurantId);
+            if (adminUser) {
+                const adminUserRef = firestore.doc(`restaurants/${restaurantId}/kitchenUsers/${adminUser.id}`);
+                await adminUserRef.update({
+                    permissions: {}, // Clear permissions
+                });
+            }
+
+            revalidatePath('/admin/superadmin');
+            return { success: true };
+        }
+
+        // Existing logic for assigning a plan
         // 1. Get the new plan to retrieve its permissions
         const plan = await getSubscriptionPlanById(newPlanId);
         if (!plan) {
