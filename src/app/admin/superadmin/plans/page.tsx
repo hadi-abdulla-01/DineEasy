@@ -43,6 +43,30 @@ function PlanForm({
     const [permissions, setPermissions] = useState<UserPermissions>(plan?.permissions || {});
     const [maxUsers, setMaxUsers] = useState(plan?.maxUsers?.toString() || '5');
     const [maxMenuItems, setMaxMenuItems] = useState(plan?.maxMenuItems?.toString() || '50');
+    const [selectAll, setSelectAll] = useState(false);
+
+    useEffect(() => {
+        const allPermissionsGranted = ALL_PERMISSIONS_CONFIG.every(menu => {
+            const menuPermissions = permissions[menu.key];
+            if (!menuPermissions) return false;
+            return menu.rights.every(right => menuPermissions[right as keyof typeof menuPermissions]);
+        });
+        setSelectAll(allPermissionsGranted);
+    }, [permissions]);
+
+    const handleSelectAll = (checked: boolean) => {
+        setSelectAll(checked);
+        const newPermissions: UserPermissions = {};
+        if (checked) {
+            ALL_PERMISSIONS_CONFIG.forEach(menu => {
+                newPermissions[menu.key] = {};
+                menu.rights.forEach(right => {
+                    (newPermissions[menu.key] as any)[right] = true;
+                });
+            });
+        }
+        setPermissions(newPermissions);
+    };
 
     useEffect(() => {
         if (plan) {
@@ -136,7 +160,17 @@ function PlanForm({
             </div>
             
             <div className="space-y-2">
-                <Label>Permissions</Label>
+                 <div className="flex justify-between items-center">
+                    <Label>Permissions</Label>
+                    <div className="flex items-center space-x-2">
+                        <Checkbox
+                            id="select-all-permissions"
+                            checked={selectAll}
+                            onCheckedChange={handleSelectAll}
+                        />
+                        <Label htmlFor="select-all-permissions" className="font-medium">Select All</Label>
+                    </div>
+                </div>
                 <div className="border rounded-lg max-h-80 overflow-y-auto">
                     <Table>
                         <TableHeader>
