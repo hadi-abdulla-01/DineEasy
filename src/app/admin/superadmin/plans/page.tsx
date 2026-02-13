@@ -303,7 +303,7 @@ export default function SubscriptionPlansPage() {
                                 <Plus className="mr-2 h-4 w-4"/> New Plan
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-3xl">
+                        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
                                 <DialogTitle>{editingPlan ? 'Edit Plan' : 'Create New Plan'}</DialogTitle>
                                 <DialogDescription>Define the details and permissions for this subscription plan.</DialogDescription>
