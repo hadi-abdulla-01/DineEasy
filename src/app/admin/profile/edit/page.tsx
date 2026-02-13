@@ -1,14 +1,13 @@
-
 'use client';
 import { useEffect, useState } from 'react';
 import { updateUserAction } from '@/lib/actions';
-import type { ActivityLog, AppUser, RestaurantSettings } from '@/lib/definitions';
+import type { ActivityLog, AppUser, RestaurantSettings, SubscriptionPlan } from '@/lib/definitions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
-import { User, KeyRound, ShieldCheck, CheckCircle, Clock, BookOpen, Calendar } from 'lucide-react';
+import { User, KeyRound, ShieldCheck, CheckCircle, Clock, BookOpen, Calendar, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/app/admin/auth-provider';
 import { useToast } from '@/hooks/use-toast';
@@ -19,6 +18,7 @@ import { getActivityLogsByUser } from '@/lib/data';
 import { formatDistanceToNow, format, differenceInDays } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useRestaurantData } from '@/lib/client-data';
+import { getSubscriptionPlanById } from '@/lib/server-actions';
 
 
 export default function EditProfilePage() {
@@ -33,6 +33,7 @@ export default function EditProfilePage() {
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
+    const [plan, setPlan] = useState<SubscriptionPlan | null>(null);
 
     useEffect(() => {
         if (currentUser) {
@@ -51,6 +52,9 @@ export default function EditProfilePage() {
                             console.error("Error calculating days remaining:", e);
                             setDaysRemaining(null);
                         }
+                    }
+                    if (s.subscriptionPlanId) {
+                        getSubscriptionPlanById(s.subscriptionPlanId).then(setPlan);
                     }
                 });
             }
@@ -228,30 +232,48 @@ export default function EditProfilePage() {
                         </div>
                     </CardContent>
                 </Card>
-                {!user.isSuperAdmin && settings && settings.nextBillingDate && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="font-headline flex items-center gap-2">
-                                <Calendar className="h-6 w-6 text-primary"/>
-                                Subscription Status
-                            </CardTitle>
-                            <CardDescription>Your plan's validity information.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div>
-                                <Label className="text-xs uppercase text-muted-foreground">Plan Expires On</Label>
-                                <p className="font-semibold text-lg">{format(new Date(settings.nextBillingDate), 'PPP')}</p>
-                            </div>
-                            {daysRemaining !== null && (
-                            <div>
-                                <Label className="text-xs uppercase text-muted-foreground">Time Remaining</Label>
-                                <p className="font-semibold text-lg">
-                                    {daysRemaining > 0 ? `${daysRemaining} day(s)` : 'Expired'}
-                                </p>
-                            </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                {!user.isSuperAdmin && settings && (
+                    <>
+                        {settings.nextBillingDate && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="font-headline flex items-center gap-2">
+                                        <Calendar className="h-6 w-6 text-primary"/>
+                                        Subscription Status
+                                    </CardTitle>
+                                    <CardDescription>Your plan's validity information.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div>
+                                        <Label className="text-xs uppercase text-muted-foreground">Plan Expires On</Label>
+                                        <p className="font-semibold text-lg">{format(new Date(settings.nextBillingDate), 'PPP')}</p>
+                                    </div>
+                                    {daysRemaining !== null && (
+                                    <div>
+                                        <Label className="text-xs uppercase text-muted-foreground">Time Remaining</Label>
+                                        <p className="font-semibold text-lg">
+                                            {daysRemaining > 0 ? `${daysRemaining} day(s)` : 'Expired'}
+                                        </p>
+                                    </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
+                        {plan && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="font-headline flex items-center gap-2">
+                                        <Star className="h-6 w-6 text-primary"/>
+                                        Current Plan
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="font-semibold text-lg">{plan.name}</p>
+                                    <p className="text-sm text-muted-foreground">{plan.description}</p>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </>
                  )}
             </div>
         </div>
