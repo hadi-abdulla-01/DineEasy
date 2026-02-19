@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useRef } from "react";
 import { motion } from "motion/react";
 import svgPaths from "../imports/svg-ygbblntbv8";
 import imgImage2 from "@/assets/kitchen-login-illustration.png";
@@ -44,7 +44,7 @@ function Group1() {
   );
 }
 
-function Frame1({ value, onChange }: { value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void }) {
+function Frame1({ value, onChange, onKeyDown }: { value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void; }) {
   return (
     <Wrapper>
       <Group1 />
@@ -53,6 +53,7 @@ function Frame1({ value, onChange }: { value: string; onChange: (e: React.Change
         placeholder="Email Address"
         value={value}
         onChange={onChange}
+        onKeyDown={onKeyDown}
         className="w-full outline-none text-[#969ab8] text-[14px] font-['Poppins:Medium',sans-serif] placeholder:text-[#969ab8] bg-transparent"
       />
     </Wrapper>
@@ -75,20 +76,31 @@ function Group2() {
   );
 }
 
-function Frame({ value, onChange }: { value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void }) {
+const Frame = React.forwardRef<
+  HTMLInputElement,
+  {
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  }
+>(({ value, onChange, onKeyDown }, ref) => {
   return (
     <Wrapper>
       <Group2 />
       <input
+        ref={ref}
         type="password"
         placeholder="Password"
         value={value}
         onChange={onChange}
+        onKeyDown={onKeyDown}
         className="w-full outline-none text-[#969ab8] text-[14px] font-['Poppins:Medium',sans-serif] placeholder:text-[#969ab8] bg-transparent"
       />
     </Wrapper>
   );
-}
+});
+Frame.displayName = 'Frame';
+
 
 export default function KitchenLoginPage({ onNavigateToAdmin }: KitchenLoginPageProps) {
   const [email, setEmail] = useState('');
@@ -96,6 +108,8 @@ export default function KitchenLoginPage({ onNavigateToAdmin }: KitchenLoginPage
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+  const loginButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleLogin = async () => {
     setError('');
@@ -118,6 +132,20 @@ export default function KitchenLoginPage({ onNavigateToAdmin }: KitchenLoginPage
       console.error("Login error:", err);
       setError('An error occurred during login.');
       setIsLoading(false);
+    }
+  };
+  
+  const handleEmailKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      passwordInputRef.current?.focus();
+    }
+  };
+
+  const handlePasswordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      loginButtonRef.current?.click();
     }
   };
 
@@ -185,14 +213,14 @@ export default function KitchenLoginPage({ onNavigateToAdmin }: KitchenLoginPage
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5, delay: 0.6 }}
               >
-                <Frame1 value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Frame1 value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={handleEmailKeyDown} />
               </motion.div>
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5, delay: 0.7 }}
               >
-                <Frame value={password} onChange={(e) => setPassword(e.target.value)} />
+                <Frame ref={passwordInputRef} value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={handlePasswordKeyDown} />
               </motion.div>
             </div>
 
@@ -200,6 +228,7 @@ export default function KitchenLoginPage({ onNavigateToAdmin }: KitchenLoginPage
 
             {/* Login Button */}
             <motion.button
+              ref={loginButtonRef}
               onClick={handleLogin}
               disabled={isLoading}
               className="bg-[#cb1e1d] rounded-[8px] px-16 py-3 w-full transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
@@ -209,7 +238,7 @@ export default function KitchenLoginPage({ onNavigateToAdmin }: KitchenLoginPage
               whileHover={{ scale: isLoading ? 1 : 1.02 }}
               whileTap={{ scale: isLoading ? 1 : 0.98 }}
             >
-              <p className="font-['Poppins:SemiBold',sans-serif] leading-[normal] not-italic text-[15px] text-center text-white tracking-[0.1px]">
+              <p className="font-['Poppins:SemiBold',sans-serif] leading-[normal] not-italic text-[15px] text-center text-nowrap text-white tracking-[0.1px]">
                 {isLoading ? 'Logging in...' : 'Login'}
               </p>
             </motion.button>
