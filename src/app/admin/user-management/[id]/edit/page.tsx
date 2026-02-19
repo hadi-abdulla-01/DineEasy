@@ -20,7 +20,7 @@ import { useAuth } from '@/app/admin/auth-provider';
 import { ALL_PERMISSIONS_CONFIG } from '@/lib/permissions';
 import { useRestaurantData } from '@/lib/client-data';
 import { Table as UiTable, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-
+import { Skeleton } from '@/components/ui/skeleton';
 
 const USER_ROLES: UserRole[] = ['Admin', 'Manager', 'Server', 'Captain', 'Cashier', 'Accountant', 'Kitchen', 'Table'];
 
