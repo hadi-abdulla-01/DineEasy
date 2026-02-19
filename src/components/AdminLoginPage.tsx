@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion } from "motion/react";
 import svgPaths from "../imports/svg-6hzyqt81bp";
 import imgImage1 from "@/assets/admin-login-illustration.png";
@@ -44,21 +45,6 @@ function Group1() {
   );
 }
 
-function Frame1({ value, onChange }: { value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void }) {
-  return (
-    <Wrapper>
-      <Group1 />
-      <input
-        type="email"
-        placeholder="Email Address"
-        value={value}
-        onChange={onChange}
-        className="w-full outline-none text-[#969ab8] text-[14px] font-['Poppins:Medium',sans-serif] placeholder:text-[#969ab8] bg-transparent"
-      />
-    </Wrapper>
-  );
-}
-
 function Group2() {
   return (
     <div className="relative shrink-0 size-[19px]" data-name="Group">
@@ -75,27 +61,14 @@ function Group2() {
   );
 }
 
-function Frame({ value, onChange }: { value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void }) {
-  return (
-    <Wrapper>
-      <Group2 />
-      <input
-        type="password"
-        placeholder="Password"
-        value={value}
-        onChange={onChange}
-        className="w-full outline-none text-[#969ab8] text-[14px] font-['Poppins:Medium',sans-serif] placeholder:text-[#969ab8] bg-transparent"
-      />
-    </Wrapper>
-  );
-}
-
 export default function AdminLoginPage({ onNavigateToKitchen }: AdminLoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+  const loginButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleLogin = async () => {
     setError('');
@@ -125,6 +98,21 @@ export default function AdminLoginPage({ onNavigateToKitchen }: AdminLoginPagePr
       setIsLoading(false);
     }
   };
+
+  const handleEmailKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      passwordInputRef.current?.focus();
+    }
+  };
+
+  const handlePasswordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      loginButtonRef.current?.click();
+    }
+  };
+
 
   return (
     <motion.div
@@ -190,14 +178,35 @@ export default function AdminLoginPage({ onNavigateToKitchen }: AdminLoginPagePr
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5, delay: 0.6 }}
               >
-                <Frame1 value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Wrapper>
+                  <Group1 />
+                  <input
+                    type="email"
+                    placeholder="Email Address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={handleEmailKeyDown}
+                    className="w-full outline-none text-[#969ab8] text-[14px] font-['Poppins:Medium',sans-serif] placeholder:text-[#969ab8] bg-transparent"
+                  />
+                </Wrapper>
               </motion.div>
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5, delay: 0.7 }}
               >
-                <Frame value={password} onChange={(e) => setPassword(e.target.value)} />
+                <Wrapper>
+                  <Group2 />
+                  <input
+                    ref={passwordInputRef}
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={handlePasswordKeyDown}
+                    className="w-full outline-none text-[#969ab8] text-[14px] font-['Poppins:Medium',sans-serif] placeholder:text-[#969ab8] bg-transparent"
+                  />
+                </Wrapper>
               </motion.div>
             </div>
 
@@ -205,6 +214,7 @@ export default function AdminLoginPage({ onNavigateToKitchen }: AdminLoginPagePr
 
             {/* Login Button */}
             <motion.button
+              ref={loginButtonRef}
               onClick={handleLogin}
               disabled={isLoading}
               className="bg-[#cb1e1d] rounded-[8px] px-16 py-3 w-full transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
