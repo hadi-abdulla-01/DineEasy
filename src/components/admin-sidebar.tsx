@@ -16,6 +16,7 @@ import {
     TrendingUp,
     Star,
     Clock,
+    FileText,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -33,7 +34,7 @@ const settingsKeys: NavMenuKey[] = [
     'settingsRestaurant', 'settingsBranches', 'settingsGeneral', 'settingsFloors',
     'settingsCategories', 'settingsSessions', 'settingsPos', 'settingsOnline',
     'settingsInvoicing', 'settingsPrinting', 'settingsQr', 'settingsPlatforms',
-    'settingsDiscounts'
+    'settingsDiscounts', 'settingsSubscription'
 ];
 
 export default function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
@@ -60,6 +61,7 @@ export default function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
             items: [
                 { key: 'sales' as NavMenuKey, icon: BarChart3, label: 'Sales Report', href: '/admin/sales' },
                 { key: 'salesHistory' as NavMenuKey, icon: History, label: 'Sales History', href: '/admin/sales-history' },
+                { key: 'dailySummary' as NavMenuKey, icon: FileText, label: 'Daily Summary', href: '/admin/reports/daily-summary' },
                 { key: 'menuPerformance' as NavMenuKey, icon: TrendingUp, label: 'Menu Performance', href: '/admin/reports/menu-performance' },
                 { key: 'employeePerformance' as NavMenuKey, icon: Star, label: 'Employee Performance', href: '/admin/reports/employee-performance' },
                 { key: 'peakHours' as NavMenuKey, icon: Clock, label: 'Peak Hours', href: '/admin/reports/peak-hours' },

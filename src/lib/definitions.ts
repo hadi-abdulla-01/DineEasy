@@ -234,10 +234,11 @@ export type UserRole = 'Admin' | 'Manager' | 'Server' | 'Captain' | 'Cashier' | 
 export type NavMenuKey =
     | 'dashboard' | 'pos' | 'tableOrder' | 'tables' | 'menu' | 'kitchen' | 'sales' | 'salesHistory'
     | 'onlineOrders' | 'takeAway' | 'userManagement' | 'menuPerformance' | 'employeePerformance' | 'peakHours' | 'display' | 'receiveOtp'
+    | 'dailySummary'
     // Settings Sub-sections
     | 'settingsRestaurant' | 'settingsBranches' | 'settingsGeneral' | 'settingsFloors'
     | 'settingsCategories' | 'settingsSessions' | 'settingsPos' | 'settingsOnline'
-    | 'settingsInvoicing' | 'settingsPrinting' | 'settingsQr' | 'settingsPlatforms' | 'settingsDiscounts';
+    | 'settingsInvoicing' | 'settingsPrinting' | 'settingsQr' | 'settingsPlatforms' | 'settingsDiscounts' | 'settingsSubscription';
 
 
 export type UserPermission = {

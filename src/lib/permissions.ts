@@ -11,6 +11,7 @@ export const ALL_PERMISSIONS_CONFIG: {key: NavMenuKey, label: string, rights: ('
     { key: 'kitchen', label: 'Kitchen View', rights: ['view'] },
     { key: 'sales', label: 'Sales Report', rights: ['view'] },
     { key: 'salesHistory', label: 'Sales History', rights: ['view', 'edit', 'delete'] },
+    { key: 'dailySummary', label: 'Daily Summary Report', rights: ['view'] },
     { key: 'menuPerformance', label: 'Menu Performance', rights: ['view'] },
     { key: 'employeePerformance', label: 'Employee Performance', rights: ['view'] },
     { key: 'peakHours', label: 'Peak Hours', rights: ['view'] },
