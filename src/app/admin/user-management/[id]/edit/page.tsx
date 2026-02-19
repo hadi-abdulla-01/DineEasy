@@ -44,6 +44,12 @@ export default function EditUserPage() {
     const [selectAllPermissions, setSelectAllPermissions] = useState(false);
     const [assignedTableId, setAssignedTableId] = useState<string | undefined>(undefined);
 
+    const availablePermissionsConfig = useMemo(() => {
+        if (currentUser?.isSuperAdmin || currentUser?.role === 'Admin') {
+          return ALL_PERMISSIONS_CONFIG;
+        }
+        return ALL_PERMISSIONS_CONFIG.filter(p => currentUser?.permissions?.[p.key]?.view);
+    }, [currentUser]);
 
     useEffect(() => {
         if (userId && restaurantId) {
@@ -184,12 +190,6 @@ export default function EditUserPage() {
 
     const canManageAllBranches = currentUser?.role === 'Admin';
     
-    const availablePermissionsConfig = useMemo(() => {
-        if (currentUser?.isSuperAdmin || currentUser?.role === 'Admin') {
-          return ALL_PERMISSIONS_CONFIG;
-        }
-        return ALL_PERMISSIONS_CONFIG.filter(p => currentUser?.permissions?.[p.key]?.view);
-    }, [currentUser]);
 
 
     return (
