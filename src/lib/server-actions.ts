@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getAdminApp, getAdminAuth, getAdminMessaging } from '@/firebase/admin';
@@ -613,7 +614,10 @@ export async function createRazorpayOrderAction(planId: string, restaurantId: st
     }
 }
 
-export async function broadcastMessageAction(formData: FormData): Promise<{ success: boolean; message: string }> {
+export async function broadcastMessageAction(
+    prevState: { success: boolean; message: string } | null,
+    formData: FormData
+): Promise<{ success: boolean; message: string }> {
     noStore();
     const title = formData.get('title') as string;
     const message = formData.get('message') as string;
