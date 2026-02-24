@@ -1,8 +1,6 @@
-
-
 'use server';
 
-import { getAdminApp, getAdminAuth } from '@/firebase/admin';
+import { getAdminApp, getAdminAuth, getAdminMessaging } from '@/firebase/admin';
 import { getFirestore as getAdminFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { AppUser, Order, RemoteOrder, RestaurantSettings, SubscriptionPlan } from './definitions';
 import { createAuthUser } from '@/lib/auth';
@@ -614,7 +612,75 @@ export async function createRazorpayOrderAction(planId: string, restaurantId: st
         throw new Error('Failed to create Razorpay order.');
     }
 }
+
+export async function broadcastMessageAction(formData: FormData): Promise<{ success: boolean; message: string }> {
+    noStore();
+    const title = formData.get('title') as string;
+    const message = formData.get('message') as string;
+
+    if (!title || !message) {
+        return { success: false, message: 'Title and message are required.' };
+    }
+
+    const messaging = getAdminMessaging();
+    if (!messaging) {
+        return { success: false, message: 'Firebase Admin Messaging not initialized.' };
+    }
+
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const restaurants = await getAllRestaurants();
+        let allTokens: string[] = [];
+
+        for (const restaurant of restaurants) {
+            // We only want to notify active restaurants
+            if (!restaurant.isActive) continue;
+
+            const admin = await getAdminForRestaurant(restaurant.id);
+            if (admin && admin.id) {
+                const tokensSnapshot = await firestore.collection(`restaurants/${restaurant.id}/fcmTokens`).where('userId', '==', admin.id).get();
+                if (!tokensSnapshot.empty) {
+                    const userTokens = tokensSnapshot.docs.map(doc => doc.data().token);
+                    allTokens.push(...userTokens);
+                }
+            }
+        }
+
+        // Remove duplicates
+        allTokens = [...new Set(allTokens)];
+
+        if (allTokens.length === 0) {
+            return { success: true, message: "No admin devices found to send notifications to." };
+        }
+
+        const fcmMessage = {
+            notification: {
+                title: title,
+                body: message,
+            },
+            tokens: allTokens,
+            android: {
+                priority: 'high' as const,
+                notification: {
+                    channelId: 'broadcasts', // A dedicated channel for broadcasts
+                },
+            },
+        };
+
+        const response = await messaging.sendEachForMulticast(fcmMessage);
+        const successMessage = `Broadcast sent successfully to ${response.successCount} device(s).`;
+        const failureMessage = response.failureCount > 0 ? ` Failed to send to ${response.failureCount} device(s).` : '';
+
+        return { success: true, message: successMessage + failureMessage };
+    } catch (e: any) {
+        console.error('Error broadcasting message:', e);
+        return { success: false, message: e.message || 'Failed to send broadcast.' };
+    }
+}
     
 
     
 
+
+
+    

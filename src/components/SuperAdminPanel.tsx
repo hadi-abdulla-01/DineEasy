@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -576,6 +575,19 @@ export default function SuperAdminPanel() {
                         </CardHeader>
                     </Card>
                 </Link>
+                <Link href="/admin/superadmin/broadcast">
+                    <Card className="h-full hover:shadow-lg hover:-translate-y-1 transition-transform">
+                        <CardHeader className="flex flex-row items-center gap-4">
+                            <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                                <Megaphone className="h-6 w-6 text-purple-600" />
+                            </div>
+                            <div>
+                                <CardTitle>Broadcast Announcements</CardTitle>
+                                <CardDescription>Send messages to all restaurant admins.</CardDescription>
+                            </div>
+                        </CardHeader>
+                    </Card>
+                </Link>
                 <Card className="h-full cursor-not-allowed opacity-60">
                     <CardHeader className="flex flex-row items-center gap-4">
                         <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
@@ -584,17 +596,6 @@ export default function SuperAdminPanel() {
                         <div>
                             <CardTitle>Feature Flags</CardTitle>
                             <CardDescription>Enable or disable features for the platform.</CardDescription>
-                        </div>
-                    </CardHeader>
-                </Card>
-                <Card className="h-full cursor-not-allowed opacity-60">
-                    <CardHeader className="flex flex-row items-center gap-4">
-                        <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                            <Megaphone className="h-6 w-6 text-slate-500" />
-                        </div>
-                        <div>
-                            <CardTitle>Broadcast Announcements</CardTitle>
-                            <CardDescription>Send messages to all restaurant admins.</CardDescription>
                         </div>
                     </CardHeader>
                 </Card>
@@ -816,4 +817,5 @@ export default function SuperAdminPanel() {
 
     
 
+    
     
