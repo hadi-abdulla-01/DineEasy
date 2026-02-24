@@ -55,7 +55,12 @@ export default function RestaurantDetailsPage() {
                     setAdminUser(adminData);
                     setUsersList(usersData);
                     setBranches(branchesData);
-                    setActivityLogs(logsData);
+                    
+                    // Filter logs for user management actions
+                    const userManagementActions = ['Created User', 'Updated User', 'Deleted User'];
+                    const filteredLogs = logsData.filter(log => userManagementActions.includes(log.action));
+                    setActivityLogs(filteredLogs);
+
                 } catch (error) {
                     console.error("Failed to fetch restaurant details:", error);
                 } finally {
@@ -200,10 +205,10 @@ export default function RestaurantDetailsPage() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <BookOpen className="w-5 h-5 text-red-600" />
-                            Recent Activity
+                            Recent User Activity
                         </CardTitle>
                         <CardDescription>
-                            A log of recent actions performed in this restaurant.
+                            A log of user management actions in this restaurant.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -225,7 +230,7 @@ export default function RestaurantDetailsPage() {
                                         </div>
                                     </div>
                                 )) : (
-                                    <p className="text-sm text-slate-500 text-center py-8">No activity recorded for this restaurant yet.</p>
+                                    <p className="text-sm text-slate-500 text-center py-8">No user management activity recorded for this restaurant yet.</p>
                                 )}
                             </div>
                         </ScrollArea>
