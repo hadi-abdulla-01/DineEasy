@@ -1,25 +1,8 @@
-// Send FCM notifications from Next.js API route
-// Sends push notifications to kitchen devices when new orders are created
 
+'use server';
 import { NextRequest, NextResponse } from 'next/server';
-import admin from 'firebase-admin';
-
-// Initialize Firebase Admin (do this once)
-if (!admin.apps.length) {
-    try {
-        const serviceAccount = JSON.parse(
-            process.env.FIREBASE_SERVICE_ACCOUNT_KEY || '{}'
-        );
-
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
-        });
-
-        console.log('✅ Firebase Admin initialized');
-    } catch (error) {
-        console.error('❌ Failed to initialize Firebase Admin:', error);
-    }
-}
+import { getAdminApp, getAdminMessaging } from '@/firebase/admin';
+import { getFirestore } from 'firebase-admin/firestore';
 
 export async function POST(request: NextRequest) {
     try {
@@ -29,8 +12,16 @@ export async function POST(request: NextRequest) {
         console.log('🏢 Restaurant:', restaurantId);
         console.log('🏪 Branch:', branchId);
 
+        const messaging = getAdminMessaging();
+        if (!messaging) {
+            throw new Error("Firebase Admin Messaging SDK not initialized.");
+        }
+        const adminApp = getAdminApp();
+        const firestore = getFirestore(adminApp);
+
+
         // Get FCM tokens for this branch
-        const tokensSnapshot = await admin.firestore()
+        const tokensSnapshot = await firestore
             .collection('restaurants')
             .doc(restaurantId)
             .collection('fcmTokens')
@@ -81,7 +72,7 @@ export async function POST(request: NextRequest) {
             },
         };
 
-        const response = await admin.messaging().sendEachForMulticast({
+        const response = await messaging.sendEachForMulticast({
             tokens: tokens,
             ...message,
         });
