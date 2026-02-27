@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { revalidatePath, unstable_noStore as noStore } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { OrderItem, OrderStatus, MenuItem, Table, Order, AppUser, RestaurantSettings, AddonGroup, SelectedAddon, UserRole, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, RemoteOrder, DayOfWeek, Discount, DiscountApplicability, OTPRequest } from './definitions';
+import type { OrderItem, OrderStatus, MenuItem, Table, Order, AppUser, RestaurantSettings, AddonGroup, SelectedAddon, UserRole, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, RemoteOrder, DayOfWeek, Discount, DiscountApplicability, OTPRequest, Payment } from './definitions';
 import {
     createOrder,
     updateTableStatus,
@@ -211,9 +211,28 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
 export async function updateOrderStatusAction(formData: FormData) {
     const status = formData.get('status') as OrderStatus;
     const orderId = formData.get('orderId') as string;
-    const paymentMethod = formData.get('paymentMethod') as Order['paymentMethod'];
+    const paymentDetailsJSON = formData.get('paymentDetails') as string | null;
     const restaurantId = formData.get('restaurantId') as string;
     const redirectTo = formData.get('redirectTo') as string | null;
+
+    let payments: Payment[] | undefined;
+    let paymentMethod: Order['paymentMethod'] | undefined;
+
+    if (paymentDetailsJSON) {
+        try {
+            payments = JSON.parse(paymentDetailsJSON);
+            if (payments && payments.length > 1) {
+                paymentMethod = 'split';
+            } else if (payments && payments.length === 1) {
+                paymentMethod = payments[0].method;
+            }
+        } catch (e) {
+            console.error("Invalid payment details JSON:", e);
+        }
+    } else {
+        // Fallback for forms that might still send the old format
+        paymentMethod = formData.get('paymentMethod') as Order['paymentMethod'];
+    }
 
     if (!status || !orderId) {
         return { success: false, message: 'Status and Order ID are required.' };
@@ -225,7 +244,7 @@ export async function updateOrderStatusAction(formData: FormData) {
             return { success: false, message: 'Order not found.' };
         }
 
-        const updatedOrder = await updateOrderStatus(orderId, status, paymentMethod, restaurantId);
+        const updatedOrder = await updateOrderStatus(orderId, status, paymentMethod, restaurantId, payments);
 
         if (updatedOrder && (status === 'completed' || status === 'cancelled')) {
             if (updatedOrder.orderType === 'Dine-in' && updatedOrder.tableId) {

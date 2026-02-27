@@ -4,11 +4,10 @@
 import { updateOrderStatusAction } from "@/lib/actions";
 import { useEffect, useState } from "react";
 import { notFound, useParams, useSearchParams } from "next/navigation";
-import type { Order, RestaurantSettings, Table } from "@/lib/definitions";
+import type { Order, RestaurantSettings, Table, Payment } from "@/lib/definitions";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { DollarSign, CreditCard, LoaderCircle } from "lucide-react";
@@ -16,9 +15,8 @@ import { useFormStatus } from "react-dom";
 import { useRestaurantData } from "@/lib/client-data";
 
 type OrderWithTable = Order & { table?: Table };
-type PaymentMode = 'cash' | 'card';
 
-function CompleteButton({ order }: { order: Order }) {
+function CompleteButton({ order, totalPaid }: { order: OrderWithTable, totalPaid: number }) {
     const { pending } = useFormStatus();
 
     if (order.status === 'completed' || order.status === 'cancelled') {
@@ -29,9 +27,11 @@ function CompleteButton({ order }: { order: Order }) {
         )
     }
 
+    const isPaymentSufficient = totalPaid >= order.total;
+
     return (
-        <Button type="submit" name="status" value="completed" className="w-full" disabled={pending}>
-            {pending ? 'Processing...' : 'Finalize & Complete Order'}
+        <Button type="submit" name="status" value="completed" className="w-full" disabled={pending || !isPaymentSufficient}>
+            {pending ? 'Processing...' : (isPaymentSufficient ? 'Finalize & Complete Order' : 'Insufficient Payment')}
         </Button>
     )
 }
@@ -40,8 +40,8 @@ export default function PaymentPage() {
     const { getOrderById, getTableById, getSettings, restaurantId } = useRestaurantData();
     const [order, setOrder] = useState<OrderWithTable | null>(null);
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
-    const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
-    const [cashReceived, setCashReceived] = useState<number | string>(0);
+    const [cashPaid, setCashPaid] = useState<number | string>('');
+    const [cardPaid, setCardPaid] = useState<number | string>('');
     const params = useParams();
     const searchParams = useSearchParams();
     const orderId = params.orderId as string;
@@ -66,7 +66,6 @@ export default function PaymentPage() {
                 }
 
                 setOrder({ ...fetchedOrder, table });
-                setCashReceived(0);
             });
         }
     }, [orderId, getOrderById, getSettings, getTableById]);
@@ -83,12 +82,14 @@ export default function PaymentPage() {
     }
 
     const currencyDecimalPlaces = settings.currencyDecimalPlaces ?? 2;
-
-    const changeDue = (typeof cashReceived === 'number' && cashReceived >= order.total)
-        ? cashReceived - order.total
-        : 0;
-
     const currencySymbol = settings.currencySymbol || '$';
+
+    const totalPaid = (Number(cashPaid) || 0) + (Number(cardPaid) || 0);
+    const balanceDue = order.total - totalPaid;
+
+    const paymentDetails: Payment[] = [];
+    if (Number(cashPaid) > 0) paymentDetails.push({ method: 'cash', amount: Number(cashPaid) });
+    if (Number(cardPaid) > 0) paymentDetails.push({ method: 'card', amount: Number(cardPaid) });
 
     return (
         <div className="grid gap-8 md:grid-cols-2">
@@ -134,58 +135,63 @@ export default function PaymentPage() {
                     <input type="hidden" name="orderId" value={order.id} />
                     <input type="hidden" name="redirectTo" value={redirectTo} />
                     <input type="hidden" name="restaurantId" value={restaurantId} />
+                    {paymentDetails.length > 0 && <input type="hidden" name="paymentDetails" value={JSON.stringify(paymentDetails)} />}
                     <CardHeader>
                         <CardTitle className="font-headline">Process Payment</CardTitle>
-                        <CardDescription>Select a payment method and finalize the order.</CardDescription>
+                        <CardDescription>Enter the amounts paid via each method.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        <div>
-                            <Label className="text-base">Payment Mode</Label>
-                            <RadioGroup value={paymentMode} onValueChange={(value: PaymentMode) => setPaymentMode(value)} className="mt-2 grid grid-cols-2 gap-4">
-                                <div>
-                                    <RadioGroupItem value="cash" id="cash" className="peer sr-only" />
-                                    <Label htmlFor="cash" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                        <DollarSign className="mb-3 h-6 w-6" />
-                                        Cash
-                                    </Label>
-                                </div>
-                                <div>
-                                    <RadioGroupItem value="card" id="card" className="peer sr-only" />
-                                    <Label htmlFor="card" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                        <CreditCard className="mb-3 h-6 w-6" />
-                                        Card/Other
-                                    </Label>
-                                </div>
-                            </RadioGroup>
-                            <input type="hidden" name="paymentMethod" value={paymentMode} />
-                        </div>
-                        {paymentMode === 'cash' && (
-                            <div className="space-y-4 rounded-lg border bg-muted/50 p-4">
-                                <h4 className="font-semibold">Cash Payment</h4>
-                                <div className="space-y-2">
-                                    <Label htmlFor="cashReceived">Cash Received</Label>
-                                    <div className="relative">
-                                        <span className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground">{currencySymbol}</span>
-                                        <Input
-                                            id="cashReceived"
-                                            type="number"
-                                            step="0.01"
-                                            placeholder="0.00"
-                                            value={cashReceived}
-                                            onChange={(e) => setCashReceived(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                                            className="pl-6"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex justify-between items-center rounded-md bg-background p-3">
-                                    <span className="font-medium text-muted-foreground">Change Due</span>
-                                    <span className="text-xl font-bold font-mono">{currencySymbol}{changeDue.toFixed(currencyDecimalPlaces)}</span>
+                        <div className="space-y-4">
+                             <div className="space-y-2">
+                                <Label htmlFor="cashPaid">Cash Amount Paid</Label>
+                                <div className="relative">
+                                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        id="cashPaid"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="0.00"
+                                        value={cashPaid}
+                                        onChange={(e) => setCashPaid(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                        className="pl-8"
+                                    />
                                 </div>
                             </div>
-                        )}
+                             <div className="space-y-2">
+                                <Label htmlFor="cardPaid">Card/Other Amount Paid</Label>
+                                <div className="relative">
+                                    <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        id="cardPaid"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="0.00"
+                                        value={cardPaid}
+                                        onChange={(e) => setCardPaid(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                        className="pl-8"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between font-medium">
+                                <span>Total Paid</span>
+                                <span className="font-mono">{currencySymbol}{totalPaid.toFixed(currencyDecimalPlaces)}</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-base">
+                                <span>{balanceDue > 0 ? 'Balance Due' : 'Change Due'}</span>
+                                <span className={balanceDue > 0 ? 'font-mono text-destructive' : 'font-mono text-green-600'}>{currencySymbol}{Math.abs(balanceDue).toFixed(currencyDecimalPlaces)}</span>
+                            </div>
+                        </div>
+
                     </CardContent>
                     <CardFooter>
-                        <CompleteButton order={order} />
+                        <CompleteButton order={order} totalPaid={totalPaid} />
                     </CardFooter>
                 </form>
             </Card>

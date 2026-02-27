@@ -1,6 +1,7 @@
 
+
 'use server';
-import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, AppUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, SelectedAddon, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, Discount, DiscountApplicability, OTPRequest } from './definitions';
+import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, AppUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, SelectedAddon, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, Discount, DiscountApplicability, OTPRequest, Payment } from './definitions';
 import { initializeFirebase } from '@/firebase/server';
 import { getAdminMessaging } from '@/firebase/admin';
 import {
@@ -798,16 +799,24 @@ export async function updateOrder(orderId: string, data: Partial<Omit<Order, 'id
     await updateDoc(orderRef, data);
 }
 
-export async function updateOrderStatus(orderId: string, status: OrderStatus, paymentMethod?: Order['paymentMethod'], restaurantId: string = 'dineeasee-restaurant'): Promise<Order | undefined> {
+export async function updateOrderStatus(orderId: string, status: OrderStatus, paymentMethod?: Order['paymentMethod'], restaurantId: string = 'dineeasee-restaurant', payments?: Payment[]): Promise<Order | undefined> {
     const firestore = await getFirestoreInstance();
     const orderRef = doc(firestore, `restaurants/${restaurantId}/orders`, orderId);
-    const updateData: Partial<Order> = { status };
-    if (status === 'completed' && paymentMethod) {
-        updateData.paymentMethod = paymentMethod;
+    const updateData: { [key: string]: any } = { status };
+    
+    if (status === 'completed') {
+        if (paymentMethod) {
+            updateData.paymentMethod = paymentMethod;
+        }
+        if (payments && payments.length > 0) {
+            updateData.payments = payments;
+        }
     }
+    
     await updateDoc(orderRef, updateData);
     return getOrderById(orderId, restaurantId);
 }
+
 
 export async function updateOrderItemStatus(orderId: string, orderItemId: string, isReady: boolean, restaurantId: string = 'dineeasee-restaurant'): Promise<Order | undefined> {
     const firestore = await getFirestoreInstance();

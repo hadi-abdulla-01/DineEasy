@@ -202,6 +202,11 @@ export type CustomerDetails = {
     platform: string;
 };
 
+export type Payment = {
+  method: 'cash' | 'card';
+  amount: number;
+};
+
 export type Order = {
     id: string;
     invoiceNumber?: string;
@@ -218,7 +223,8 @@ export type Order = {
     createdAt: string;
     orderType: OrderType;
     notes?: string;
-    paymentMethod?: 'cash' | 'card';
+    paymentMethod?: 'cash' | 'card' | 'split';
+    payments?: Payment[];
     takeAwayTime?: string;
     branchId: string;
     createdByName?: string;
