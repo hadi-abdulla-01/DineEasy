@@ -10,9 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { DollarSign, CreditCard, LoaderCircle } from "lucide-react";
+import { DollarSign, CreditCard, LoaderCircle, Scissors } from "lucide-react";
 import { useFormStatus } from "react-dom";
 import { useRestaurantData } from "@/lib/client-data";
+import { SplitBillDialog } from "@/components/split-bill-dialog";
 
 type OrderWithTable = Order & { table?: Table };
 
@@ -42,6 +43,7 @@ export default function PaymentPage() {
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [cashPaid, setCashPaid] = useState<number | string>('');
     const [cardPaid, setCardPaid] = useState<number | string>('');
+    const [isSplitBillOpen, setIsSplitBillOpen] = useState(false);
     const params = useParams();
     const searchParams = useSearchParams();
     const orderId = params.orderId as string;
@@ -92,6 +94,7 @@ export default function PaymentPage() {
     if (Number(cardPaid) > 0) paymentDetails.push({ method: 'card', amount: Number(cardPaid) });
 
     return (
+        <>
         <div className="grid gap-8 md:grid-cols-2">
             <Card>
                 <CardHeader>
@@ -184,17 +187,30 @@ export default function PaymentPage() {
                                 <span className="font-mono">{currencySymbol}{totalPaid.toFixed(currencyDecimalPlaces)}</span>
                             </div>
                             <div className="flex justify-between font-bold text-base">
-                                <span>{balanceDue > 0 ? 'Balance Due' : 'Change Due'}</span>
-                                <span className={balanceDue > 0 ? 'font-mono text-destructive' : 'font-mono text-green-600'}>{currencySymbol}{Math.abs(balanceDue).toFixed(currencyDecimalPlaces)}</span>
+                                <span>{balanceDue >= 0 ? 'Change Due' : 'Balance Due'}</span>
+                                <span className={balanceDue >= 0 ? 'text-green-600' : 'text-destructive'}>{currencySymbol}{Math.abs(balanceDue).toFixed(currencyDecimalPlaces)}</span>
                             </div>
                         </div>
 
                     </CardContent>
-                    <CardFooter>
+                    <CardFooter className="flex flex-col gap-2">
                         <CompleteButton order={order} totalPaid={totalPaid} />
+                        {order.orderType === 'Dine-in' && (
+                            <Button type="button" variant="outline" className="w-full" onClick={() => setIsSplitBillOpen(true)}>
+                                <Scissors className="mr-2 h-4 w-4" />
+                                Split Bill
+                            </Button>
+                        )}
                     </CardFooter>
                 </form>
             </Card>
         </div>
+        <SplitBillDialog
+            open={isSplitBillOpen}
+            onOpenChange={setIsSplitBillOpen}
+            order={order}
+            settings={settings}
+        />
+        </>
     );
 }
