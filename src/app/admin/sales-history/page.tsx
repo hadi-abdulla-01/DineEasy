@@ -91,10 +91,10 @@ export default function SalesHistoryPage() {
             const styles = Array.from(document.styleSheets).map(sheet => {
                 try {
                     if (sheet.href) {
-                        return `<link rel="stylesheet" href="${sheet.href}">`;
+                        return `<link rel="stylesheet" href="${'${sheet.href}'}">`;
                     }
                     if (sheet.cssRules) {
-                        return `<style>${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}</style>`;
+                        return `<style>${'${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}'}</style>`;
                     }
                 } catch (e) {
                     console.warn('Could not copy stylesheet for printing:', e);
@@ -103,7 +103,7 @@ export default function SalesHistoryPage() {
             }).join('\n');
 
             printWindow.document.head.innerHTML += styles;
-            printWindow.document.write(`</head><body style="${bodyStyle}">`);
+            printWindow.document.write(`</head><body style="${'${bodyStyle}'}">`);
             printWindow.document.write(content.innerHTML);
             printWindow.document.write('</body></html>');
             printWindow.document.close();
@@ -219,7 +219,22 @@ export default function SalesHistoryPage() {
                       <TableCell>{safeFormatDate(order.createdAt)}</TableCell>
                       <TableCell>{'customerName' in order ? order.customerName : (order.customerDetails?.name || 'N/A')}</TableCell>
                       <TableCell>{order.orderType}</TableCell>
-                      <TableCell className="capitalize">{order.paymentMethod || '--'}</TableCell>
+                      <TableCell className="capitalize">
+                        {order.paymentMethod === 'split' && order.payments ? (
+                            <div>
+                                <span className="font-medium">Split</span>
+                                <div className="text-xs text-muted-foreground">
+                                    {order.payments.map(p => (
+                                        <div key={p.method}>
+                                            {p.method}: {currencySymbol}{p.amount.toFixed(currencyDecimalPlaces)}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            order.paymentMethod || '--'
+                        )}
+                      </TableCell>
                       <TableCell className="text-right font-mono">{currencySymbol}{(order.total || 0).toFixed(currencyDecimalPlaces)}</TableCell>
                       <TableCell className="print-hide text-right flex gap-2 justify-end">
                         <Button variant="outline" size="sm" onClick={() => handlePrintInvoice(order)}>
@@ -228,7 +243,7 @@ export default function SalesHistoryPage() {
                         </Button>
                         {canEdit && (
                           <Button variant="outline" size="sm" asChild>
-                            <Link href={`/admin/sales-history/${order.id}/edit?type=${order.type}`}>
+                            <Link href={`/admin/sales-history/${'${order.id}'}/edit?type=${'${order.type}'}`}>
                               <Edit className="mr-2 h-4 w-4" />
                               Edit
                             </Link>
@@ -237,7 +252,7 @@ export default function SalesHistoryPage() {
                         {canDelete && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="sm" disabled={user.role === 'Admin'}>
+                              <Button variant="destructive" size="sm" disabled={user?.role === 'Admin'}>
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete
                               </Button>
@@ -282,3 +297,5 @@ export default function SalesHistoryPage() {
     </div>
   );
 }
+
+    

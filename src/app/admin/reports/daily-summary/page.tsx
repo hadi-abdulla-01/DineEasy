@@ -99,10 +99,29 @@ export default function DailySummaryPage() {
     }, [branchFilter, date, getSettings, getOrders, getRemoteOrders]);
 
     const dailyStats = useMemo(() => {
-        const totalRevenue = allOrders.reduce((acc, order) => acc + order.total, 0);
+        let totalRevenue = 0;
         const totalOrders = allOrders.length;
-        const cashRevenue = allOrders.filter(o => o.paymentMethod === 'cash').reduce((acc, order) => acc + order.total, 0);
-        const cardRevenue = allOrders.filter(o => o.paymentMethod === 'card').reduce((acc, order) => acc + order.total, 0);
+        let cashRevenue = 0;
+        let cardRevenue = 0;
+
+        for (const order of allOrders) {
+            totalRevenue += order.total;
+
+            if (order.payments && order.payments.length > 0) {
+                for (const payment of order.payments) {
+                    if (payment.method === 'cash') {
+                        cashRevenue += payment.amount;
+                    } else if (payment.method === 'card') {
+                        cardRevenue += payment.amount;
+                    }
+                }
+            } else if (order.paymentMethod === 'cash') {
+                cashRevenue += order.total;
+            } else if (order.paymentMethod === 'card') {
+                cardRevenue += order.total;
+            }
+        }
+        
         return { totalRevenue, totalOrders, cashRevenue, cardRevenue };
     }, [allOrders]);
     
@@ -149,8 +168,8 @@ export default function DailySummaryPage() {
             printWindow.document.write('<html><head><title>Daily Summary Report</title>');
             const styles = Array.from(document.styleSheets).map(sheet => {
                 try {
-                    if (sheet.href) return `<link rel="stylesheet" href="${sheet.href}">`;
-                    return `<style>${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}</style>`;
+                    if (sheet.href) return `<link rel="stylesheet" href="${'${sheet.href}'}">`;
+                    return `<style>${'${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}'}</style>`;
                 } catch (e) { return ''; }
             }).join('\n');
 
@@ -171,7 +190,7 @@ export default function DailySummaryPage() {
               }
             `;
             
-            printWindow.document.head.innerHTML = `<style>${printSpecificStyles}</style>` + styles;
+            printWindow.document.head.innerHTML = `<style>${'${printSpecificStyles}'}</style>` + styles;
             printWindow.document.write('</head><body>');
             const reportDate = date ? format(date, 'PPP') : 'N/A';
             const branchName = isGlobalAdmin
@@ -179,10 +198,10 @@ export default function DailySummaryPage() {
                 : currentBranchName || 'Unknown Branch';
             const reportHeader = `
                 <div id="print-header">
-                    <h1 style="font-size: 22px; font-weight: bold; margin: 0;">${settings.restaurantName}</h1>
+                    <h1 style="font-size: 22px; font-weight: bold; margin: 0;">${'${settings.restaurantName}'}</h1>
                     <h2 style="font-size: 16px; font-weight: bold; margin: 4px 0;">Daily Summary Report</h2>
-                    <p style="font-size: 12px; color: #555; margin: 0;">${branchName}</p>
-                    <p style="font-size: 12px; color: #555; margin: 0;">Date: ${reportDate}</p>
+                    <p style="font-size: 12px; color: #555; margin: 0;">${'${branchName}'}</p>
+                    <p style="font-size: 12px; color: #555; margin: 0;">Date: ${'${reportDate}'}</p>
                 </div>
             `;
             printWindow.document.write(reportHeader);
@@ -212,7 +231,7 @@ export default function DailySummaryPage() {
     const currencySymbol = settings.currencySymbol || '$';
     const currencyDecimalPlaces = settings.currencyDecimalPlaces ?? 2;
 
-    const formatCurrency = (amount: number) => `${currencySymbol}${amount.toFixed(currencyDecimalPlaces)}`;
+    const formatCurrency = (amount: number) => `${'${currencySymbol}'}${amount.toFixed(currencyDecimalPlaces)}`;
 
     return (
         <div className="space-y-8">
@@ -302,3 +321,4 @@ export default function DailySummaryPage() {
     );
 }
 
+    

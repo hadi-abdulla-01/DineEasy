@@ -217,10 +217,10 @@ export default function SalesReportPage() {
         const styles = Array.from(document.styleSheets).map(sheet => {
             try {
                 if (sheet.href) {
-                    return `<link rel="stylesheet" href="${sheet.href}">`;
+                    return `<link rel="stylesheet" href="${'${sheet.href}'}">`;
                 }
                 if (sheet.cssRules) {
-                    return `<style>${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}</style>`;
+                    return `<style>${'${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}'}</style>`;
                 }
             } catch (e) {
                 console.warn('Could not copy stylesheet for printing:', e);
@@ -307,7 +307,7 @@ export default function SalesReportPage() {
           }
         `;
         
-        printWindow.document.head.innerHTML += `<style>${printSpecificStyles}</style>` + styles;
+        printWindow.document.head.innerHTML += `<style>${'${printSpecificStyles}'}</style>` + styles;
         printWindow.document.write('</head><body>');
         
         const fromDate = date?.from ? format(date.from, 'PPP') : 'N/A';
@@ -318,10 +318,10 @@ export default function SalesReportPage() {
 
         const reportHeader = `
             <div id="print-header">
-                <h1 style="font-size: 22px; font-weight: bold; margin: 0;">${settings.restaurantName}</h1>
+                <h1 style="font-size: 22px; font-weight: bold; margin: 0;">${'${settings.restaurantName}'}</h1>
                 <h2 style="font-size: 16px; font-weight: bold; margin: 4px 0;">Sales Report</h2>
-                <p style="font-size: 12px; color: #555; margin: 0;">${branchName}</p>
-                <p style="font-size: 12px; color: #555; margin: 0;">Date Range: ${fromDate} - ${toDate}</p>
+                <p style="font-size: 12px; color: #555; margin: 0;">${'${branchName}'}</p>
+                <p style="font-size: 12px; color: #555; margin: 0;">Date Range: ${'${fromDate}'} - ${'${toDate}'}</p>
             </div>
         `;
         printWindow.document.write(reportHeader);
@@ -472,13 +472,13 @@ export default function SalesReportPage() {
                                     label={(props) => `${(props.percent * 100).toFixed(0)}%`}
                                 >
                                      {detailedStats.revenueByOrderType.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                                        <Cell key={`cell-${'${index}'}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                                     ))}
                                 </Pie>
                                  <Tooltip
                                     cursor={{ fill: 'hsl(var(--accent))' }}
                                     content={<ChartTooltipContent
-                                        formatter={(value) => `${currencySymbol}${Number(value).toFixed(currencyDecimalPlaces)}`}
+                                        formatter={(value) => `${currencySymbol}${'${Number(value).toFixed(currencyDecimalPlaces)}'}`}
                                         nameKey="name"
                                     />}
                                 />
@@ -502,7 +502,7 @@ export default function SalesReportPage() {
                                 <Tooltip
                                     cursor={{ fill: 'hsl(var(--accent))' }}
                                     content={<ChartTooltipContent
-                                        formatter={(value) => `${currencySymbol}${Number(value).toFixed(currencyDecimalPlaces)}`}
+                                        formatter={(value) => `${currencySymbol}${'${Number(value).toFixed(currencyDecimalPlaces)}'}`}
                                         nameKey="name"
                                     />}
                                 />
@@ -572,7 +572,22 @@ export default function SalesReportPage() {
                         <TableCell>{'customerName' in order ? order.customerName : order.customerDetails.name}</TableCell>
                         <TableCell>{order.orderType}</TableCell>
                         <TableCell>{order.createdByName || 'N/A'}</TableCell>
-                        <TableCell className="capitalize">{order.paymentMethod || '--'}</TableCell>
+                        <TableCell className="capitalize">
+                            {order.paymentMethod === 'split' && order.payments ? (
+                                <div>
+                                    <span className="font-medium">Split</span>
+                                    <div className="text-xs text-muted-foreground">
+                                        {order.payments.map(p => (
+                                            <div key={p.method}>
+                                                {p.method}: {currencySymbol}{p.amount.toFixed(currencyDecimalPlaces)}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                order.paymentMethod || '--'
+                            )}
+                        </TableCell>
                         <TableCell className="text-right font-mono">{currencySymbol}{order.total.toFixed(currencyDecimalPlaces)}</TableCell>
                       </TableRow>
                     ))
@@ -649,5 +664,7 @@ export default function SalesReportPage() {
     </div>
   );
 }
+
+    
 
     
