@@ -97,7 +97,7 @@ export default function PaymentPage() {
                 <CardHeader>
                     <CardTitle className="font-headline">Order Summary</CardTitle>
                     <CardDescription>
-                        Order #{order.id.slice(-6)} for {order.table ? `Table ${order.table.number}` : order.orderType}
+                        Invoice #{order.invoiceNumber || order.id.slice(-6)} for {order.table ? `Table ${order.table.number}` : order.orderType}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
