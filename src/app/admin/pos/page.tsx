@@ -17,7 +17,7 @@ import { placeholderImages } from '@/lib/placeholder-images';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from "@/components/ui/label"
-import { LoaderCircle, PlusCircle, MinusCircle, Search, Globe, ShoppingBag, Utensils, ChevronRight, ChevronLeft, Beef, Leaf, Wine, Grid3x3, Drumstick, IceCream, DollarSign, CreditCard, Maximize, Minimize, X } from 'lucide-react';
+import { LoaderCircle, PlusCircle, MinusCircle, Search, Globe, ShoppingBag, Utensils, ChevronRight, ChevronLeft, Beef, Leaf, Wine, Grid3x3, Drumstick, IceCream, DollarSign, CreditCard, Maximize, Minimize, X, Scissors } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { createOrderAction, updateOrderStatusAction } from "@/lib/actions";
 import { Textarea } from '@/components/ui/textarea';
@@ -428,6 +428,7 @@ function POSCart({
                 <div className="grid grid-cols-2 gap-2">
                     {orderType === 'Dine-in' && (
                         <Button variant="outline" className="w-full" size="default" onClick={onSplitBill} disabled={cart.length === 0 || isSubmitting}>
+                            <Scissors className="mr-2 h-4 w-4" />
                             Split Bill
                         </Button>
                     )}
