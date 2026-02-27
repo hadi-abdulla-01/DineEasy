@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import type { MenuItem, RestaurantSettings, OrderItem, Order, Branch, Table, RemoteOrder, CustomerDetails, AddonOption, Discount } from '@/lib/definitions';
+import type { MenuItem, RestaurantSettings, OrderItem, Order, Branch, Table, RemoteOrder, CustomerDetails, AddonOption, Discount, Payment } from '@/lib/definitions';
 import { useRestaurantData } from '@/lib/client-data';
 import { useAuth } from '../auth-provider';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Label } from "@/components/ui/label"
 import { LoaderCircle, PlusCircle, MinusCircle, Search, Globe, ShoppingBag, Utensils, ChevronRight, ChevronLeft, Beef, Leaf, Wine, Grid3x3, Drumstick, IceCream, DollarSign, CreditCard, Maximize, Minimize, X } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { createOrderAction } from "@/lib/actions";
+import { createOrderAction, updateOrderStatusAction } from "@/lib/actions";
 import { Textarea } from '@/components/ui/textarea';
 import { AddonDialog } from '@/components/addon-dialog';
 import { Progress } from '@/components/ui/progress';
@@ -487,16 +487,16 @@ function PaymentSheet({
     onOpenChange: (open: boolean) => void;
     order: any; // Temporary order object
     settings: RestaurantSettings | null;
-    onFinalizePayment: (paymentMethod: 'cash' | 'card') => void;
+    onFinalizePayment: (paymentDetails: { cashPaid: number, cardPaid: number }) => void;
     isFinalizing: boolean;
 }) {
-    const [paymentMode, setPaymentMode] = useState<'cash' | 'card'>('cash');
-    const [cashReceived, setCashReceived] = useState<number | string>('');
+    const [cashPaid, setCashPaid] = useState<number | string>('');
+    const [cardPaid, setCardPaid] = useState<number | string>('');
 
     useEffect(() => {
         if (isOpen) {
-            setCashReceived('');
-            setPaymentMode('cash');
+            setCashPaid('');
+            setCardPaid('');
         }
     }, [isOpen]);
 
@@ -506,16 +506,21 @@ function PaymentSheet({
     const currencyDecimalPlaces = settings.currencyDecimalPlaces ?? 2;
     const denominations = settings.posSettings?.cashDenominations || [10, 20, 50, 100];
 
-    const changeDue = (typeof cashReceived === 'number' && cashReceived >= order.total)
-        ? cashReceived - order.total
-        : 0;
+    const totalPaid = (Number(cashPaid) || 0) + (Number(cardPaid) || 0);
+    const balanceDue = order.total - totalPaid;
+    const isPaymentSufficient = totalPaid >= order.total;
 
     const handleDenominationClick = (amount: number) => {
-        setCashReceived(current => (Number(current) || 0) + amount);
+        setCashPaid(current => (Number(current) || 0) + amount);
     }
 
     const handleFinalize = () => {
-        onFinalizePayment(paymentMode);
+        if(isPaymentSufficient) {
+            onFinalizePayment({
+                cashPaid: Number(cashPaid) || 0,
+                cardPaid: Number(cardPaid) || 0,
+            });
+        }
     }
 
     return (
@@ -539,56 +544,67 @@ function PaymentSheet({
                         </CardContent>
                     </Card>
 
-                    <div className="space-y-4">
-                        <Label className="text-base">Payment Mode</Label>
-                        <RadioGroup value={paymentMode} onValueChange={(value: 'cash' | 'card') => setPaymentMode(value)} className="grid grid-cols-2 gap-4">
-                            <div>
-                                <RadioGroupItem value="cash" id="cash" className="peer sr-only" />
-                                <Label htmlFor="cash" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                    <DollarSign className="mb-3 h-6 w-6" /> Cash
-                                </Label>
-                            </div>
-                            <div>
-                                <RadioGroupItem value="card" id="card" className="peer sr-only" />
-                                <Label htmlFor="card" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                    <CreditCard className="mb-3 h-6 w-6" /> Card/Other
-                                </Label>
-                            </div>
-                        </RadioGroup>
-                    </div>
-
-                    {paymentMode === 'cash' && (
-                        <div className="space-y-4 rounded-lg border bg-muted/50 p-4 mt-4">
-                            <h4 className="font-semibold">Cash Payment</h4>
-                            <div className="space-y-2">
-                                <Label htmlFor="cashReceived">Cash Received</Label>
+                    <div className="space-y-6">
+                        <div className="space-y-4">
+                             <div className="space-y-2">
+                                <Label htmlFor="cashPaid">Cash Amount Paid</Label>
                                 <div className="relative">
-                                    <span className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground">{currencySymbol}</span>
+                                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <Input
-                                        id="cashReceived" type="number" step="0.01" placeholder="0.00"
-                                        value={cashReceived}
-                                        onChange={(e) => setCashReceived(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                                        className="pl-6"
+                                        id="cashPaid"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="0.00"
+                                        value={cashPaid}
+                                        onChange={(e) => setCashPaid(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                        className="pl-8"
                                     />
                                 </div>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                                {denominations.map(denom => (
-                                    <Button key={denom} type="button" variant="secondary" onClick={() => handleDenominationClick(denom)}>
-                                        +{denom}
-                                    </Button>
-                                ))}
-                            </div>
-                            <div className="flex justify-between items-center rounded-md bg-background p-3">
-                                <span className="font-medium text-muted-foreground">Change Due</span>
-                                <span className="text-xl font-bold font-mono">{currencySymbol}{changeDue.toFixed(currencyDecimalPlaces)}</span>
+                             <div className="space-y-2">
+                                <Label htmlFor="cardPaid">Card/Other Amount Paid</Label>
+                                <div className="relative">
+                                    <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        id="cardPaid"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="0.00"
+                                        value={cardPaid}
+                                        onChange={(e) => setCardPaid(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                        className="pl-8"
+                                    />
+                                </div>
                             </div>
                         </div>
-                    )}
+
+                         <div className="flex flex-wrap gap-2">
+                            {denominations.map(denom => (
+                                <Button key={denom} type="button" variant="secondary" size="sm" onClick={() => handleDenominationClick(denom)}>
+                                    +{denom}
+                                </Button>
+                            ))}
+                        </div>
+
+                        <Separator />
+
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between font-medium">
+                                <span>Total Paid</span>
+                                <span className="font-mono">{currencySymbol}{totalPaid.toFixed(currencyDecimalPlaces)}</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-base">
+                                <span>{balanceDue >= 0 ? 'Change Due' : 'Balance Due'}</span>
+                                <span className={cn('font-mono', balanceDue < 0 ? 'text-destructive' : 'text-green-600')}>{currencySymbol}{Math.abs(balanceDue).toFixed(currencyDecimalPlaces)}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <SheetFooter className="mt-auto pt-4 border-t">
-                    <Button type="button" className="w-full" size="lg" onClick={handleFinalize} disabled={isFinalizing}>
-                        {isFinalizing ? <LoaderCircle className="animate-spin" /> : 'Finalize & Complete Order'}
+                    <Button type="button" className="w-full" size="lg" onClick={handleFinalize} disabled={isFinalizing || !isPaymentSufficient}>
+                        {isFinalizing ? <LoaderCircle className="animate-spin" /> : (!isPaymentSufficient ? 'Insufficient Payment' : 'Finalize & Complete Order')}
                     </Button>
                 </SheetFooter>
             </SheetContent>
@@ -1050,10 +1066,14 @@ export default function POSPage() {
         router.push('/admin/');
     };
 
-    const handleFinalizePayment = (paymentMethod: 'cash' | 'card') => {
+    const handleFinalizePayment = (paymentDetails: { cashPaid: number, cardPaid: number }) => {
         if (!selectedBranchId || !user || !restaurantId || isPending || !orderToPay) return;
 
         startTransition(async () => {
+            const payments: Payment[] = [];
+            if (paymentDetails.cashPaid > 0) payments.push({ method: 'cash', amount: paymentDetails.cashPaid });
+            if (paymentDetails.cardPaid > 0) payments.push({ method: 'card', amount: paymentDetails.cardPaid });
+
             try {
                 if (orderToUpdate) {
                     await updateFullOrder(orderToUpdate.id, orderToUpdate.orderType as any, {
@@ -1065,10 +1085,20 @@ export default function POSPage() {
                         address: orderToPay.address,
                         platform: orderToPay.platform,
                         takeAwayTime: orderToPay.takeAwayTime,
-                        paymentMethod,
                         discount: orderToPay.discount,
                     });
-                    toast({ title: "Success", description: "Order updated successfully." });
+                     // Now complete it
+                    const formData = new FormData();
+                    formData.append('orderId', orderToUpdate.id);
+                    formData.append('status', 'completed');
+                    formData.append('restaurantId', restaurantId);
+                    if (payments.length > 0) {
+                        formData.append('paymentDetails', JSON.stringify(payments));
+                    }
+                    await updateOrderStatusAction(formData);
+
+                    toast({ title: "Success", description: "Order updated and completed." });
+
                 } else {
                     const orderPayload: any = {
                         branchId: selectedBranchId,
@@ -1078,8 +1108,7 @@ export default function POSPage() {
                         orderType: orderToPay.orderType,
                         notes: orderToPay.notes,
                         createdByName: user.username,
-                        discount: orderToPay.discount,
-                        paymentMethod
+                        discount: orderToPay.discount
                     };
                     if (orderType === 'Dine-in') {
                         if (!tableId) {
@@ -1092,9 +1121,23 @@ export default function POSPage() {
                     }
                     if (orderType === 'Take-away') orderPayload.takeAwayTime = takeAwayTime;
                     if (orderType === 'Online') orderPayload.customerDetails = { name: orderToPay.customerName, phone: orderToPay.customerPhone, address: orderToPay.address, platform: orderToPay.platform };
+                    
+                    const newOrder = await createOrderAction(orderPayload, restaurantId);
 
-                    await createOrderAction(orderPayload, restaurantId);
-                    toast({ title: "Success", description: "Order placed successfully." });
+                    if (newOrder) {
+                        const formData = new FormData();
+                        formData.append('orderId', newOrder.id);
+                        formData.append('status', 'completed');
+                        formData.append('restaurantId', restaurantId);
+                        if (payments.length > 0) {
+                            formData.append('paymentDetails', JSON.stringify(payments));
+                        }
+                        await updateOrderStatusAction(formData);
+
+                        toast({ title: "Success", description: "Order placed and completed successfully." });
+                    } else {
+                         toast({ variant: 'destructive', title: "Order Failed", description: "Could not create the order." });
+                    }
                 }
                 setIsPaymentSheetOpen(false);
                 setOrderToPay(null);
