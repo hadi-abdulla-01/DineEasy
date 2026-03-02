@@ -737,6 +737,12 @@ export async function updateSettingsAction(formData: FormData) {
             newSettings.taxes = JSON.parse(formData.get('taxes') as string);
         } catch (e) { console.error("Failed to parse taxes JSON", e); }
     }
+    
+    if (formData.has('kdsSettings')) {
+        try {
+            newSettings.kdsSettings = JSON.parse(formData.get('kdsSettings') as string);
+        } catch (e) { console.error("Failed to parse kdsSettings JSON", e); }
+    }
 
     if (formData.has('posSettings')) {
         try {
@@ -1325,3 +1331,4 @@ export async function verifyOtpAction(
         return { error: e.message || 'An unexpected error occurred during verification.' };
     }
 }
+
