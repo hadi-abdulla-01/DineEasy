@@ -1,5 +1,4 @@
 
-
 'use client';
 import { collection, query, where, onSnapshot, DocumentSnapshot } from "firebase/firestore";
 import { useFirebase } from "@/firebase/provider";
@@ -329,11 +328,12 @@ export default function KitchenPage() {
                                         {getOrderIcon(order)}
                                         {getOrderTitle(order)}
                                     </CardTitle>
-                                    <p className="text-xs text-muted-foreground">#{order.invoiceNumber || order.id.slice(-4)}</p>
+                                    <p className="text-xs text-muted-foreground mb-1">#{order.invoiceNumber || order.id.slice(-4)}</p>
+                                    <Badge variant="outline" className="capitalize">{order.orderType}</Badge>
                                 </div>
                                 <OrderStatusBadge status={order.status} />
                             </div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-2 pt-1">
+                            <div className="text-xs text-muted-foreground flex items-center gap-2 pt-2">
                                 <div className="flex items-center gap-1">
                                     <Clock className="h-3 w-3" />
                                     <span>{formatDistanceInTimezone(order.createdAt, settings.timezone)}</span>
