@@ -3,8 +3,8 @@
 
 import { useEffect, useRef } from 'react';
 
-// A simple, publicly available notification sound
-const NOTIFICATION_SOUND_URL = 'https://cdn.freesound.org/previews/573/573381_7021649-lq.mp3';
+// A reliable, publicly available notification sound from Google's sound library.
+const NOTIFICATION_SOUND_URL = 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg';
 
 /**
  * A hook to play a sound when the number of orders increases.
