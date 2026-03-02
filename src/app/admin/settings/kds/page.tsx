@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const defaultKdsSettings: KdsSettings = {
     enableSoundAlerts: true,
-    notificationSound: 'https://archive.org/download/sound-effects-for-commercial-productions/DINNER%20BELL.mp3',
+    notificationSound: 'https://cdn.freesound.org/previews/219/219475_4103577-lq.mp3',
     orderTypeColors: {
         dineIn: '#FBBF24', // amber-400
         takeAway: '#3B82F6', // blue-500
@@ -28,13 +28,13 @@ const defaultKdsSettings: KdsSettings = {
 };
 
 const SOUND_OPTIONS = [
-    { name: 'Kitchen Bell', url: 'https://archive.org/download/sound-effects-for-commercial-productions/DINNER%20BELL.mp3' },
-    { name: 'Simple Chime', url: 'https://archive.org/download/Sound_Effects_3/SOUND%20EFFECTS%20-%20CHIME.mp3'},
-    { name: 'Positive Alert', url: 'https://archive.org/download/sound-effects-for-commercial-productions/MUSICAL%20ACCENT%20-%20POSITIVE%20EVENT.mp3'},
-    { name: 'Short Beep', url: 'https://archive.org/download/computer-process-sound-effects/Computer%20Processing%20Sound%204.mp3' },
-    { name: 'Notification Sent', url: 'https://archive.org/download/sound-effects-for-commercial-productions/MESSAGE%20SENT.mp3'},
-    { name: 'Digital Beep', url: 'https://archive.org/download/Electronic_Sounds/Electronic_Placement.mp3'},
-    { name: 'Gong', url: 'https://archive.org/download/Gong/Gong%20%281%29.mp3'}
+    { name: 'Kitchen Bell', url: 'https://cdn.freesound.org/previews/219/219475_4103577-lq.mp3' },
+    { name: 'Simple Chime', url: 'https://cdn.freesound.org/previews/415/415763_6142149-lq.mp3' },
+    { name: 'Positive Alert', url: 'https://cdn.freesound.org/previews/561/561460_9269495-lq.mp3' },
+    { name: 'Short Beep', url: 'https://cdn.freesound.org/previews/320/320668_5260872-lq.mp3' },
+    { name: 'Notification Sent', url: 'https://cdn.freesound.org/previews/268/268144_4103577-lq.mp3' },
+    { name: 'Digital Beep', url: 'https://cdn.freesound.org/previews/65/65951_9269495-lq.mp3' },
+    { name: 'Gong', url: 'https://cdn.freesound.org/previews/35/35151_215455-lq.mp3' }
 ];
 
 function SubmitButton() {

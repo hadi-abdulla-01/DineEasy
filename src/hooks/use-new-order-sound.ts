@@ -3,7 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 
-const DEFAULT_SOUND_URL = 'https://archive.org/download/sound-effects-for-commercial-productions/DINNER%20BELL.mp3';
+const DEFAULT_SOUND_URL = 'https://cdn.freesound.org/previews/219/219475_4103577-lq.mp3';
 
 /**
  * A hook to play a sound when the number of orders increases.
