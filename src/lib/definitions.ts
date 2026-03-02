@@ -63,6 +63,7 @@ export type Discount = {
 
 export type KdsSettings = {
     enableSoundAlerts?: boolean;
+    notificationSound?: string;
     orderTypeColors?: {
         dineIn: string;
         takeAway: string;

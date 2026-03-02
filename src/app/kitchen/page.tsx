@@ -212,7 +212,11 @@ export default function KitchenPage() {
     }, [orders, user]);
 
     // Sound alert hook
-    useNewOrderSound(filteredOrders.length, !!settings?.kdsSettings?.enableSoundAlerts);
+    useNewOrderSound(
+        filteredOrders.length,
+        !!settings?.kdsSettings?.enableSoundAlerts,
+        settings?.kdsSettings?.notificationSound
+    );
 
 
     // Helper to convert doc to object (client-side)

@@ -3,29 +3,31 @@
 
 import { useEffect, useRef } from 'react';
 
-// A reliable, publicly available notification sound from Google's sound library.
-const NOTIFICATION_SOUND_URL = 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg';
+const DEFAULT_SOUND_URL = 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg';
 
 /**
  * A hook to play a sound when the number of orders increases.
  * @param orderCount The current number of orders.
  * @param isEnabled A boolean to enable or disable the sound.
+ * @param soundUrl Optional URL for the sound to be played.
  */
-export const useNewOrderSound = (orderCount: number, isEnabled: boolean) => {
+export const useNewOrderSound = (orderCount: number, isEnabled: boolean, soundUrl?: string) => {
     const prevOrderCountRef = useRef(orderCount);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
-    // Effect to initialize the Audio object.
-    // This runs only once when the component mounts.
+    // Effect to initialize or update the Audio object whenever the soundUrl changes.
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            audioRef.current = new Audio(NOTIFICATION_SOUND_URL);
-            audioRef.current.preload = 'auto'; // Preload the audio file for faster playback
+            const url = soundUrl || DEFAULT_SOUND_URL;
+            // Only create a new Audio object if the URL has changed or it doesn't exist
+            if (!audioRef.current || audioRef.current.src !== url) {
+                audioRef.current = new Audio(url);
+                audioRef.current.preload = 'auto';
+            }
         }
-    }, []);
+    }, [soundUrl]);
 
     // Effect to play the sound when orderCount increases.
-    // This runs whenever orderCount or isEnabled changes.
     useEffect(() => {
         if (isEnabled && orderCount > prevOrderCountRef.current) {
             audioRef.current?.play().catch(error => {

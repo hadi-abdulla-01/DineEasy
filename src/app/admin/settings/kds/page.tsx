@@ -14,16 +14,26 @@ import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useRestaurantData } from '@/lib/client-data';
-import { Palette, Utensils, ShoppingBag, Globe } from 'lucide-react';
+import { Palette, Utensils, ShoppingBag, Globe, Music } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const defaultKdsSettings: KdsSettings = {
     enableSoundAlerts: true,
+    notificationSound: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg', // Default sound
     orderTypeColors: {
         dineIn: '#FBBF24', // amber-400
         takeAway: '#3B82F6', // blue-500
         online: '#10B981', // emerald-500
     },
 };
+
+const SOUND_OPTIONS = [
+    { name: 'Default Beep', url: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg' },
+    { name: 'Chime', url: 'https://actions.google.com/sounds/v1/notifications/gong.ogg' },
+    { name: 'Bell', url: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' },
+    { name: 'Simple Beep', url: 'https://actions.google.com/sounds/v1/notifications/beep_short.ogg' },
+    { name: 'Kitchen Order', url: 'https://actions.google.com/sounds/v1/alarms/kitchen_timer_counter_to_zero.ogg' }
+];
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -159,6 +169,25 @@ export default function KdsSettingsPage() {
                             onCheckedChange={(checked) => handleSettingChange('enableSoundAlerts', checked)}
                         />
                     </div>
+                    
+                    {kdsSettings.enableSoundAlerts && (
+                        <div className="space-y-2 pl-4">
+                            <Label htmlFor="notificationSound" className="flex items-center gap-2"><Music className="h-4 w-4"/> Notification Sound</Label>
+                            <Select
+                                value={kdsSettings.notificationSound}
+                                onValueChange={(value) => handleSettingChange('notificationSound', value)}
+                            >
+                                <SelectTrigger id="notificationSound" className="w-full md:w-1/2">
+                                    <SelectValue placeholder="Select a sound" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {SOUND_OPTIONS.map(sound => (
+                                        <SelectItem key={sound.url} value={sound.url}>{sound.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                     
                     <Separator />
 
