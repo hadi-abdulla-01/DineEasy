@@ -1248,7 +1248,7 @@ export async function requestOrderAccessAction(
     const token = formData.get('token') as string | null;
     const customerName = formData.get('customerName') as string;
     const customerPhone = formData.get('customerPhone') as string;
-    
+
     if (!customerName || !customerPhone) {
         return { error: 'Name and phone number are required.' };
     }
@@ -1256,31 +1256,37 @@ export async function requestOrderAccessAction(
     try {
         const validation = await validateTableAction(tableId, restaurantId, token);
         if (!validation.success) {
-            // Display the error on the welcome page itself without a hard error page
             return { error: validation.error };
         }
-        
-        // Get the table data to find out which branch it belongs to.
+
         const table = await getTableById(tableId, restaurantId);
         if (!table || !table.branchId) {
-             return { error: 'Could not determine the branch for this table.' };
+            return { error: 'Could not determine the branch for this table.' };
         }
 
-        // Fetch settings specifically for that branch.
+        // Check for an existing active order for this customer at this table
+        const activeOrders = await getActiveOrders(table.branchId, restaurantId);
+        const existingOrder = activeOrders.find(order =>
+            order.tableId === tableId &&
+            order.customerPhone === customerPhone
+        );
+
+        if (existingOrder) {
+            // If an active order exists, redirect straight to the status page, bypassing OTP
+            return { redirectTo: `/order/${tableId}/status/${existingOrder.id}?restaurantId=${restaurantId}` };
+        }
+
         const settings = await getSettings(table.branchId, restaurantId);
-        
         const useOtp = settings.posSettings?.enableDineInOTP;
 
         if (useOtp) {
             const otpRequest = await createOtpRequest(tableId, restaurantId, customerName, customerPhone);
             if (otpRequest) {
                 await sendOtpNotification(otpRequest);
-                // Return a redirect instruction instead of calling redirect()
-                return { redirectTo: `/order/${tableId}/verify?reqId=${otpRequest.id}&name=${customerName}&phone=${customerPhone}&restaurantId=${restaurantId}` };
+                return { redirectTo: `/order/${tableId}/verify?reqId=${otpRequest.id}&name=${encodeURIComponent(customerName)}&phone=${encodeURIComponent(customerPhone)}&restaurantId=${restaurantId}` };
             } else {
                 return { error: 'Failed to create OTP request.' };
             }
-
         } else {
             // For non-OTP, just return success. Client will handle sessionStorage and redirect.
             return { success: true };

@@ -101,20 +101,11 @@ export default function OrderPage() {
 
                 const targetRestaurantId = restaurantIdFromUrl;
 
-                const [fetchedSettings, allMenuItems, session, activeOrders] = await Promise.all([
+                const [fetchedSettings, allMenuItems, session] = await Promise.all([
                     getSettings(fetchedTable.branchId, targetRestaurantId),
                     getMenuItems(fetchedTable.branchId, targetRestaurantId),
                     getCurrentSession(fetchedTable.branchId, targetRestaurantId),
-                    getActiveOrders(fetchedTable.branchId, targetRestaurantId)
                 ]);
-
-                if (loggedInUser?.role !== 'Table') {
-                    const existingOrder = activeOrders.find(order => order.tableId === tableId && order.customerPhone === customerInfo.phone);
-                    if (existingOrder && !addItems) {
-                        router.replace(`/order/${tableId}/status/${existingOrder.id}?restaurantId=${restaurantIdFromUrl}`);
-                        return;
-                    }
-                }
 
                 setSettings(fetchedSettings);
                 setCurrentSession(session);
