@@ -3,7 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 
-const DEFAULT_SOUND_URL = 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg';
+const DEFAULT_SOUND_URL = 'https://archive.org/download/sound-effects-for-commercial-productions/DINNER%20BELL.mp3';
 
 /**
  * A hook to play a sound when the number of orders increases.
