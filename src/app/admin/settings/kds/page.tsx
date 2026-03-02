@@ -30,9 +30,11 @@ const defaultKdsSettings: KdsSettings = {
 const SOUND_OPTIONS = [
     { name: 'Default Beep', url: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg' },
     { name: 'Chime', url: 'https://actions.google.com/sounds/v1/notifications/gong.ogg' },
-    { name: 'Bell', url: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' },
+    { name: 'Bell Ring', url: 'https://actions.google.com/sounds/v1/alarms/medium_bell_ringing_near.ogg' },
     { name: 'Simple Beep', url: 'https://actions.google.com/sounds/v1/notifications/beep_short.ogg' },
-    { name: 'Kitchen Order', url: 'https://actions.google.com/sounds/v1/alarms/kitchen_timer_counter_to_zero.ogg' }
+    { name: 'Kitchen Order', url: 'https://actions.google.com/sounds/v1/alarms/kitchen_timer_counter_to_zero.ogg' },
+    { name: 'Bugle Tune', url: 'https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg'},
+    { name: 'Notification Tone', url: 'https://actions.google.com/sounds/v1/notifications/hangouts_message.ogg'}
 ];
 
 function SubmitButton() {
@@ -102,6 +104,18 @@ export default function KdsSettingsPage() {
             }
         }));
     };
+
+    const handleSoundChange = (value: string) => {
+        handleSettingChange('notificationSound', value);
+        // Play sound preview
+        try {
+            const audio = new Audio(value);
+            audio.play().catch(error => console.error("Audio preview failed:", error));
+        } catch (error) {
+            console.error("Could not play audio:", error);
+        }
+    };
+
 
     if (isLoading) {
         return (
@@ -175,7 +189,7 @@ export default function KdsSettingsPage() {
                             <Label htmlFor="notificationSound" className="flex items-center gap-2"><Music className="h-4 w-4"/> Notification Sound</Label>
                             <Select
                                 value={kdsSettings.notificationSound}
-                                onValueChange={(value) => handleSettingChange('notificationSound', value)}
+                                onValueChange={handleSoundChange}
                             >
                                 <SelectTrigger id="notificationSound" className="w-full md:w-1/2">
                                     <SelectValue placeholder="Select a sound" />
