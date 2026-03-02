@@ -28,6 +28,7 @@ export const ALL_PERMISSIONS_CONFIG: {key: NavMenuKey, label: string, rights: ('
     { key: 'settingsCategories', label: 'Settings: Categories', rights: ['view', 'edit']},
     { key: 'settingsSessions', label: 'Settings: Sessions', rights: ['view', 'edit']},
     { key: 'settingsPos', label: 'Settings: POS', rights: ['view', 'edit']},
+    { key: 'settingsKds', label: 'Settings: KDS', rights: ['view', 'edit']},
     { key: 'settingsDiscounts', label: 'Settings: Discounts', rights: ['view', 'create', 'edit', 'delete']},
     { key: 'settingsSubscription', label: 'Settings: Subscription', rights: ['view', 'edit']},
     { key: 'settingsOnline', label: 'Settings: Online Orders', rights: ['view', 'edit']},

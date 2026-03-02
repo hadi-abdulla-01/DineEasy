@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { OrderStatusBadge } from "@/components/order-status-badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import type { Order, OrderItem, RestaurantSettings, Table } from "@/lib/definitions";
+import type { Order, OrderItem, RestaurantSettings, Table, KdsSettings } from "@/lib/definitions";
 import { updateKitchenOrderStatusAction, updateOrderItemStatusAction } from "@/lib/actions";
 import { Clock, User, Phone, ShoppingBasket, Utensils, CheckCircle, MessageSquare, Printer } from "lucide-react";
 import { formatDistanceInTimezone } from "@/lib/format-date";
@@ -17,6 +17,7 @@ import { useAuth } from "@/app/admin/auth-provider";
 import { getSettings, getTableById } from "@/lib/data";
 import { extractRestaurantId } from "@/lib/auth-utils";
 import { Badge } from "@/components/ui/badge";
+import { useNewOrderSound } from '@/hooks/use-new-order-sound';
 
 type OrderWithTable = Order & { table?: Table };
 
@@ -194,6 +195,26 @@ export default function KitchenPage() {
 
     // Extract restaurantId from user email
     const restaurantId = user?.email ? extractRestaurantId(user.email) : null;
+    
+    const filteredOrders = useMemo(() => {
+        if (!user) return [];
+
+        return orders.map(order => {
+            // Filter items based on user categories
+            const visibleItems = order.items.filter(item => {
+                if (item.status === 'cancelled') return false;
+                if (!user.categories || user.categories.length === 0 || user.categories.includes('All')) {
+                    return true; // Show all if user has no specific categories or has 'All'
+                }
+                return user.categories.includes(item.category);
+            });
+            return { ...order, visibleItems };
+        }).filter(order => order.visibleItems.length > 0); // Only show orders with items relevant to this chef
+    }, [orders, user]);
+
+    // Sound alert hook
+    useNewOrderSound(filteredOrders.length, !!settings?.kdsSettings?.enableSoundAlerts);
+
 
     // Helper to convert doc to object (client-side)
     function docToObj<T>(doc: DocumentSnapshot): T {
@@ -215,30 +236,20 @@ export default function KitchenPage() {
     useEffect(() => {
         if (!user?.branchId || !restaurantId || !firestore) return;
 
-        console.log(`[KitchenPage] Using restaurantId: ${restaurantId}`);
-        console.log(`[KitchenPage] User email: ${user.email}`);
-
         getSettings(user.branchId, restaurantId).then(setSettings);
 
-        // Use restaurant-specific collection
         const ordersRef = collection(firestore, `restaurants/${restaurantId}/orders`);
         const q = query(ordersRef, where('status', 'in', ['received', 'preparing', 'ready']));
 
         const unsubscribe = onSnapshot(q, async (snapshot) => {
             const activeOrders = snapshot.docs.map(d => docToObj<Order>(d));
-            console.log(`[KitchenPage] Raw active orders fetched: ${activeOrders.length}`);
-            console.log(`[KitchenPage] User Branch ID: ${user.branchId}`);
 
-            // Client-side filtering for branch
             const branchOrders = activeOrders
                 .filter(order => order.branchId === user.branchId)
                 .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-            console.log(`[KitchenPage] Orders (branch filter disabled): ${branchOrders.length}`);
-
             const ordersWithTableData: OrderWithTable[] = await Promise.all(branchOrders.map(async (order) => {
                 let table;
-                // Pass restaurantId to getTableById
                 if (order.orderType === 'Dine-in' && order.tableId) {
                     table = await getTableById(order.tableId, restaurantId);
                 }
@@ -252,23 +263,6 @@ export default function KitchenPage() {
 
         return () => unsubscribe();
     }, [user, firestore, restaurantId]);
-
-    const filteredOrders = useMemo(() => {
-        if (!user) return [];
-
-        return orders.map(order => {
-            // Filter items based on user categories
-            const visibleItems = order.items.filter(item => {
-                if (item.status === 'cancelled') return false;
-                // TEMPORARILY DISABLED CATEGORY FILTER
-                return true;
-                // if (!user.categories || user.categories.includes('All')) return true;
-                // return user.categories.includes(item.category);
-            });
-            return { ...order, visibleItems };
-        }).filter(order => order.visibleItems.length > 0); // Only show orders with items relevant to this chef
-    }, [orders, user]);
-
 
     const getOrderTitle = (order: OrderWithTable) => {
         switch (order.orderType) {
@@ -310,12 +304,24 @@ export default function KitchenPage() {
         );
     }
 
+    const orderTypeColorMap = {
+        'dinein': settings.kdsSettings?.orderTypeColors?.dineIn || 'transparent',
+        'takeaway': settings.kdsSettings?.orderTypeColors?.takeAway || 'transparent',
+        'online': settings.kdsSettings?.orderTypeColors?.online || 'transparent',
+    };
+
     return (
         <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
-                {filteredOrders.map((order) => (
-                    <Card key={order.id} className={cn("flex flex-col border-2", order.status === 'ready' ? "border-green-500/50 bg-green-500/5" : "border-transparent")}>
+                {filteredOrders.map((order) => {
+                    const orderTypeKey = (order.orderType?.toLowerCase().replace('-', '') || 'dinein') as keyof typeof orderTypeColorMap;
+                    const borderColor = order.status !== 'ready'
+                        ? orderTypeColorMap[orderTypeKey]
+                        : 'rgb(34 197 94 / 0.5)'; // green-500/50
+
+                    return (
+                    <Card key={order.id} className="flex flex-col border-2" style={{ borderColor }}>
                         <CardHeader className="pb-3">
                             <div className="flex items-start justify-between">
                                 <div>
@@ -394,7 +400,7 @@ export default function KitchenPage() {
                             <MarkOrderReadyButton order={order} visibleItems={order.visibleItems} restaurantId={restaurantId || 'dineeasee-restaurant'} />
                         </CardFooter>
                     </Card>
-                ))}
+                )})}
             </div>
         </>
     );

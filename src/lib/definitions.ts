@@ -61,6 +61,15 @@ export type Discount = {
   applicableItems?: string[]; // Array of menuItemIds, applies if applicability is 'items'
 };
 
+export type KdsSettings = {
+    enableSoundAlerts?: boolean;
+    orderTypeColors?: {
+        dineIn: string;
+        takeAway: string;
+        online: string;
+    };
+};
+
 export type POSSettings = {
     cashDenominations: number[];
     enableOnScreenKeyboard?: boolean;
@@ -87,6 +96,7 @@ export type RestaurantSettings = {
     invoiceSettings?: InvoiceSettings;
     printSettings?: PrintSettings;
     posSettings?: POSSettings;
+    kdsSettings?: KdsSettings;
     mealSessions?: MealSession[];
     menuCategories?: string[]; // Food categories like Meals, Snacks, Beverages, etc.
     multiFloorEnabled?: boolean;
@@ -244,7 +254,8 @@ export type NavMenuKey =
     // Settings Sub-sections
     | 'settingsRestaurant' | 'settingsBranches' | 'settingsGeneral' | 'settingsFloors'
     | 'settingsCategories' | 'settingsSessions' | 'settingsPos' | 'settingsOnline'
-    | 'settingsInvoicing' | 'settingsPrinting' | 'settingsQr' | 'settingsPlatforms' | 'settingsDiscounts' | 'settingsSubscription';
+    | 'settingsInvoicing' | 'settingsPrinting' | 'settingsQr' | 'settingsPlatforms'
+    | 'settingsDiscounts' | 'settingsSubscription' | 'settingsKds';
 
 
 export type UserPermission = {

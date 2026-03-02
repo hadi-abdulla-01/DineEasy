@@ -2,7 +2,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Settings, ChevronRight, QrCode, ShoppingBasket, Globe, FileText, Printer, GitBranch, Building, Clock, Tag, Layers, Monitor, Percent, Wallet } from "lucide-react";
+import { Settings, ChevronRight, QrCode, ShoppingBasket, Globe, FileText, Printer, GitBranch, Building, Clock, Tag, Layers, Monitor, Percent, Wallet, Palette } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from '@/app/admin/auth-provider';
 import { useEffect, useState } from 'react';
@@ -71,6 +71,13 @@ const branchSettingsSections = [
         href: "/admin/settings/pos",
         icon: <Monitor className="h-6 w-6" />,
         permissionKey: 'settingsPos' as NavMenuKey
+    },
+    {
+        title: "Kitchen Display (KDS)",
+        description: "Customize sound alerts and order colors for the kitchen screen.",
+        href: "/admin/settings/kds",
+        icon: <Palette className="h-6 w-6" />,
+        permissionKey: 'settingsKds' as NavMenuKey
     },
     {
         title: "Discount & Offer Management",
