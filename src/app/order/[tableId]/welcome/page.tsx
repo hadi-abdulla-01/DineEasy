@@ -31,9 +31,11 @@ export default function WelcomePage() {
 
     useEffect(() => {
         if (actionState?.redirectTo) {
+            // For existing orders, save session info FIRST, then redirect.
+            sessionStorage.setItem(`dineeasy-customer-${tableId}`, JSON.stringify({ name: customerName, phone: customerPhone }));
             router.push(actionState.redirectTo);
         } else if (actionState?.success) {
-            // Handle non-OTP success flow
+            // For new orders (non-OTP flow), save session info and redirect to order page.
             sessionStorage.setItem(`dineeasy-customer-${tableId}`, JSON.stringify({ name: customerName, phone: customerPhone }));
             router.push(`/order/${tableId}?restaurantId=${restaurantId}`);
         }
