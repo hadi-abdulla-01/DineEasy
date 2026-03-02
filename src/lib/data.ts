@@ -1,7 +1,7 @@
 
 
 'use server';
-import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, AppUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, SelectedAddon, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, Discount, DiscountApplicability, OTPRequest, Payment } from './definitions';
+import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, AppUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, SelectedAddon, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, RemoteOrder, DayOfWeek, Discount, DiscountApplicability, OTPRequest, Payment } from './definitions';
 import { initializeFirebase } from '@/firebase/server';
 import { getAdminMessaging } from '@/firebase/admin';
 import {
@@ -193,6 +193,14 @@ export async function getSettings(branchId?: string, restaurantId: string = 'din
             enableOnScreenKeyboard: false,
             enableDineInOTP: false,
         },
+        kdsSettings: {
+            enableSoundAlerts: true,
+            orderTypeColors: {
+                dineIn: '#FBBF24',
+                takeAway: '#3B82F6',
+                online: '#10B981',
+            },
+        },
         mealSessions: [],
         multiFloorEnabled: false,
         floors: [],
@@ -208,6 +216,14 @@ export async function getSettings(branchId?: string, restaurantId: string = 'din
         invoiceSettings: { ...defaultSettings.invoiceSettings, ...(globalSettings.invoiceSettings || {}) },
         printSettings: { ...defaultSettings.printSettings, ...(globalSettings.printSettings || {}) },
         posSettings: { ...defaultSettings.posSettings, ...(globalSettings.posSettings || {}) },
+        kdsSettings: {
+            ...defaultSettings.kdsSettings,
+            ...(globalSettings.kdsSettings || {}),
+            orderTypeColors: {
+                ...defaultSettings.kdsSettings!.orderTypeColors,
+                ...(globalSettings.kdsSettings?.orderTypeColors || {}),
+            },
+        },
         manualSessionOverride: globalSettings.manualSessionOverride ?? defaultSettings.manualSessionOverride,
     };
 
@@ -234,6 +250,14 @@ export async function getSettings(branchId?: string, restaurantId: string = 'din
         invoiceSettings: { ...baseSettings.invoiceSettings, ...(branchData.invoiceSettings || {}) },
         printSettings: { ...baseSettings.printSettings, ...(branchData.printSettings || {}) },
         posSettings: { ...baseSettings.posSettings, ...(branchData.posSettings || {}) },
+        kdsSettings: {
+            ...baseSettings.kdsSettings,
+            ...(branchData.kdsSettings || {}),
+            orderTypeColors: {
+                ...baseSettings.kdsSettings!.orderTypeColors,
+                ...(branchData.kdsSettings?.orderTypeColors || {}),
+            },
+        },
         manualSessionOverride: branchData.manualSessionOverride ?? baseSettings.manualSessionOverride,
         mealSessions: branchData.mealSessions || baseSettings.mealSessions,
         menuCategories: branchData.menuCategories || baseSettings.menuCategories,
