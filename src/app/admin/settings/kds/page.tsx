@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const defaultKdsSettings: KdsSettings = {
     enableSoundAlerts: true,
-    notificationSound: 'https://cdn.freesound.org/previews/219/219475_4103577-lq.mp3',
+    notificationSound: 'https://cdn.pixabay.com/audio/2022/11/17/audio_85d13f9973.mp3',
     orderTypeColors: {
         dineIn: '#FBBF24', // amber-400
         takeAway: '#3B82F6', // blue-500
@@ -28,13 +28,13 @@ const defaultKdsSettings: KdsSettings = {
 };
 
 const SOUND_OPTIONS = [
-    { name: 'Kitchen Bell', url: 'https://cdn.freesound.org/previews/219/219475_4103577-lq.mp3' },
-    { name: 'Simple Chime', url: 'https://cdn.freesound.org/previews/415/415763_6142149-lq.mp3' },
-    { name: 'Positive Alert', url: 'https://cdn.freesound.org/previews/561/561460_9269495-lq.mp3' },
-    { name: 'Short Beep', url: 'https://cdn.freesound.org/previews/320/320668_5260872-lq.mp3' },
-    { name: 'Notification Sent', url: 'https://cdn.freesound.org/previews/268/268144_4103577-lq.mp3' },
-    { name: 'Digital Beep', url: 'https://cdn.freesound.org/previews/65/65951_9269495-lq.mp3' },
-    { name: 'Gong', url: 'https://cdn.freesound.org/previews/35/35151_215455-lq.mp3' }
+    { name: 'Chime', url: 'https://cdn.pixabay.com/audio/2022/11/17/audio_85d13f9973.mp3' },
+    { name: 'Bell', url: 'https://cdn.pixabay.com/audio/2022/03/15/audio_731c312781.mp3' },
+    { name: 'Notification', url: 'https://cdn.pixabay.com/audio/2022/10/28/audio_1e5923a492.mp3' },
+    { name: 'Alert', url: 'https://cdn.pixabay.com/audio/2021/08/04/audio_12b0c7443c.mp3' },
+    { name: 'Digital Beep', url: 'https://cdn.pixabay.com/audio/2022/11/11/audio_a21a5c6869.mp3' },
+    { name: 'Gong', url: 'https://cdn.pixabay.com/audio/2023/04/24/audio_349a71a39f.mp3' },
+    { name: 'Positive', url: 'https://cdn.pixabay.com/audio/2022/03/10/audio_c3b9181156.mp3' },
 ];
 
 function SubmitButton() {

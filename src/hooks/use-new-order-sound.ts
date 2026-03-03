@@ -3,7 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 
-const DEFAULT_SOUND_URL = 'https://cdn.freesound.org/previews/219/219475_4103577-lq.mp3';
+const DEFAULT_SOUND_URL = 'https://cdn.pixabay.com/audio/2022/11/17/audio_85d13f9973.mp3';
 
 /**
  * A hook to play a sound when the number of orders increases.
