@@ -3,7 +3,8 @@
 
 import { useEffect, useRef } from 'react';
 
-const DEFAULT_SOUND_URL = 'https://www.soundjay.com/buttons/sounds/button-1.mp3';
+// A silent placeholder data URI for when no sound is selected or available.
+const SILENT_SOUND = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABgAAABkYXRhAAAAAA==';
 
 /**
  * A hook to play a sound when the number of orders increases.
@@ -18,7 +19,9 @@ export const useNewOrderSound = (orderCount: number, isEnabled: boolean, soundUr
     // Effect to initialize or update the Audio object whenever the soundUrl changes.
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const url = soundUrl || DEFAULT_SOUND_URL;
+            // Use the provided sound URL, or the silent sound if the URL is empty/undefined.
+            const url = soundUrl || SILENT_SOUND;
+            
             // Only create a new Audio object if the URL has changed or it doesn't exist
             if (!audioRef.current || audioRef.current.src !== url) {
                 audioRef.current = new Audio(url);
@@ -29,8 +32,8 @@ export const useNewOrderSound = (orderCount: number, isEnabled: boolean, soundUr
 
     // Effect to play the sound when orderCount increases.
     useEffect(() => {
-        if (isEnabled && orderCount > prevOrderCountRef.current) {
-            audioRef.current?.play().catch(error => {
+        if (isEnabled && orderCount > prevOrderCountRef.current && audioRef.current && audioRef.current.src !== SILENT_SOUND) {
+            audioRef.current.play().catch(error => {
                 // Autoplay can be blocked by browsers. Log the error for debugging.
                 console.error("Audio playback error:", error);
             });

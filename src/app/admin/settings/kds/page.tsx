@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -14,28 +15,19 @@ import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useRestaurantData } from '@/lib/client-data';
-import { Palette, Utensils, ShoppingBag, Globe, Music } from 'lucide-react';
+import { Palette, Utensils, ShoppingBag, Globe, Music, LoaderCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getSoundOptions, type SoundOption } from '@/lib/server-actions';
 
 const defaultKdsSettings: KdsSettings = {
     enableSoundAlerts: true,
-    notificationSound: 'https://www.soundjay.com/buttons/sounds/button-1.mp3',
+    notificationSound: '', // Default will be set from fetched options
     orderTypeColors: {
         dineIn: '#FBBF24', // amber-400
         takeAway: '#3B82F6', // blue-500
         online: '#10B981', // emerald-500
     },
 };
-
-const SOUND_OPTIONS = [
-    { name: 'Beep', url: 'https://www.soundjay.com/buttons/sounds/button-1.mp3' },
-    { name: 'Click', url: 'https://www.soundjay.com/buttons/sounds/button-7.mp3' },
-    { name: 'Chime', url: 'https://www.soundjay.com/buttons/sounds/button-10.mp3' },
-    { name: 'Simple Alert', url: 'https://www.soundjay.com/buttons/sounds/button-16.mp3' },
-    { name: 'Switch', url: 'https://www.soundjay.com/buttons/sounds/switch-1.mp3' },
-    { name: 'Camera Shutter', url: 'https://www.soundjay.com/mechanical/sounds/camera-shutter-click-01.mp3' },
-];
-
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -53,7 +45,18 @@ export default function KdsSettingsPage() {
     const [branch, setBranch] = useState<Branch | null>(null);
     const [kdsSettings, setKdsSettings] = useState<KdsSettings>(defaultKdsSettings);
     const [isLoading, setIsLoading] = useState(true);
+    const [soundOptions, setSoundOptions] = useState<SoundOption[]>([]);
     const { toast } = useToast();
+
+    useEffect(() => {
+        getSoundOptions().then(options => {
+            setSoundOptions(options);
+            // If there are options and no sound is set, default to the first one.
+            if (options.length > 0 && !kdsSettings.notificationSound) {
+                setKdsSettings(prev => ({...prev, notificationSound: options[0].url}));
+            }
+        });
+    }, []);
 
     useEffect(() => {
         if (branchId) {
@@ -69,14 +72,18 @@ export default function KdsSettingsPage() {
                         },
                     });
                 } else {
-                    setKdsSettings(defaultKdsSettings);
+                    // Set default sound if no settings exist and options are loaded
+                    setKdsSettings(prev => ({
+                        ...prev,
+                        notificationSound: soundOptions.length > 0 ? soundOptions[0].url : ''
+                    }));
                 }
                 setIsLoading(false);
             });
         } else {
             setIsLoading(false);
         }
-    }, [branchId, getBranchById]);
+    }, [branchId, getBranchById, soundOptions]);
 
     const handleFormAction = async (formData: FormData) => {
         const newFormData = new FormData();
@@ -125,7 +132,7 @@ export default function KdsSettingsPage() {
                 </CardHeader>
                 <CardContent>
                     <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed">
-                        <p className="text-muted-foreground">Loading settings...</p>
+                        <LoaderCircle className="h-6 w-6 animate-spin" />
                     </div>
                 </CardContent>
             </Card>
@@ -190,16 +197,18 @@ export default function KdsSettingsPage() {
                             <Select
                                 value={kdsSettings.notificationSound}
                                 onValueChange={handleSoundChange}
+                                disabled={soundOptions.length === 0}
                             >
                                 <SelectTrigger id="notificationSound" className="w-full md:w-1/2">
-                                    <SelectValue placeholder="Select a sound" />
+                                    <SelectValue placeholder={soundOptions.length > 0 ? "Select a sound" : "No sounds available"} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {SOUND_OPTIONS.map(sound => (
-                                        <SelectItem key={sound.url} value={sound.url}>{sound.name}</SelectItem>
+                                    {soundOptions.map(sound => (
+                                        <SelectItem key={sound.id} value={sound.url}>{sound.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {soundOptions.length === 0 && <p className="text-xs text-muted-foreground mt-1">Add notification sounds in the Super Admin panel.</p>}
                         </div>
                     )}
                     
@@ -275,3 +284,4 @@ export default function KdsSettingsPage() {
         </form>
     );
 }
+

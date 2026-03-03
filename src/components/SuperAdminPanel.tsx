@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -10,7 +11,7 @@ import {
     Building2, Plus, Mail, Users, Trash2, Eye, EyeOff, LogOut,
     DollarSign, ShoppingCart, TrendingUp, Activity, LayoutDashboard, List,
     LoaderCircle, Edit, Save, X, KeyRound, Settings, ClipboardList, ToggleRight, Megaphone, Check, CircleDollarSign, FileText, Star,
-    Calendar as CalendarIcon
+    Calendar as CalendarIcon, Music
 } from 'lucide-react';
 import { generateUserEmail } from '@/lib/auth-utils';
 import {
@@ -545,6 +546,19 @@ export default function SuperAdminPanel() {
                             <div>
                                 <CardTitle>Default Templates</CardTitle>
                                 <CardDescription>Manage default settings for new restaurants.</CardDescription>
+                            </div>
+                        </CardHeader>
+                    </Card>
+                </Link>
+                 <Link href="/admin/superadmin/sounds">
+                    <Card className="h-full hover:shadow-lg hover:-translate-y-1 transition-transform">
+                        <CardHeader className="flex flex-row items-center gap-4">
+                            <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
+                               <Music className="h-6 w-6 text-yellow-600" />
+                            </div>
+                            <div>
+                                <CardTitle>Sound Management</CardTitle>
+                                <CardDescription>Manage notification sounds for KDS.</CardDescription>
                             </div>
                         </CardHeader>
                     </Card>

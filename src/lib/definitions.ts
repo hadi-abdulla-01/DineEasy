@@ -346,3 +346,9 @@ export type SubscriptionPlan = {
   maxUsers: number;
   maxMenuItems: number;
 };
+
+export type SoundOption = {
+  id: string;
+  name: string;
+  url: string;
+};

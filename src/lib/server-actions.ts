@@ -3,7 +3,7 @@
 
 import { getAdminApp, getAdminAuth, getAdminMessaging } from '@/firebase/admin';
 import { getFirestore as getAdminFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
-import type { AppUser, Order, RemoteOrder, RestaurantSettings, SubscriptionPlan } from './definitions';
+import type { AppUser, Order, RemoteOrder, RestaurantSettings, SubscriptionPlan, SoundOption } from './definitions';
 import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
 import { unstable_noStore as noStore, revalidatePath } from 'next/cache';
@@ -131,6 +131,48 @@ export async function updateDefaultRestaurantSettings(settings: Partial<Restaura
         return { success: false, error: e.message || 'Failed to update default settings.' };
     }
 }
+
+// --- Sound Option Management ---
+export async function getSoundOptions(): Promise<SoundOption[]> {
+    noStore();
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const soundsRef = firestore.collection('platform').doc('sounds').collection('options');
+        const snapshot = await soundsRef.orderBy('name').get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SoundOption));
+    } catch (e: any) {
+        console.error("Error fetching sound options:", e);
+        return [];
+    }
+}
+
+export async function addSoundOption(name: string, url: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        await firestore.collection('platform').doc('sounds').collection('options').add({
+            name,
+            url,
+        });
+        revalidatePath('/admin/superadmin/sounds');
+        revalidatePath('/admin/settings/kds');
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || 'Failed to add sound.' };
+    }
+}
+
+export async function deleteSoundOption(id: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        await firestore.collection('platform').doc('sounds').collection('options').doc(id).delete();
+        revalidatePath('/admin/superadmin/sounds');
+        revalidatePath('/admin/settings/kds');
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || 'Failed to delete sound.' };
+    }
+}
+
 
 // --- Restaurant Management from restaurant-management.ts ---
 
