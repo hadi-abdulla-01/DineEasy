@@ -3,7 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 
-const DEFAULT_SOUND_URL = 'https://cdn.pixabay.com/audio/2022/11/17/audio_85d13f9973.mp3';
+const DEFAULT_SOUND_URL = 'https://archive.org/download/chime-sound-effect/CHIME%20SOUND%20EFFECT.mp3';
 
 /**
  * A hook to play a sound when the number of orders increases.
