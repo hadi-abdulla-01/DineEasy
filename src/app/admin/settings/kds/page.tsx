@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const defaultKdsSettings: KdsSettings = {
     enableSoundAlerts: true,
-    notificationSound: 'https://cdn.pixabay.com/audio/2022/03/15/audio_2218338917.mp3',
+    notificationSound: 'https://www.soundjay.com/buttons/sounds/button-1.mp3',
     orderTypeColors: {
         dineIn: '#FBBF24', // amber-400
         takeAway: '#3B82F6', // blue-500
@@ -28,12 +28,12 @@ const defaultKdsSettings: KdsSettings = {
 };
 
 const SOUND_OPTIONS = [
-    { name: 'Notification', url: 'https://cdn.pixabay.com/audio/2022/03/15/audio_2218338917.mp3' },
-    { name: 'Chime', url: 'https://cdn.pixabay.com/audio/2022/03/22/audio_731c5195f1.mp3' },
-    { name: 'Bell', url: 'https://cdn.pixabay.com/audio/2022/11/17/audio_8b24b8214a.mp3' },
-    { name: 'Alert', url: 'https://cdn.pixabay.com/audio/2022/10/28/audio_28096c4cc7.mp3' },
-    { name: 'Simple', url: 'https://cdn.pixabay.com/audio/2021/08/04/audio_12b0c41b8c.mp3' },
-    { name: 'Positive', url: 'https://cdn.pixabay.com/audio/2022/03/23/audio_0c39f01835.mp3' },
+    { name: 'Beep', url: 'https://www.soundjay.com/buttons/sounds/button-1.mp3' },
+    { name: 'Click', url: 'https://www.soundjay.com/buttons/sounds/button-7.mp3' },
+    { name: 'Chime', url: 'https://www.soundjay.com/buttons/sounds/button-10.mp3' },
+    { name: 'Simple Alert', url: 'https://www.soundjay.com/buttons/sounds/button-16.mp3' },
+    { name: 'Switch', url: 'https://www.soundjay.com/buttons/sounds/switch-1.mp3' },
+    { name: 'Camera Shutter', url: 'https://www.soundjay.com/mechanical/sounds/camera-shutter-click-01.mp3' },
 ];
 
 
