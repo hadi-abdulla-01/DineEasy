@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const defaultKdsSettings: KdsSettings = {
     enableSoundAlerts: true,
-    notificationSound: 'https://archive.org/download/chime-sound-effect/CHIME%20SOUND%20EFFECT.mp3',
+    notificationSound: 'https://cdn.pixabay.com/download/audio/2022/10/28/audio_1e3b68f331.mp3',
     orderTypeColors: {
         dineIn: '#FBBF24', // amber-400
         takeAway: '#3B82F6', // blue-500
@@ -28,13 +28,12 @@ const defaultKdsSettings: KdsSettings = {
 };
 
 const SOUND_OPTIONS = [
-    { name: 'Chime', url: 'https://archive.org/download/chime-sound-effect/CHIME%20SOUND%20EFFECT.mp3' },
-    { name: 'Bell', url: 'https://archive.org/download/school-bell-sound-effect/SCHOOL%20BELL%20SOUND%20EFFECT.mp3' },
-    { name: 'Notification', url: 'https://archive.org/download/windows-xp-sound-effect-notification/WINDOWS%20XP%20SOUND%20EFFECT%20-%20NOTIFICATION.mp3' },
-    { name: 'Alert', url: 'https://archive.org/download/alarm-sound-effect/ALARM%20SOUND%20EFFECT.mp3' },
-    { name: 'Digital Beep', url: 'https://archive.org/download/digital-alarm-clock-sound-effect/DIGITAL%20ALARM%20CLOCK%20SOUND%20EFFECT.mp3' },
-    { name: 'Gong', url: 'https://archive.org/download/gong-sound-effect/GONG%20SOUND%20EFFECT.mp3' },
-    { name: 'Positive', url: 'https://archive.org/download/sound-effect-twinkling-stars/SOUND%20EFFECT%20-%20TWINKLING%20STARS.mp3' },
+    { name: 'Notification', url: 'https://cdn.pixabay.com/download/audio/2022/10/28/audio_1e3b68f331.mp3' },
+    { name: 'Level Up', url: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_e8cba53525.mp3' },
+    { name: 'Simple', url: 'https://cdn.pixabay.com/download/audio/2022/11/17/audio_8b214a1c0b.mp3' },
+    { name: 'Success Bell', url: 'https://cdn.pixabay.com/download/audio/2022/10/18/audio_c480a3a992.mp3' },
+    { name: 'Ting', url: 'https://cdn.pixabay.com/download/audio/2022/02/21/audio_1f24fe7630.mp3' },
+    { name: 'Chime', url: 'https://cdn.pixabay.com/download/audio/2021/08/04/audio_921c5fb4ab.mp3' },
 ];
 
 function SubmitButton() {
