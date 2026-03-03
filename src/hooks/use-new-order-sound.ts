@@ -3,7 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 
-const DEFAULT_SOUND_URL = 'https://www.soundjay.com/buttons/sounds/bell-ringing-05.mp3';
+const DEFAULT_SOUND_URL = 'https://cdn.pixabay.com/audio/2022/03/15/audio_165a732296.mp3';
 
 /**
  * A hook to play a sound when the number of orders increases.

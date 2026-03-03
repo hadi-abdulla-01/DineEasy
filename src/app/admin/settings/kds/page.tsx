@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const defaultKdsSettings: KdsSettings = {
     enableSoundAlerts: true,
-    notificationSound: 'https://www.soundjay.com/buttons/sounds/bell-ringing-05.mp3',
+    notificationSound: 'https://cdn.pixabay.com/audio/2022/03/15/audio_165a732296.mp3',
     orderTypeColors: {
         dineIn: '#FBBF24', // amber-400
         takeAway: '#3B82F6', // blue-500
@@ -28,12 +28,12 @@ const defaultKdsSettings: KdsSettings = {
 };
 
 const SOUND_OPTIONS = [
-    { name: 'Bell Ring', url: 'https://www.soundjay.com/buttons/sounds/bell-ringing-05.mp3' },
-    { name: 'Simple Beep', url: 'https://www.soundjay.com/buttons/sounds/beep-07a.mp3' },
-    { name: 'Chime', url: 'https://www.soundjay.com/buttons/sounds/button-3.mp3' },
-    { name: 'Click', url: 'https://www.soundjay.com/buttons/sounds/button-4.mp3' },
-    { name: 'Simple Up', url: 'https://www.soundjay.com/buttons/sounds/button-09.mp3' },
-    { name: 'Pling', url: 'https://www.soundjay.com/buttons/sounds/button-10.mp3' },
+    { name: 'Ting', url: 'https://cdn.pixabay.com/audio/2022/03/15/audio_165a732296.mp3' },
+    { name: 'Chime', url: 'https://cdn.pixabay.com/audio/2022/11/17/audio_8226000305.mp3' },
+    { name: 'Bell', url: 'https://cdn.pixabay.com/audio/2022/03/24/audio_323402489c.mp3' },
+    { name: 'Beep', url: 'https://cdn.pixabay.com/audio/2021/08/04/audio_513291614f.mp3' },
+    { name: 'Up', url: 'https://cdn.pixabay.com/audio/2022/11/22/audio_c3a3c22b13.mp3' },
+    { name: 'Click', url: 'https://cdn.pixabay.com/audio/2022/01/21/audio_a1250239c8.mp3' },
 ];
 
 
