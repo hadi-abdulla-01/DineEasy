@@ -1,3 +1,4 @@
+
 'use client';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -18,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const defaultKdsSettings: KdsSettings = {
     enableSoundAlerts: true,
-    notificationSound: 'https://storage.googleapis.com/web-dev-assets/meet-the-google-family/sounds/ding.mp3',
+    notificationSound: 'https://cdn.pixabay.com/audio/2022/03/15/audio_2218338917.mp3',
     orderTypeColors: {
         dineIn: '#FBBF24', // amber-400
         takeAway: '#3B82F6', // blue-500
@@ -27,12 +28,12 @@ const defaultKdsSettings: KdsSettings = {
 };
 
 const SOUND_OPTIONS = [
-    { name: 'Ting', url: 'https://storage.googleapis.com/web-dev-assets/meet-the-google-family/sounds/ding.mp3' },
-    { name: 'Chime', url: 'https://storage.googleapis.com/web-dev-assets/meet-the-google-family/sounds/chime.mp3' },
-    { name: 'Bell', url: 'https://storage.googleapis.com/web-dev-assets/meet-the-google-family/sounds/bell.mp3' },
-    { name: 'Beep', url: 'https://storage.googleapis.com/web-dev-assets/meet-the-google-family/sounds/notification_high-intensity.mp3' },
-    { name: 'Up', url: 'https://storage.googleapis.com/web-dev-assets/meet-the-google-family/sounds/positive_gliss.mp3' },
-    { name: 'Click', url: 'https://storage.googleapis.com/web-dev-assets/meet-the-google-family/sounds/click.mp3' },
+    { name: 'Notification', url: 'https://cdn.pixabay.com/audio/2022/03/15/audio_2218338917.mp3' },
+    { name: 'Chime', url: 'https://cdn.pixabay.com/audio/2022/03/22/audio_731c5195f1.mp3' },
+    { name: 'Bell', url: 'https://cdn.pixabay.com/audio/2022/11/17/audio_8b24b8214a.mp3' },
+    { name: 'Alert', url: 'https://cdn.pixabay.com/audio/2022/10/28/audio_28096c4cc7.mp3' },
+    { name: 'Simple', url: 'https://cdn.pixabay.com/audio/2021/08/04/audio_12b0c41b8c.mp3' },
+    { name: 'Positive', url: 'https://cdn.pixabay.com/audio/2022/03/23/audio_0c39f01835.mp3' },
 ];
 
 
