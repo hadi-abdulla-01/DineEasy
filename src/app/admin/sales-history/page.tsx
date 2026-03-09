@@ -91,10 +91,10 @@ export default function SalesHistoryPage() {
             const styles = Array.from(document.styleSheets).map(sheet => {
                 try {
                     if (sheet.href) {
-                        return `<link rel="stylesheet" href="${'${sheet.href}'}">`;
+                        return `<link rel="stylesheet" href="${sheet.href}">`;
                     }
                     if (sheet.cssRules) {
-                        return `<style>${'${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}'}</style>`;
+                        return `<style>${Array.from(sheet.cssRules).map(rule => rule.cssText).join('')}</style>`;
                     }
                 } catch (e) {
                     console.warn('Could not copy stylesheet for printing:', e);
@@ -103,7 +103,7 @@ export default function SalesHistoryPage() {
             }).join('\n');
 
             printWindow.document.head.innerHTML += styles;
-            printWindow.document.write(`</head><body style="${'${bodyStyle}'}">`);
+            printWindow.document.write(`</head><body style="${bodyStyle}">`);
             printWindow.document.write(content.innerHTML);
             printWindow.document.write('</body></html>');
             printWindow.document.close();
