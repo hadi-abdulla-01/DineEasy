@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/admin/auth-provider';
 import { useRestaurantData } from '@/lib/client-data';
 import type { RestaurantSettings, SubscriptionPlan } from '@/lib/definitions';
-import { getSubscriptionPlans, createRazorpayOrderAction } from '@/lib/server-actions';
+import { getSubscriptionPlans } from '@/lib/server-actions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +24,6 @@ function SubscriptionPage() {
     const [settings, setSettings] = useState<RestaurantSettings | null>(null);
     const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isPaying, setIsPaying] = useState<string | null>(null); // planId being paid for
 
     const loadData = async () => {
         setIsLoading(true);
@@ -57,63 +56,6 @@ function SubscriptionPage() {
         return currency ? `${currency} ` : '$';
     };
 
-    const handlePayment = async (plan: SubscriptionPlan) => {
-        if (!user || !user.branchId) return;
-        setIsPaying(plan.id);
-
-        try {
-            const order = await createRazorpayOrderAction(plan.id, restaurantId, user.branchId);
-            
-            const options = {
-                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID!,
-                amount: order.amount,
-                currency: order.currency,
-                name: "DineEzee Subscription",
-                description: `Payment for ${plan.name}`,
-                order_id: order.id,
-                handler: function (response: any) {
-                    toast({
-                        title: "Payment Successful!",
-                        description: "Your subscription will be updated shortly. Payment ID: " + response.razorpay_payment_id,
-                    });
-                    // The actual subscription update is handled by the webhook.
-                    // We can optimistically update the UI here or just let the user know.
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 3000);
-                },
-                prefill: {
-                    name: user.username,
-                    email: user.email,
-                },
-                notes: {
-                    restaurantId: restaurantId,
-                    planId: plan.id,
-                },
-                theme: {
-                    color: "#CB1E1D"
-                }
-            };
-            
-            const rzp = new (window as any).Razorpay(options);
-            rzp.on('payment.failed', function (response: any){
-                toast({
-                    variant: 'destructive',
-                    title: 'Payment Failed',
-                    description: response.error.description,
-                });
-            });
-            rzp.open();
-
-        } catch (error) {
-            if (error instanceof Error) {
-                toast({ variant: 'destructive', title: 'Error', description: error.message });
-            }
-        } finally {
-            setIsPaying(null);
-        }
-    };
-
     const currentPlan = plans.find(p => p.id === settings?.subscriptionPlanId);
     const daysRemaining = settings?.nextBillingDate ? Math.max(0, Math.ceil((new Date(settings.nextBillingDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))) : null;
 
@@ -123,8 +65,6 @@ function SubscriptionPage() {
     }
     
     return (
-        <>
-        <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
         <div className="space-y-8">
             <h1 className="text-3xl font-headline font-bold">Subscription & Billing</h1>
 
@@ -163,19 +103,17 @@ function SubscriptionPage() {
                             </ul>
                         </CardContent>
                         <div className="p-6 pt-0">
-                           <Button 
+                           <Button
                              className="w-full"
-                             onClick={() => handlePayment(plan)}
-                             disabled={isPaying !== null}
+                             disabled
                            >
-                             {isPaying === plan.id ? <LoaderCircle className="animate-spin" /> : (plan.id === currentPlan?.id ? 'Renew / Extend' : 'Upgrade Plan')}
+                            Contact Admin to Upgrade
                            </Button>
                         </div>
                     </Card>
                 ))}
             </div>
         </div>
-        </>
     );
 }
 

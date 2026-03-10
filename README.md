@@ -95,7 +95,7 @@ A comprehensive, multi-tenant restaurant management platform with QR code orderi
 
 3. **Set up environment variables**
    
-   Create a `.env.local` file in the root directory:
+   Create a `.env.local` file in the root directory. You can use `.env.example` as a template:
    ```env
    # Firebase Configuration (Client-side)
    NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
@@ -112,11 +112,6 @@ A comprehensive, multi-tenant restaurant management platform with QR code orderi
    # App Configuration
    NEXT_PUBLIC_SUPER_ADMIN_EMAIL=your-super-admin@example.com
    NEXT_PUBLIC_APP_URL=http://localhost:3000
-
-   # Razorpay Payment Gateway
-   NEXT_PUBLIC_RAZORPAY_KEY_ID=your_razorpay_key_id
-   RAZORPAY_KEY_SECRET=your_razorpay_key_secret
-   RAZORPAY_WEBHOOK_SECRET=your_razorpay_webhook_secret
    ```
 
 4. **Run the development server**
