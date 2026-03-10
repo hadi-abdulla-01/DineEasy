@@ -12,7 +12,6 @@ const nextConfig = {
       bodySizeLimit: '10mb',
       timeout: 120,
     },
-    allowedDevOrigins: ["*.cloudworkstations.dev"],
   },
   images: {
     remotePatterns: [
