@@ -1,0 +1,443 @@
+import { motion } from "motion/react";
+import Link from "next/link";
+import { useState } from "react";
+import { Mail, Phone, MapPin, Send, Facebook, Instagram, Twitter } from "lucide-react";
+import { ResponsiveNavbar } from "./ResponsiveNavbar";
+import Logo from '@/components/logo';
+
+interface ContactPageProps {
+  onNavigateToHome: () => void;
+  onNavigateToAbout: () => void;
+}
+
+/* ================ MOBILE COMPONENTS ================ */
+
+function MobileContactInfo() {
+  return (
+    <div className="bg-[#eee] rounded-3xl p-6 md:p-8">
+      <h2 className="text-[#ffce46] text-3xl md:text-4xl font-['Poppins:Bold',sans-serif] font-bold mb-6 md:mb-8 text-center md:text-left">
+        Contact Us
+      </h2>
+
+      <div className="flex flex-col gap-4">
+        {/* Email */}
+        <div className="flex gap-4 items-center p-4 rounded-2xl transition-all border-[2px] border-transparent bg-white/30 hover:bg-[rgba(158,9,15,0.1)] hover:border-[#9e090f] cursor-pointer">
+          <Mail className="size-6 text-[#9e090f]" />
+          <p className="text-[#000] text-base md:text-lg font-['Poppins:Medium',sans-serif] font-medium">
+            dineezee@gmail.com
+          </p>
+        </div>
+
+        {/* Phone */}
+        <div className="flex gap-4 items-center p-4 rounded-2xl transition-all border-[2px] border-transparent bg-white/30 hover:bg-[rgba(158,9,15,0.1)] hover:border-[#9e090f] cursor-pointer">
+          <Phone className="size-6 text-[#9e090f]" />
+          <p className="text-[#000] text-base md:text-lg font-['Poppins:Medium',sans-serif] font-medium">
+            +123 456 789
+          </p>
+        </div>
+
+        {/* Address */}
+        <div className="flex gap-4 items-center p-4 rounded-2xl transition-all border-[2px] border-transparent bg-white/30 hover:bg-[rgba(158,9,15,0.1)] hover:border-[#9e090f] cursor-pointer">
+          <MapPin className="size-6 text-[#9e090f]" />
+          <p className="text-[#000] text-base md:text-lg font-['Poppins:Medium',sans-serif] font-medium">
+            123 Street 456 House
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileContactForm() {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    message: '',
+    company: '' // Honeypot field (hidden)
+  });
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('submitting');
+
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setStatus('success');
+        setFormData({ name: '', email: '', message: '', company: '' });
+        alert('Message sent successfully!');
+      } else {
+        setStatus('error');
+        alert(data.error || 'Failed to send message. Please try again.');
+      }
+    } catch (error) {
+      console.error(error);
+      setStatus('error');
+      alert('An error occurred. Please try again.');
+    } finally {
+      setStatus('idle');
+    }
+  };
+
+  return (
+    <div className="bg-[#eee] rounded-3xl p-6 md:p-8">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        {/* Name Input */}
+        <div className="flex flex-col gap-2">
+          <input
+            type="text"
+            placeholder="Your name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            required
+            className="bg-transparent border-b-[2px] border-[#9e090f] pb-2 text-lg text-black placeholder:text-black/40 outline-none font-['Poppins:Medium',sans-serif] focus:border-[#9e090f] transition-colors"
+          />
+        </div>
+
+        {/* Email Input */}
+        <div className="flex flex-col gap-2">
+          <input
+            type="email"
+            placeholder="Your email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            required
+            className="bg-transparent border-b-[2px] border-[#9e090f]/30 pb-2 text-lg text-black placeholder:text-black/40 outline-none font-['Poppins:Medium',sans-serif] focus:border-[#9e090f] transition-colors"
+          />
+        </div>
+
+        {/* Message Input */}
+        <div className="flex flex-col gap-2">
+          <textarea
+            placeholder="Your message"
+            rows={4}
+            value={formData.message}
+            onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+            required
+            className="bg-transparent border-b-[2px] border-[#9e090f]/30 pb-2 text-lg text-black placeholder:text-black/40 outline-none font-['Poppins:Medium',sans-serif] focus:border-[#9e090f] transition-colors resize-none"
+          />
+        </div>
+
+        {/* HONEYPOT FIELD (Hidden) - Anti-spam */}
+        <input
+          type="text"
+          name="company"
+          value={formData.company}
+          onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+          style={{ display: 'none' }}
+          tabIndex={-1}
+          autoComplete="off"
+        />
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={status === 'submitting'}
+          className="bg-[#9e090f] text-white rounded-2xl px-8 py-3 flex items-center justify-center gap-3 self-start hover:bg-[#7a0709] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {status === 'submitting' ? (
+            <span className="text-lg font-bold font-['Poppins:Medium',sans-serif]">Sending...</span>
+          ) : (
+            <>
+              <Send className="size-5" />
+              <span className="text-lg font-bold font-['Poppins:Medium',sans-serif]">Send Message</span>
+            </>
+          )}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/* ================ DESKTOP COMPONENTS (Original) ================ */
+
+function DesktopContactForm() {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    message: '',
+    company: ''
+  });
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('submitting');
+
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setStatus('success');
+        setFormData({ name: '', email: '', message: '', company: '' });
+        alert('Message sent successfully!');
+      } else {
+        setStatus('error');
+        alert(data.error || 'Failed to send message. Please try again.');
+      }
+    } catch (error) {
+      console.error(error);
+      setStatus('error');
+      alert('An error occurred. Please try again.');
+    } finally {
+      setStatus('idle');
+    }
+  };
+
+  return (
+    <motion.div className="absolute left-[calc(33.33%+123px)] top-[200px] w-[722px] h-[896px] bg-[#eee] rounded-[44px]">
+      <form onSubmit={handleSubmit}>
+        <div className="absolute left-[48px] top-[48px] flex flex-col gap-[64px]">
+          {/* Name */}
+          <div className="flex flex-col gap-[8px]">
+            <input
+              type="text"
+              placeholder="Your name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+              className="bg-transparent text-[20px] outline-none font-['Poppins:Medium',sans-serif] w-[600px]"
+            />
+            <div className="h-[3px] w-[600px] bg-[#9e090f] opacity-50" />
+          </div>
+
+          {/* Email */}
+          <div className="flex flex-col gap-[8px]">
+            <input
+              type="email"
+              placeholder="Your email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              required
+              className="bg-transparent text-[20px] outline-none font-['Poppins:Medium',sans-serif] w-[600px]"
+            />
+            <div className="h-[3px] w-[600px] bg-[#9e090f] opacity-50" />
+          </div>
+
+          {/* Message */}
+          <div className="flex flex-col gap-[8px]">
+            <textarea
+              placeholder="Your message"
+              value={formData.message}
+              onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+              required
+              rows={6}
+              className="bg-transparent text-[20px] outline-none font-['Poppins:Medium',sans-serif] w-[600px] resize-none"
+            />
+            <div className="h-[3px] w-[600px] bg-[#9e090f] opacity-50" />
+          </div>
+
+          {/* HONEYPOT FIELD (Hidden) */}
+          <input
+            type="text"
+            name="company"
+            value={formData.company}
+            onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+            style={{ display: 'none' }}
+            tabIndex={-1}
+            autoComplete="off"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={status === 'submitting'}
+          className="absolute left-[33px] top-[480px] flex items-center gap-[16px] px-[64px] py-[24px] bg-[#9e090f] rounded-[16px] hover:bg-[#7a0709] hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
+        >
+          {status === 'submitting' ? (
+            <span className="text-[20px] text-[#eee] font-['Poppins:Medium',sans-serif]">
+              Sending...
+            </span>
+          ) : (
+            <>
+              <Send className="size-[24px] text-[#eee]" />
+              <span className="text-[20px] text-[#eee] font-['Poppins:Medium',sans-serif]">
+                Send Message
+              </span>
+            </>
+          )}
+        </button>
+      </form>
+    </motion.div>
+  );
+}
+
+function DesktopHeader({
+  onNavigateToHome,
+  onNavigateToAbout,
+}: {
+  onNavigateToHome: () => void;
+  onNavigateToAbout: () => void;
+}) {
+  return (
+    <header className="absolute left-[105px] right-[105px] top-[35px] flex items-center justify-between z-10">
+      <Logo className="h-6 w-auto text-[#9e090f]" />
+
+      <nav className="flex items-center gap-[60px]">
+        <button
+          onClick={onNavigateToHome}
+          className="font-['Mulish:Bold',sans-serif] font-bold text-[18px] text-black hover:text-[#9e090f]"
+        >
+          Home
+        </button>
+        <button
+          onClick={onNavigateToAbout}
+          className="font-['Mulish:Bold',sans-serif] font-bold text-[18px] text-black hover:text-[#9e090f]"
+        >
+          About us
+        </button>
+        <button className="font-['Mulish:Bold',sans-serif] font-bold text-[18px] text-[#9e090f]">
+          Contact
+        </button>
+      </nav>
+
+      <Link href="/login?role=admin" className="bg-[#9e090f] text-white px-[28px] py-[8px] rounded-[25px] font-bold text-[18px] hover:bg-[#7a0709] hover:scale-105 transition-all">
+        Sign In
+      </Link>
+    </header>
+  );
+}
+
+/* ================ MAIN PAGE COMPONENT ================ */
+
+export function ContactPage({ onNavigateToHome, onNavigateToAbout }: ContactPageProps) {
+  return (
+    <>
+      {/* ================= MOBILE/TABLET VIEW (< 1024px) ================= */}
+      <div className="lg:hidden h-screen w-full overflow-x-hidden overflow-y-auto bg-[#ffce46]">
+        <ResponsiveNavbar
+          onNavigateToHome={onNavigateToHome}
+          onNavigateToAbout={onNavigateToAbout}
+        />
+
+        <main className="px-4 md:px-8 pb-12">
+          <div className="max-w-7xl mx-auto flex flex-col gap-8 md:gap-12 mt-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <MobileContactInfo />
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            >
+              <MobileContactForm />
+            </motion.div>
+          </div>
+        </main>
+
+        <footer className="py-8 text-center">
+          <p className="text-black/60 text-sm">
+            © 2026 DineEzee. All rights reserved.
+          </p>
+        </footer>
+      </div>
+
+      {/* ================= DESKTOP VIEW (>= 1024px) ================= */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+        className="hidden lg:block absolute inset-0 overflow-hidden"
+      >
+        <div
+          className="absolute inset-0 origin-top-left"
+          style={{
+            transform: "scale(0.92)",
+            width: "108.7%",
+            height: "108.7%",
+          }}
+        >
+          <DesktopHeader
+            onNavigateToHome={onNavigateToHome}
+            onNavigateToAbout={onNavigateToAbout}
+          />
+
+          {/* Heading */}
+          <motion.h1
+            className="absolute left-[179px] top-[152px] text-[48px] text-[#eee] font-['Poppins:Bold',sans-serif] w-[646px]"
+          >
+            Contact Us
+          </motion.h1>
+
+          {/* Contact Info */}
+          <motion.div className="absolute left-[145px] top-[251px] w-[399px] flex flex-col gap-[24px]">
+
+            {/* EMAIL */}
+            <div className="
+              flex items-center gap-[16px] py-[24px] px-[24px] rounded-[16px]
+              cursor-pointer transition-all duration-300
+              hover:bg-[rgba(158,9,15,0.15)]
+              hover:border-[3px] hover:border-[#9e090f]
+            ">
+              <Mail className="size-[24px] text-[#9e090f]" />
+              <p className="text-[20px] text-white font-['Poppins:Medium',sans-serif]">
+                dineezee@gmail.com
+              </p>
+            </div>
+
+            {/* PHONE */}
+            <div className="
+              flex items-center gap-[16px] py-[24px] px-[24px] rounded-[16px]
+              cursor-pointer transition-all duration-300
+              hover:bg-[rgba(158,9,15,0.5)]
+              hover:border-[3px] hover:border-[#9e090f]
+            ">
+              <Phone className="size-[24px] text-[#9e090f]" />
+              <p className="text-[20px] text-white font-['Poppins:Medium',sans-serif]">
+                +123 456 789
+              </p>
+            </div>
+
+            {/* ADDRESS */}
+            <div className="
+              flex items-center gap-[16px] py-[24px] px-[24px] rounded-[16px]
+              cursor-pointer transition-all duration-300
+              hover:bg-[rgba(158,9,15,0.15)]
+              hover:border-[3px] hover:border-[#9e090f]
+            ">
+              <MapPin className="size-[24px] text-[#9e090f]" />
+              <p className="text-[20px] text-white font-['Poppins:Medium',sans-serif]">
+                123 Street 456 House
+              </p>
+            </div>
+          </motion.div>
+
+          {/* Contact Form */}
+          <DesktopContactForm />
+
+          {/* Social Icons */}
+          <motion.div className="absolute left-[151px] top-[941px] w-[228px] flex justify-between">
+            {[Facebook, Instagram, Twitter].map((Icon, i) => (
+              <button
+                key={i}
+                className="size-[64px] rounded-full bg-[#eee] flex items-center justify-center hover:scale-110 transition-all"
+              >
+                <Icon className="size-[24px] text-[#9e090f]" />
+              </button>
+            ))}
+          </motion.div>
+        </div>
+      </motion.div>
+    </>
+  );
+}

@@ -1,0 +1,40 @@
+{
+  "placeholderImages": [
+    {
+      "id": "dineeasy-hero",
+      "description": "A bustling and stylish modern restaurant interior",
+      "imageUrl": "https://images.unsplash.com/photo-1560130934-590b85fc08e7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxyZXN0YXVyYW50JTIwaW50ZXJpb3J8ZW58MHx8fHwxNzYxMzU5NzgyfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "restaurant interior"
+    },
+    {
+      "id": "dineeasy-burger",
+      "description": "A juicy gourmet burger with fries",
+      "imageUrl": "https://images.unsplash.com/photo-1627378378955-a3f4e406c5de?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxnb3VybWV0JTIwYnVyZ2VyfGVufDB8fHx8MTc2MTM1NzM1OHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "gourmet burger"
+    },
+    {
+      "id": "dineeasy-pasta",
+      "description": "A plate of creamy spaghetti carbonara",
+      "imageUrl": "https://images.unsplash.com/photo-1759934057874-f4a3f0ed911e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxjcmVhbXklMjBwYXN0YXxlbnwwfHx8fDE3NjEzODQwNTJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "creamy pasta"
+    },
+    {
+      "id": "dineeasy-salad",
+      "description": "A fresh and vibrant garden salad",
+      "imageUrl": "https://images.unsplash.com/photo-1644172970997-6bbc653f308d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxmcmVzaCUyMHNhbGFkfGVufDB8fHx8MTc2MTMxNDY1OHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "fresh salad"
+    },
+    {
+      "id": "dineeasy-drink",
+      "description": "A colorful cocktail in a fancy glass",
+      "imageUrl": "https://images.unsplash.com/photo-1681579289916-af960b852352?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxjb2NrdGFpbCUyMGRyaW5rfGVufDB8fHx8MTc2MTMwODkwOHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "cocktail drink"
+    },
+    {
+      "id": "dineeasy-pizza",
+      "description": "A delicious wood-fired margherita pizza",
+      "imageUrl": "https://images.unsplash.com/photo-1662043591511-cce40e379d77?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHx3b29kLWZpcmVkJTIwcGl6emF8ZW58MHx8fHwxNzYxMjg5NzMzfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "wood-fired pizza"
+    }
+  ]
+}

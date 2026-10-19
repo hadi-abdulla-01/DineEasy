@@ -1,0 +1,10 @@
+{
+  "restaurantName": "DineEasy",
+  "restaurantAddress": "Kuwait City",
+  "currencySymbol": " K.D ",
+  "taxRate": 0,
+  "currencyDecimalPlaces": 3,
+  "qrCodeColor": "#000000",
+  "qrCodeBackgroundColor": "#FFFFFF",
+  "qrCodeLogo": null
+}
