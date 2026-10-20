@@ -43,6 +43,7 @@ export default function EditUserPage() {
     const [categorySearchTerm, setCategorySearchTerm] = useState("");
     const [selectAllPermissions, setSelectAllPermissions] = useState(false);
     const [assignedTableId, setAssignedTableId] = useState<string | undefined>(undefined);
+    const [editUsername, setEditUsername] = useState<string>('');
 
     const availablePermissionsConfig = useMemo(() => {
         if (currentUser?.isSuperAdmin || currentUser?.role === 'Admin') {
@@ -56,6 +57,7 @@ export default function EditUserPage() {
             getUserById(userId).then(fetchedUser => {
                 if (fetchedUser) {
                     setUser(fetchedUser);
+                    setEditUsername(fetchedUser.username || '');
                     setSelectedCategories(fetchedUser.categories || []);
                     setSelectedRole(fetchedUser.role || 'Kitchen');
                     setPermissions(fetchedUser.permissions || {});
@@ -205,8 +207,22 @@ export default function EditUserPage() {
                             <Label htmlFor="username">Username</Label>
                             <div className="relative">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input id="username" name="username" defaultValue={user.username} required className="pl-9" />
+                                <Input id="username" name="username" value={editUsername} onChange={(e) => setEditUsername(e.target.value)} required className="pl-9" placeholder="e.g., kitchen1" />
                             </div>
+                            {restaurantId ? (
+                                <p className="text-xs text-muted-foreground font-mono">
+                                    Login email (auto-generated):{' '}
+                                    <span className="text-foreground font-semibold">
+                                        {selectedRole === 'Admin'
+                                            ? `admin@${restaurantId}.dineezee`
+                                            : `${(editUsername.trim().toLowerCase().replace(/\s+/g, '_') || 'username')}@${restaurantId}.dineezee`}
+                                    </span>
+                                </p>
+                            ) : user.email ? (
+                                <p className="text-xs text-muted-foreground font-mono">
+                                    Login: <span className="text-foreground">{user.email}</span>
+                                </p>
+                            ) : null}
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="role">Role</Label>

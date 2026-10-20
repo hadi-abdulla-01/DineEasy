@@ -58,6 +58,9 @@ export default function UserManagementPage() {
   const [branchFilter, setBranchFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
 
+  // Live username preview for create form
+  const [newUsername, setNewUsername] = useState('');
+
   useEffect(() => {
     if (!currentUser || !restaurantId) return;
 
@@ -135,6 +138,7 @@ export default function UserManagementPage() {
       setPermissions({ kitchen: { view: true } });
       setSelectAllPermissions(false);
       setSelectedRole('Kitchen');
+      setNewUsername('');
       if (isGlobalAdmin && mainBranch) {
         setSelectedBranch(mainBranch.id);
       }
@@ -317,7 +321,12 @@ export default function UserManagementPage() {
 
                     return (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.username}</TableCell>
+                      <TableCell className="font-medium">
+                        <div>{user.username}</div>
+                        {user.email && (
+                          <div className="text-xs text-muted-foreground font-normal">{user.email}</div>
+                        )}
+                      </TableCell>
                       <TableCell>{user.role}</TableCell>
                       <TableCell>{getBranchName(user.branchId)}</TableCell>
                       <TableCell className="truncate max-w-[150px]">
@@ -395,8 +404,30 @@ export default function UserManagementPage() {
                   <Label htmlFor="username">Username</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="username" name="username" placeholder="e.g., chef_john or table_5" required className="pl-9" />
+                    <Input
+                      id="username"
+                      name="username"
+                      placeholder="e.g., chef_john or table_5"
+                      required
+                      className="pl-9"
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                    />
                   </div>
+                  {restaurantId ? (
+                    <p className="text-xs text-muted-foreground font-mono">
+                      Login email (auto-generated):{' '}
+                      <span className="text-foreground font-semibold">
+                        {selectedRole === 'Admin'
+                          ? `admin@${restaurantId}.dineezee`
+                          : `${(newUsername.trim().toLowerCase().replace(/\s+/g, '_') || 'username')}@${restaurantId}.dineezee`}
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground font-mono">
+                      Login email (auto-generated): <span className="text-foreground">loading…</span>
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="role">Role</Label>
