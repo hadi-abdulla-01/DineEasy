@@ -26,7 +26,7 @@ type CartSheetProps = {
   existingOrder?: Order;
   branchId?: string;
   settings: RestaurantSettings | null;
-  customerInfo?: { name: string, phone: string };
+  customerInfo?: { name: string; phone: string; tempUserUid?: string };
   restaurantId?: string;
 };
 
@@ -70,6 +70,10 @@ export function CartSheet({
       if (isCustomerFacing) {
         formData.set('customerName', customerInfo?.name || '');
         formData.set('customerPhone', customerInfo?.phone || '');
+        // Pass tempUserUid for cleanup after order placement
+        if (customerInfo?.tempUserUid) {
+          formData.set('tempUserUid', customerInfo.tempUserUid);
+        }
       } else {
         formData.set('customerName', adminCustomerName);
         formData.set('customerPhone', adminCustomerPhone);

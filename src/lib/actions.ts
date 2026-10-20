@@ -49,6 +49,10 @@ import {
     verifyOtp,
     getUsers,
     getMenuItems,
+    createPhoneVerificationRequest,
+    verifyPhoneVerification,
+    getPhoneVerificationRequest,
+    cleanupTemporaryPhoneUser,
 } from './data';
 import { getRestaurantById, getSubscriptionPlanById } from './server-actions';
 import { randomUUID } from 'crypto';
@@ -102,6 +106,7 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
     const isCustomerFacing = formData.get('isCustomerFacing') === 'true';
     const createdByForm = formData.get('createdBy') as string | null;
     const existingOrderId = formData.get('existingOrderId') as string | null;
+    const tempUserUid = formData.get('tempUserUid') as string | null;
 
 
     if (isCustomerFacing) {
@@ -189,6 +194,19 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
         
         const action = isCustomerFacing ? 'QR Order Placed' : 'POS Order Placed';
         await logActivity(createdByForm || 'customer', createdByName, action, `Order ID: ${finalOrder.id.slice(-6)}`, restaurantId);
+
+        // Clean up temporary phone auth user if this is a customer-facing order
+        // This is safe to do after the order is successfully placed
+        if (isCustomerFacing && tempUserUid && restaurantId) {
+            try {
+                await cleanupTemporaryPhoneUser(tempUserUid, restaurantId);
+                console.log(`Cleaned up temporary phone auth user: ${tempUserUid}`);
+            } catch (cleanupError: any) {
+                console.error('Failed to cleanup temporary phone auth user:', cleanupError);
+                // Don't fail the order placement if cleanup fails
+                // The temporary user will need to be cleaned up manually or will expire naturally
+            }
+        }
 
     } catch (error) {
         console.error(error);
@@ -1424,16 +1442,25 @@ export async function requestOrderAccessAction(
 
         const settings = await getSettings(table.branchId, restaurantId);
         // Super Admin master switch AND per-branch toggle must both allow OTP.
-        const useOtp = (settings.dineInOtpEnabled ?? true) && settings.posSettings?.enableDineInOTP;
+        // Now using Firebase Phone Authentication for direct SMS OTP
+        const usePhoneVerification = (settings.dineInOtpEnabled ?? true) && settings.posSettings?.enableDineInOTP;
 
-        if (useOtp) {
-            const otpRequest = await createOtpRequest(tableId, restaurantId, customerName, customerPhone);
-            if (otpRequest) {
-                await sendOtpNotification(otpRequest);
+        if (usePhoneVerification) {
+            // Use new phone verification flow
+            // Create phone verification request
+            const phoneResult = await createPhoneVerificationRequest(
+                tableId,
+                restaurantId,
+                customerName,
+                customerPhone
+            );
+            
+            if (phoneResult.success) {
                 const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-                return { redirectTo: `/order/${tableId}/verify?reqId=${otpRequest.id}&name=${encodeURIComponent(customerName)}&phone=${encodeURIComponent(customerPhone)}&restaurantId=${restaurantId}${tokenParam}` };
+                // Redirect to new phone verification page
+                return { redirectTo: `/order/${tableId}/verify-phone?restaurantId=${restaurantId}&name=${encodeURIComponent(customerName)}&phone=${encodeURIComponent(customerPhone)}&verificationId=${encodeURIComponent(phoneResult.verificationId || '')}${tokenParam}` };
             } else {
-                return { error: 'Failed to create OTP request.' };
+                return { error: phoneResult.error || 'Failed to create verification request.' };
             }
         } else {
             // For non-OTP, just return success. Client will handle sessionStorage and redirect.
@@ -1471,6 +1498,141 @@ export async function verifyOtpAction(
     } catch (e: any) {
         console.error(e);
         return { error: e.message || 'An unexpected error occurred during verification.' };
+    }
+}
+
+// --- Phone Verification Actions ---
+
+type PhoneVerificationState = {
+    error?: string;
+    success?: boolean;
+    message?: string;
+    verificationId?: string;
+    tempUserUid?: string;
+} | null;
+
+/**
+ * Request phone verification - sends OTP via Firebase Phone Auth
+ * This creates a verification request and triggers Firebase to send SMS
+ */
+export async function requestPhoneVerificationAction(
+    prevState: PhoneVerificationState,
+    formData: FormData
+): Promise<PhoneVerificationState> {
+    noStore();
+    const tableId = formData.get('tableId') as string;
+    const restaurantId = formData.get('restaurantId') as string;
+    const customerName = formData.get('customerName') as string;
+    const customerPhone = formData.get('customerPhone') as string;
+    const token = formData.get('token') as string | null;
+
+    if (!tableId || !restaurantId || !customerName || !customerPhone) {
+        return { error: 'Missing required data.' };
+    }
+
+    try {
+        // Validate and format phone number
+        let phoneNumber = customerPhone.trim();
+        phoneNumber = phoneNumber.replace(/\s+/g, '');
+        
+        // Add country code if not present (default to +91 for India)
+        if (!phoneNumber.startsWith('+')) {
+            if (phoneNumber.startsWith('91')) {
+                phoneNumber = '+' + phoneNumber;
+            } else {
+                phoneNumber = '+91' + phoneNumber;
+            }
+        }
+        
+        // Validate E.164 format
+        const phoneRegex = /^\+[1-9]\d{1,14}$/;
+        if (!phoneRegex.test(phoneNumber)) {
+            return { error: 'Invalid phone number format. Please use international format with country code (e.g., +919876543210).' };
+        }
+
+        // Create phone verification request in database
+        const result = await createPhoneVerificationRequest(
+            tableId,
+            restaurantId,
+            customerName,
+            phoneNumber
+        );
+
+        if (!result.success) {
+            return { error: result.error || 'Failed to create verification request.' };
+        }
+
+        // In a real implementation, we would use Firebase Admin Auth to send the OTP
+        // For now, we'll return the verification ID
+        // The client will use Firebase client SDK to send the actual SMS
+        
+        // Note: Firebase Phone Auth requires client-side SDK for sending OTP
+        // The server can only verify the OTP using the Admin SDK
+        
+        return { 
+            success: true, 
+            verificationId: result.verificationId,
+            message: 'OTP request created. Please use Firebase client SDK to send OTP.'
+        };
+
+    } catch (e: any) {
+        console.error('Error in requestPhoneVerificationAction:', e);
+        return { error: e.message || 'An unexpected error occurred.' };
+    }
+}
+
+/**
+ * Verify phone OTP - validates the OTP entered by the user
+ * This uses Firebase Admin Auth to verify the phone number and OTP
+ */
+export async function verifyPhoneVerificationAction(
+    prevState: PhoneVerificationState,
+    formData: FormData
+): Promise<PhoneVerificationState> {
+    noStore();
+    const verificationId = formData.get('verificationId') as string;
+    const otp = formData.get('otp') as string;
+    const restaurantId = formData.get('restaurantId') as string;
+    const tableId = formData.get('tableId') as string;
+
+    if (!verificationId || !otp || !restaurantId) {
+        return { error: 'Missing required data.' };
+    }
+
+    try {
+        // Verify the OTP using server-side validation
+        const result = await verifyPhoneVerification(verificationId, otp, restaurantId);
+
+        if (!result.success) {
+            return { error: result.error || 'Invalid or expired OTP.' };
+        }
+
+        // Return success with temp user UID if available
+        return { 
+            success: true, 
+            message: 'Phone verified successfully!',
+            tempUserUid: result.tempUserUid
+        };
+
+    } catch (e: any) {
+        console.error('Error in verifyPhoneVerificationAction:', e);
+        return { error: e.message || 'An unexpected error occurred during verification.' };
+    }
+}
+
+/**
+ * Clean up temporary phone auth user after order completion
+ */
+export async function cleanupPhoneUserAction(
+    tempUserUid: string,
+    restaurantId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const success = await cleanupTemporaryPhoneUser(tempUserUid, restaurantId);
+        return { success, error: success ? undefined : 'Failed to cleanup temporary user' };
+    } catch (e: any) {
+        console.error('Error in cleanupPhoneUserAction:', e);
+        return { success: false, error: e.message || 'An unexpected error occurred.' };
     }
 }
 

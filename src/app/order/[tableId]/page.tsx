@@ -30,7 +30,7 @@ export default function OrderPage() {
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [currentSession, setCurrentSession] = useState<MealSession | null | undefined>(undefined);
     const [activeOrderForCustomer, setActiveOrderForCustomer] = useState<Order | undefined>(undefined);
-    const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+    const [customerInfo, setCustomerInfo] = useState<{ name: string; phone: string; tempUserUid?: string } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
@@ -54,7 +54,17 @@ export default function OrderPage() {
                 try {
                     const info = JSON.parse(storedCustomerInfo);
                     if (info.phone) {
-                        setCustomerInfo(info);
+                        // Check if phone verification is complete
+                        if (info.isVerified) {
+                            setCustomerInfo({
+                                name: info.name,
+                                phone: info.phone,
+                                tempUserUid: info.tempUserUid
+                            });
+                        } else {
+                            // Not verified yet, redirect to welcome or verify page
+                            router.replace(`/order/${tableId}/welcome?restaurantId=${restaurantIdFromUrl}${tokenSuffix}`);
+                        }
                     } else {
                         router.replace(`/order/${tableId}/welcome?restaurantId=${restaurantIdFromUrl}${tokenSuffix}`);
                     }

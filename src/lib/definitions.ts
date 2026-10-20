@@ -339,6 +339,30 @@ export type OTPRequest = {
   createdAt: any; // Firestore Timestamp
 };
 
+// Phone verification types for Firebase Phone Authentication
+export type PhoneVerificationState = {
+  phoneNumber: string;
+  verificationId: string;
+  verificationTimestamp: number;
+  isVerified: boolean;
+  tempUserUid?: string; // Temporary Firebase Auth user UID
+};
+
+export type PhoneVerificationRequest = {
+  id: string;
+  tableId: string;
+  restaurantId: string;
+  branchId: string;
+  customerName: string;
+  customerPhone: string;
+  verificationId: string; // Firebase verification ID
+  createdAt: any; // Firestore Timestamp
+  expiresAt: any; // Firestore Timestamp
+  isVerified: boolean;
+  verifiedAt?: any; // Firestore Timestamp
+  tempUserUid?: string; // Temporary Firebase Auth user UID
+};
+
 export type BillingStatus = 'active' | 'trial' | 'overdue' | 'cancelled';
 
 export type SubscriptionPlan = {
