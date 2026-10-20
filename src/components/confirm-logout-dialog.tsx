@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/app/admin/auth-provider';
-import { signInWithEmail } from '@/lib/auth';
 import { LoaderCircle } from 'lucide-react';
 
 interface ConfirmLogoutDialogProps {
@@ -51,12 +50,25 @@ export function ConfirmLogoutDialog({ isOpen, onOpenChange }: ConfirmLogoutDialo
     setIsLoading(true);
     setError('');
 
-    const result = await signInWithEmail(user.email, password);
+    try {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: user.email, password }),
+      });
+      
+      const result = await response.json();
 
-    if (result.success) {
-      window.location.href = '/login?role=admin'; // Hard redirect to clear all state
-    } else {
-      setError(result.error || 'Incorrect password. Please try again.');
+      if (result.success) {
+        window.location.href = '/login?role=admin'; // Hard redirect to clear all state
+      } else {
+        setError(result.error || 'Incorrect password. Please try again.');
+      }
+    } catch (err) {
+      console.error('Logout confirmation error:', err);
+      setError('An error occurred. Please try again.');
     }
 
     setIsLoading(false);

@@ -5,7 +5,6 @@ import { motion } from "motion/react";
 import svgPaths from "../imports/svg-ygbblntbv8";
 import imgImage2 from "@/assets/kitchen-login-illustration.png";
 import { useAuth } from "@/app/admin/auth-provider";
-import { signInWithEmail } from "@/lib/auth";
 import Link from 'next/link';
 import { Home } from 'lucide-react';
 
@@ -120,7 +119,15 @@ export default function KitchenLoginPage({ onNavigateToAdmin }: KitchenLoginPage
 
     setIsLoading(true);
     try {
-      const result = await signInWithEmail(email, password);
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      
+      const result = await response.json();
 
       if (result.success && result.user) {
         login(result.user);

@@ -4,7 +4,6 @@
 import { getAdminApp, getAdminAuth, getAdminMessaging } from '@/firebase/admin';
 import { getFirestore as getAdminFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { AppUser, Order, RemoteOrder, RestaurantSettings, SubscriptionPlan, SoundOption } from './definitions';
-import { createAuthUser } from '@/lib/auth';
 import { generateUserEmail } from '@/lib/auth-utils';
 import { unstable_noStore as noStore, revalidatePath } from 'next/cache';
 
@@ -489,6 +488,37 @@ export async function deleteSubscriptionPlan(planId: string): Promise<{ success:
     }
 }
 
+function sanitizeUserData(data: any): any {
+    if (!data || typeof data !== 'object') return data;
+    
+    const sanitized: Record<string, any> = {};
+    for (const key in data) {
+        const value = data[key];
+        
+        // Handle Firestore Timestamp instances
+        if (value && typeof value?.toDate === 'function') {
+            sanitized[key] = (value as FirebaseFirestore.Timestamp).toDate().toISOString();
+        }
+        // Handle raw Timestamp objects with _seconds and _nanoseconds
+        else if (value && typeof value === 'object' && '_seconds' in value && '_nanoseconds' in value) {
+            const ts = value as { _seconds: number; _nanoseconds: number };
+            sanitized[key] = new Date(ts._seconds * 1000 + ts._nanoseconds / 1e6).toISOString();
+        }
+        // Recursively handle nested objects
+        else if (value && typeof value === 'object' && !Array.isArray(value)) {
+            sanitized[key] = sanitizeUserData(value);
+        }
+        // Handle arrays
+        else if (Array.isArray(value)) {
+            sanitized[key] = value.map(item => sanitizeUserData(item));
+        }
+        else {
+            sanitized[key] = value;
+        }
+    }
+    return sanitized;
+}
+
 export async function getAdminForRestaurant(restaurantId: string): Promise<AppUser | null> {
     noStore();
     try {
@@ -501,9 +531,13 @@ export async function getAdminForRestaurant(restaurantId: string): Promise<AppUs
         }
         const doc = snapshot.docs[0];
         const data = doc.data();
+        
+        // Sanitize all Timestamp fields in the user data
+        const sanitizedData = sanitizeUserData(data);
+        
         return {
             id: doc.id,
-            ...data,
+            ...sanitizedData,
             restaurantId,
         } as AppUser;
     } catch (e) {

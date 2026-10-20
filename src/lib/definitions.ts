@@ -286,6 +286,7 @@ export type AppUser = {
     permissions?: UserPermissions;
     isSuperAdmin?: boolean;
     assignedTableId?: string;
+    createdAt?: string; // ISO date string for when the user was created
 };
 
 

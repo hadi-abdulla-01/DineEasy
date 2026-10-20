@@ -125,18 +125,61 @@ export async function createAuthUser(
 
         // Create user in Firebase Auth
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const firebaseUid = userCredential.user.uid;
 
-        // Create user in Firestore
-        const newUser = await createUserInFirestore({
-            ...userData,
-            email,
-            firebaseUid: userCredential.user.uid
-        }, restaurantId);
+        try {
+            // Create user in Firestore
+            const newUser = await createUserInFirestore({
+                ...userData,
+                email,
+                firebaseUid
+            }, restaurantId);
 
-        return {
-            success: true,
-            user: newUser
-        };
+            return {
+                success: true,
+                user: newUser
+            };
+        } catch (firestoreError: any) {
+            // Firestore creation failed, delete the Firebase Auth user to maintain consistency
+            console.error(`Firestore error during user creation for ${email}:`, firestoreError);
+            let cleanupSuccess = false;
+            try {
+                // Use Admin SDK to delete the user
+                const { getAdminAuth } = await import('@/firebase/admin');
+                const adminAuth = getAdminAuth();
+                if (adminAuth) {
+                    await adminAuth.deleteUser(firebaseUid);
+                    console.log(`Deleted Firebase Auth user ${firebaseUid} due to Firestore creation failure`);
+                    cleanupSuccess = true;
+                } else {
+                    console.warn('Admin Auth not available, cannot cleanup Firebase Auth user');
+                    // Try to use client SDK as fallback (might not work on server)
+                    try {
+                        await userCredential.user.delete();
+                        console.log(`Deleted Firebase Auth user ${firebaseUid} using client SDK`);
+                        cleanupSuccess = true;
+                    } catch (clientDeleteError: any) {
+                        console.error(`Client SDK delete also failed for ${firebaseUid}:`, clientDeleteError);
+                    }
+                }
+            } catch (deleteError: any) {
+                console.error(`Failed to delete Firebase Auth user ${firebaseUid} after Firestore error:`, deleteError);
+            }
+            
+            // Return appropriate error message
+            if (!cleanupSuccess) {
+                return {
+                    success: false,
+                    error: `User created in Auth but failed in database. Auth user ${firebaseUid} may need manual cleanup. Firestore error: ${firestoreError.message || 'Unknown error'}`
+                };
+            }
+            
+            // Return the Firestore error message
+            return {
+                success: false,
+                error: `Failed to create user in database: ${firestoreError.message || 'Unknown error'}`
+            };
+        }
     } catch (error: any) {
         console.error('Create user error:', error);
 
@@ -147,6 +190,8 @@ export async function createAuthUser(
             errorMessage = 'Password is too weak';
         } else if (error.code === 'auth/invalid-email') {
             errorMessage = 'Invalid email format';
+        } else if (error.message) {
+            errorMessage = error.message;
         }
 
         return {

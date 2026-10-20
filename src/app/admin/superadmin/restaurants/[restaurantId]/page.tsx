@@ -28,6 +28,7 @@ export default function RestaurantDetailsPage() {
     const [branches, setBranches] = useState<Branch[]>([]);
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!user || !user.isSuperAdmin) {
@@ -38,6 +39,7 @@ export default function RestaurantDetailsPage() {
         if (restaurantId) {
             const fetchData = async () => {
                 setIsLoading(true);
+                setFetchError(null);
                 try {
                     const [restaurantData, usersData, branchesData, logsData, adminData] = await Promise.all([
                         getRestaurantById(restaurantId),
@@ -61,8 +63,9 @@ export default function RestaurantDetailsPage() {
                     const filteredLogs = logsData.filter(log => userManagementActions.includes(log.action));
                     setActivityLogs(filteredLogs);
 
-                } catch (error) {
+                } catch (error: any) {
                     console.error("Failed to fetch restaurant details:", error);
+                    setFetchError(error?.message || 'Failed to load restaurant data. Please try again.');
                 } finally {
                     setIsLoading(false);
                 }
@@ -110,6 +113,16 @@ export default function RestaurantDetailsPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
                 <p>Loading restaurant details...</p>
+            </div>
+        );
+    }
+
+    if (fetchError) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-50 dark:bg-slate-900">
+                <p className="text-destructive font-medium">Error loading restaurant</p>
+                <p className="text-sm text-muted-foreground">{fetchError}</p>
+                <Link href="/admin/superadmin" className="text-sm underline">Back to super admin</Link>
             </div>
         );
     }
