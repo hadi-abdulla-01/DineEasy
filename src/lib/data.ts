@@ -48,16 +48,39 @@ const getCollections = async (restaurantId: string) => {
 };
 
 // Helper to convert Firestore doc to object with ID
+function serializeValue(value: any): any {
+    if (value === null || value === undefined) return value;
+    // Firestore Timestamp instance (toDate method present)
+    if (typeof value?.toDate === 'function') {
+        return value.toDate().toISOString();
+    }
+    // Raw Timestamp-like plain object that slipped through ({_seconds, _nanoseconds})
+    if (typeof value === 'object' && '_seconds' in value && '_nanoseconds' in value) {
+        return new Date(value._seconds * 1000 + value._nanoseconds / 1e6).toISOString();
+    }
+    // Recursively handle nested objects
+    if (typeof value === 'object' && !Array.isArray(value)) {
+        const result: Record<string, any> = {};
+        for (const k in value) {
+            result[k] = serializeValue(value[k]);
+        }
+        return result;
+    }
+    // Recursively handle arrays
+    if (Array.isArray(value)) {
+        return value.map(serializeValue);
+    }
+    return value;
+}
+
 function docToObj<T>(d: any): T {
     if (!d.exists()) return null as T;
     const data = d.data();
-    // Convert Timestamps to ISO strings
+    const serialized: Record<string, any> = {};
     for (const key in data) {
-        if (data[key] instanceof Timestamp) {
-            data[key] = data[key].toDate().toISOString();
-        }
+        serialized[key] = serializeValue(data[key]);
     }
-    return { ...data, id: d.id } as T;
+    return { ...serialized, id: d.id } as T;
 }
 
 async function seedInitialAdminUser(restaurantId: string) {
@@ -1132,15 +1155,38 @@ export async function getUserByEmail(email: string, restaurantId: string = 'dine
 export async function createUserInFirestore(userData: Omit<AppUser, 'id'>, restaurantId: string = 'dineeasee-restaurant'): Promise<AppUser> {
     const collections = await getCollections(restaurantId);
     const usersRef = collections.kitchenUsers;
-    const newUserPayload = { ...userData, restaurantId };
-    const docRef = await addDoc(usersRef, newUserPayload);
-    return { ...newUserPayload, id: docRef.id };
+    // Firestore rejects `undefined` values (throws "Function addDoc() called with
+    // invalid data. Unsupported field value: undefined"). Strip them so optional
+    // fields like `assignedTableId` don't break user creation.
+    const sanitizedUserData = Object.fromEntries(
+        Object.entries(userData).filter(([, value]) => value !== undefined)
+    );
+    const newUserPayload = { ...sanitizedUserData, restaurantId, createdAt: serverTimestamp() };
+
+    try {
+        const docRef = await addDoc(usersRef, newUserPayload);
+        // Return the user with the document ID
+        // Note: createdAt in Firestore is a server timestamp, but we return it as ISO string for client use
+        return { 
+            ...userData,
+            id: docRef.id,
+            restaurantId,
+            createdAt: new Date().toISOString()
+        };
+    } catch (error: any) {
+        console.error(`Failed to create user in Firestore for restaurant ${restaurantId}:`, error);
+        throw error; // Re-throw to be caught by the caller
+    }
 }
 
 export async function updateUser(userId: string, updateData: Partial<AppUser>, restaurantId: string = 'dineeasee-restaurant'): Promise<AppUser | undefined> {
     const firestore = await getFirestoreInstance();
     const userRef = doc(firestore, `restaurants/${restaurantId}/kitchenUsers`, userId);
-    await updateDoc(userRef, updateData);
+    // updateDoc also rejects `undefined` values, so strip them (deleteField() sentinels are objects, not undefined, and are preserved).
+    const sanitizedUpdateData = Object.fromEntries(
+        Object.entries(updateData).filter(([, value]) => value !== undefined)
+    );
+    await updateDoc(userRef, sanitizedUpdateData);
     return getUserById(userId, restaurantId);
 }
 

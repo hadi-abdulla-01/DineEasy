@@ -596,7 +596,7 @@ export async function createUserAction(restaurantId: string, formData: FormData)
             role,
             permissions,
             branchId,
-            assignedTableId: assignedTableId || undefined,
+            ...(assignedTableId ? { assignedTableId } : {}),
         }, restaurantId);
 
         if (!authResult.success) {
@@ -661,6 +661,26 @@ export async function updateUserAction(userId: string, formData: FormData): Prom
 
 
     try {
+        // If password is being changed, also update it in Firebase Auth
+        if (password) {
+            const existingUser = await getUserById(userId, restaurantId);
+            if (existingUser?.firebaseUid) {
+                const { getAdminAuth } = await import('@/firebase/admin');
+                const adminAuth = getAdminAuth();
+                if (adminAuth) {
+                    try {
+                        await adminAuth.updateUser(existingUser.firebaseUid, { password });
+                        console.log(`Updated Firebase Auth password for user ${existingUser.firebaseUid}`);
+                    } catch (authError: any) {
+                        console.error('Failed to update Firebase Auth password:', authError);
+                        return undefined;
+                    }
+                } else {
+                    console.warn("Skipping Firebase Auth password update: Admin Auth could not be initialized. Check FIREBASE_SERVICE_ACCOUNT_KEY.");
+                }
+            }
+        }
+
         const updatedUser = await updateUser(userId, updateData, restaurantId);
         if (updatedBy) {
             const updater = await getUserById(updatedBy, restaurantId);
