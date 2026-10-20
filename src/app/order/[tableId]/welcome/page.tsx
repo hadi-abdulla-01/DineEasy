@@ -7,9 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Logo from '@/components/logo';
-import { requestPhoneVerificationAction } from '@/lib/actions';
+import { requestPhoneVerificationAction, requestOrderAccessAction } from '@/lib/actions';
 import { sendPhoneOTP, clearVerificationState } from '@/firebase/phone-auth';
 import { LoaderCircle, ChevronDown } from 'lucide-react';
+import { getSettings } from '@/lib/data';
 
 export default function WelcomePage() {
     const router = useRouter();
@@ -45,6 +46,26 @@ export default function WelcomePage() {
         clearVerificationState();
     }, []);
 
+    const [requiresOTP, setRequiresOTP] = useState<boolean | null>(null);
+
+    // Check if OTP is required for this restaurant
+    useEffect(() => {
+        if (restaurantId && tableId) {
+            const checkOTPRequired = async () => {
+                try {
+                    const table = await getSettings(undefined, restaurantId);
+                    // Check both Super Admin master switch and branch setting
+                    const otpRequired = (table?.dineInOtpEnabled ?? true) && table?.posSettings?.enableDineInOTP;
+                    setRequiresOTP(otpRequired);
+                } catch {
+                    // If we can't check, assume OTP is required for safety
+                    setRequiresOTP(true);
+                }
+            };
+            checkOTPRequired();
+        }
+    }, [restaurantId, tableId]);
+
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
@@ -68,41 +89,113 @@ export default function WelcomePage() {
             // Combine with country code
             const fullPhoneNumber = countryCode + phoneNumber;
 
-            // First, create the verification request on the server
-            const formData = new FormData();
-            formData.set('tableId', tableId);
-            formData.set('restaurantId', restaurantId);
-            formData.set('customerName', customerName.trim());
-            formData.set('customerPhone', fullPhoneNumber);
-            if (token) formData.set('token', token);
+            // Check if OTP is required
+            if (requiresOTP === null) {
+                // Still loading, try to proceed with OTP flow
+                const formData = new FormData();
+                formData.set('tableId', tableId);
+                formData.set('restaurantId', restaurantId);
+                formData.set('customerName', customerName.trim());
+                formData.set('customerPhone', fullPhoneNumber);
+                if (token) formData.set('token', token);
 
-            const result = await requestPhoneVerificationAction(null, formData);
-
-            if (result?.error) {
-                setError(result.error);
-                isSubmitting.current = false;
-                setIsPending(false);
+                const result = await requestOrderAccessAction(null, formData);
+                
+                if (result?.error) {
+                    setError(result.error);
+                    isSubmitting.current = false;
+                    setIsPending(false);
+                    return;
+                }
+                
+                if (result?.redirectTo) {
+                    router.push(result.redirectTo);
+                } else if (result?.success) {
+                    // No OTP required, save customer info and redirect
+                    sessionStorage.setItem(
+                        `dineeasy-customer-${tableId}`,
+                        JSON.stringify({ 
+                            name: customerName.trim(), 
+                            phone: fullPhoneNumber,
+                            isVerified: true
+                        })
+                    );
+                    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+                    router.push(`/order/${tableId}?restaurantId=${restaurantId}${tokenParam}`);
+                }
                 return;
             }
 
-            // Now send OTP via Firebase Phone Auth client SDK
-            // This will actually send the SMS
-            const confirmationResult = await sendPhoneOTP(fullPhoneNumber);
+            if (requiresOTP) {
+                // OTP is required, use phone verification flow
+                const formData = new FormData();
+                formData.set('tableId', tableId);
+                formData.set('restaurantId', restaurantId);
+                formData.set('customerName', customerName.trim());
+                formData.set('customerPhone', fullPhoneNumber);
+                if (token) formData.set('token', token);
 
-            // Save customer info and verification state to session storage
-            sessionStorage.setItem(
-                `dineeasy-customer-${tableId}`,
-                JSON.stringify({ 
-                    name: customerName.trim(), 
-                    phone: fullPhoneNumber,
-                    verificationId: confirmationResult.verificationId,
-                    serverVerificationId: result.verificationId // Server-side tracking
-                })
-            );
+                const result = await requestPhoneVerificationAction(null, formData);
 
-            // Redirect to phone verification page
-            const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-            router.push(`/order/${tableId}/verify-phone?restaurantId=${restaurantId}&name=${encodeURIComponent(customerName.trim())}&phone=${encodeURIComponent(fullPhoneNumber)}&countryCode=${encodeURIComponent(countryCode)}&verificationId=${encodeURIComponent(confirmationResult.verificationId)}${tokenParam}`);
+                if (result?.error) {
+                    setError(result.error);
+                    isSubmitting.current = false;
+                    setIsPending(false);
+                    return;
+                }
+
+                // Now send OTP via Firebase Phone Auth client SDK
+                // This will actually send the SMS
+                const confirmationResult = await sendPhoneOTP(fullPhoneNumber);
+
+                // Save customer info and verification state to session storage
+                sessionStorage.setItem(
+                    `dineeasy-customer-${tableId}`,
+                    JSON.stringify({ 
+                        name: customerName.trim(), 
+                        phone: fullPhoneNumber,
+                        verificationId: confirmationResult.verificationId,
+                        serverVerificationId: result.verificationId // Server-side tracking
+                    })
+                );
+
+                // Redirect to phone verification page
+                const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+                router.push(`/order/${tableId}/verify-phone?restaurantId=${restaurantId}&name=${encodeURIComponent(customerName.trim())}&phone=${encodeURIComponent(fullPhoneNumber)}&countryCode=${encodeURIComponent(countryCode)}&verificationId=${encodeURIComponent(confirmationResult.verificationId)}${tokenParam}`);
+            } else {
+                // OTP is not required, save customer info and redirect directly
+                const formData = new FormData();
+                formData.set('tableId', tableId);
+                formData.set('restaurantId', restaurantId);
+                formData.set('customerName', customerName.trim());
+                formData.set('customerPhone', fullPhoneNumber);
+                if (token) formData.set('token', token);
+
+                const result = await requestOrderAccessAction(null, formData);
+                
+                if (result?.error) {
+                    setError(result.error);
+                    isSubmitting.current = false;
+                    setIsPending(false);
+                    return;
+                }
+                
+                if (result?.redirectTo) {
+                    router.push(result.redirectTo);
+                } else if (result?.success) {
+                    // Save customer info and redirect
+                    sessionStorage.setItem(
+                        `dineeasy-customer-${tableId}`,
+                        JSON.stringify({ 
+                            name: customerName.trim(), 
+                            phone: fullPhoneNumber,
+                            isVerified: true
+                        })
+                    );
+                    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+                    router.push(`/order/${tableId}?restaurantId=${restaurantId}${tokenParam}`);
+                }
+            }
 
         } catch (err: any) {
             setError(err?.message || 'An unexpected error occurred.');
@@ -119,7 +212,9 @@ export default function WelcomePage() {
                 <CardHeader className="items-center text-center">
                     <Logo className="h-10 w-10 text-primary mb-2" />
                     <CardTitle className="font-headline text-2xl">Welcome!</CardTitle>
-                    <CardDescription>Enter your details to receive an OTP via SMS</CardDescription>
+                    <CardDescription>
+                        {requiresOTP === false ? 'Enter your details to start ordering' : 'Enter your details to receive an OTP via SMS'}
+                    </CardDescription>
                 </CardHeader>
 
                 <form onSubmit={handleSubmit}>
@@ -192,17 +287,19 @@ export default function WelcomePage() {
                                     ))}
                                 </div>
                             )}
-                            <p className="text-xs text-muted-foreground">
-                                We will send an OTP to this number via SMS
-                            </p>
+                            {requiresOTP !== false && (
+                                <p className="text-xs text-muted-foreground">
+                                    We will send an OTP to this number via SMS
+                                </p>
+                            )}
                         </div>
                     </CardContent>
 
                     <CardFooter>
                         <Button type="submit" className="w-full" disabled={isPending}>
                             {isPending
-                                ? <><LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> Sending OTP...</>
-                                : 'Send OTP via SMS'
+                                ? <><LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> {requiresOTP !== false ? 'Sending OTP...' : 'Please wait...'}</>
+                                : requiresOTP !== false ? 'Send OTP via SMS' : 'Start Ordering'
                             }
                         </Button>
                     </CardFooter>

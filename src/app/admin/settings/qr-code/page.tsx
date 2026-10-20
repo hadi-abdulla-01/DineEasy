@@ -176,29 +176,30 @@ function QRCodeSettingsContent() {
                     {/* ── Dynamic QR duration ── */}
                     {!dynamicQrAllowed && (
                         <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-                            Dynamic QR codes are disabled by the Super Admin for this restaurant. Tables use static QR codes. Contact the Super Admin to enable this feature.
+                            Dynamic QR codes are disabled by the Super Admin for this restaurant. Tables use static QR codes.
                         </div>
                     )}
-                    <div className="space-y-2">
-                        <Label htmlFor="dynamicQrDuration">Dynamic QR Code Duration (timeout)</Label>
-                        <div className="flex items-center gap-3 max-w-xs">
-                            <Input
-                                id="dynamicQrDuration"
-                                name="dynamicQrDuration"
-                                type="number"
-                                min={30}
-                                max={86400}
-                                step={30}
-                                disabled={!dynamicQrAllowed}
-                                defaultValue={branch.dynamicQrDuration ?? restaurantDefaultDuration}
-                            />
-                            <span className="text-sm text-muted-foreground whitespace-nowrap">seconds</span>
+                    {dynamicQrAllowed && (
+                        <div className="space-y-2">
+                            <Label htmlFor="dynamicQrDuration">Dynamic QR Code Duration (timeout)</Label>
+                            <div className="flex items-center gap-3 max-w-xs">
+                                <Input
+                                    id="dynamicQrDuration"
+                                    name="dynamicQrDuration"
+                                    type="number"
+                                    min={30}
+                                    max={86400}
+                                    step={30}
+                                    defaultValue={branch.dynamicQrDuration ?? restaurantDefaultDuration}
+                                />
+                                <span className="text-sm text-muted-foreground whitespace-nowrap">seconds</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                How long a dynamic QR code is valid before it auto-rotates and the old one expires.
+                                Restaurant default: {restaurantDefaultDuration} s. Minimum: 30 s. Leave empty to use the restaurant default.
+                            </p>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                            How long a dynamic QR code is valid before it auto-rotates and the old one expires.
-                            Restaurant default: {restaurantDefaultDuration} s. Minimum: 30 s. Leave empty to use the restaurant default.
-                        </p>
-                    </div>
+                    )}
 
                     <Separator />
 

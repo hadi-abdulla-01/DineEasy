@@ -1443,6 +1443,7 @@ export async function requestOrderAccessAction(
         const settings = await getSettings(table.branchId, restaurantId);
         // Super Admin master switch AND per-branch toggle must both allow OTP.
         // Now using Firebase Phone Authentication for direct SMS OTP
+        // If Super Admin has disabled dineInOtpEnabled, no OTP is required regardless of branch setting
         const usePhoneVerification = (settings.dineInOtpEnabled ?? true) && settings.posSettings?.enableDineInOTP;
 
         if (usePhoneVerification) {
@@ -1463,7 +1464,8 @@ export async function requestOrderAccessAction(
                 return { error: phoneResult.error || 'Failed to create verification request.' };
             }
         } else {
-            // For non-OTP, just return success. Client will handle sessionStorage and redirect.
+            // For non-OTP, save customer info and return success. Client will handle sessionStorage and redirect.
+            // Save customer info to session storage format
             return { success: true };
         }
     } catch (e: any) {

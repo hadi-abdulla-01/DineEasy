@@ -241,39 +241,6 @@ export default function RestaurantDetailsPage() {
                                         }}
                                     />
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="feature-qr-duration">Dynamic QR Timeout Duration (seconds)</Label>
-                                    <div className="flex items-center gap-3 max-w-xs">
-                                        <Input
-                                            id="feature-qr-duration"
-                                            type="number"
-                                            min={30}
-                                            step={30}
-                                            value={featureFlags.dynamicQrDuration}
-                                            disabled={isSavingFlags || !featureFlags.dynamicQrEnabled}
-                                            onChange={(e) => setFeatureFlags({ ...featureFlags, dynamicQrDuration: Number(e.target.value) })}
-                                            onBlur={async () => {
-                                                const duration = featureFlags.dynamicQrDuration;
-                                                if (isNaN(duration) || duration < 30) {
-                                                    toast({ variant: 'destructive', title: 'Invalid value', description: 'Duration must be at least 30 seconds.' });
-                                                    const fresh = await getRestaurantFeatureFlags(restaurantId);
-                                                    setFeatureFlags(fresh);
-                                                    return;
-                                                }
-                                                setIsSavingFlags(true);
-                                                const result = await updateRestaurantFeatureFlags(restaurantId, { dynamicQrDuration: duration });
-                                                setIsSavingFlags(false);
-                                                if (result.success) {
-                                                    toast({ title: 'Saved', description: `QR timeout set to ${duration} seconds.` });
-                                                } else {
-                                                    toast({ variant: 'destructive', title: 'Error', description: result.error || 'Failed to update.' });
-                                                }
-                                            }}
-                                        />
-                                        <span className="text-sm text-muted-foreground whitespace-nowrap">seconds</span>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">Used as the default rotation timeout for this restaurant's tables and branches.</p>
-                                </div>
                             </>
                         )}
                     </CardContent>

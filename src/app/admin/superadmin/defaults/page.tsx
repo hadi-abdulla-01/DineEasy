@@ -31,7 +31,6 @@ export default function DefaultSettingsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [defaultDynamicQrEnabled, setDefaultDynamicQrEnabled] = useState(true);
     const [defaultDineInOtpEnabled, setDefaultDineInOtpEnabled] = useState(true);
-    const [defaultDynamicQrDuration, setDefaultDynamicQrDuration] = useState(300);
 
     useEffect(() => {
         getDefaultRestaurantSettings().then(s => {
@@ -39,13 +38,11 @@ export default function DefaultSettingsPage() {
             setTaxes(s?.taxes || []);
             setDefaultDynamicQrEnabled(s?.dynamicQrEnabled ?? true);
             setDefaultDineInOtpEnabled(s?.dineInOtpEnabled ?? true);
-            setDefaultDynamicQrDuration(s?.dynamicQrDuration ?? 300);
             setIsLoading(false);
         });
     }, []);
 
     const handleFormAction = async (formData: FormData) => {
-        const duration = Number(formData.get('dynamicQrDuration'));
         const newSettings: Partial<RestaurantSettings> = {
             restaurantName: formData.get('restaurantName') as string,
             restaurantAddress: formData.get('restaurantAddress') as string,
@@ -57,7 +54,6 @@ export default function DefaultSettingsPage() {
             menuCategories: (formData.get('menuCategories') as string).split(',').map(c => c.trim()).filter(Boolean),
             dynamicQrEnabled: defaultDynamicQrEnabled,
             dineInOtpEnabled: defaultDineInOtpEnabled,
-            dynamicQrDuration: isNaN(duration) || duration < 30 ? 300 : duration,
         };
 
         await updateDefaultRestaurantSettings(newSettings);
@@ -198,14 +194,6 @@ export default function DefaultSettingsPage() {
                                     <p className="text-sm text-muted-foreground">Allow new restaurants to require OTP verification for dine-in orders.</p>
                                 </div>
                                 <Switch id="defaultDineInOtpEnabled" checked={defaultDineInOtpEnabled} onCheckedChange={setDefaultDineInOtpEnabled} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="dynamicQrDuration">Default Dynamic QR Duration (seconds)</Label>
-                                <div className="flex items-center gap-3 max-w-xs">
-                                    <Input id="dynamicQrDuration" name="dynamicQrDuration" type="number" min={30} step={30} value={defaultDynamicQrDuration} onChange={(e) => setDefaultDynamicQrDuration(Number(e.target.value))} />
-                                    <span className="text-sm text-muted-foreground whitespace-nowrap">seconds</span>
-                                </div>
-                                <p className="text-xs text-muted-foreground">How long a dynamic QR code stays valid before auto-rotating. Minimum 30 seconds.</p>
                             </div>
                         </CardContent>
                      </Card>

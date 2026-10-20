@@ -207,7 +207,7 @@ export default function PosSettingsPage() {
                         <h3 className="text-lg font-medium">Dine-in OTP Verification</h3>
                         {!otpAllowed && (
                             <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-                                OTP verification is disabled by the Super Admin for this restaurant. Contact the Super Admin to enable this feature.
+                                OTP verification is disabled by the Super Admin for this restaurant. Customers can place orders without OTP verification.
                             </div>
                         )}
                         <div className="flex items-center justify-between rounded-lg border p-4">
@@ -216,7 +216,7 @@ export default function PosSettingsPage() {
                                     Enable OTP for Dine-in Orders
                                 </Label>
                                 <p className="text-sm text-muted-foreground">
-                                    If enabled, customers must enter an OTP sent to staff devices before they can place an order.
+                                    If enabled, customers must verify their phone number via SMS OTP before they can place an order. If disabled, customers can place orders directly without verification.
                                 </p>
                             </div>
                             <Switch
