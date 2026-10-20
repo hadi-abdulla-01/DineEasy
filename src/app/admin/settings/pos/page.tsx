@@ -205,11 +205,6 @@ export default function PosSettingsPage() {
                     
                     <div className="space-y-4">
                         <h3 className="text-lg font-medium">Dine-in OTP Verification</h3>
-                        {!otpAllowed && (
-                            <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-                                OTP verification is disabled by the Super Admin for this restaurant. Customers can place orders without OTP verification.
-                            </div>
-                        )}
                         <div className="flex items-center justify-between rounded-lg border p-4">
                             <div className="space-y-0.5">
                                 <Label htmlFor="enableDineInOTPSwitch" className="text-base">

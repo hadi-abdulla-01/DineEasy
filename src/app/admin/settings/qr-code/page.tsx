@@ -174,11 +174,6 @@ function QRCodeSettingsContent() {
                     <Separator />
 
                     {/* ── Dynamic QR duration ── */}
-                    {!dynamicQrAllowed && (
-                        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-                            Dynamic QR codes are disabled by the Super Admin for this restaurant. Tables use static QR codes.
-                        </div>
-                    )}
                     {dynamicQrAllowed && (
                         <div className="space-y-2">
                             <Label htmlFor="dynamicQrDuration">Dynamic QR Code Duration (timeout)</Label>

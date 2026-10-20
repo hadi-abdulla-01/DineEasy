@@ -53,9 +53,10 @@ export default function WelcomePage() {
         if (restaurantId && tableId) {
             const checkOTPRequired = async () => {
                 try {
-                    const table = await getSettings(undefined, restaurantId);
-                    // Check both Super Admin master switch and branch setting
-                    const otpRequired = (table?.dineInOtpEnabled ?? true) && table?.posSettings?.enableDineInOTP;
+                    const restaurantSettings = await getSettings(undefined, restaurantId);
+                    // Check Super Admin master switch first
+                    // If Super Admin has disabled dineInOtpEnabled, no OTP is required
+                    const otpRequired = (restaurantSettings?.dineInOtpEnabled ?? true) && restaurantSettings?.posSettings?.enableDineInOTP;
                     setRequiresOTP(otpRequired);
                 } catch {
                     // If we can't check, assume OTP is required for safety

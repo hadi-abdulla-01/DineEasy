@@ -29,14 +29,12 @@ export default function DefaultSettingsPage() {
     const [taxes, setTaxes] = useState<Tax[]>([]);
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(true);
-    const [defaultDynamicQrEnabled, setDefaultDynamicQrEnabled] = useState(true);
     const [defaultDineInOtpEnabled, setDefaultDineInOtpEnabled] = useState(true);
 
     useEffect(() => {
         getDefaultRestaurantSettings().then(s => {
             setSettings(s);
             setTaxes(s?.taxes || []);
-            setDefaultDynamicQrEnabled(s?.dynamicQrEnabled ?? true);
             setDefaultDineInOtpEnabled(s?.dineInOtpEnabled ?? true);
             setIsLoading(false);
         });
@@ -52,7 +50,6 @@ export default function DefaultSettingsPage() {
             taxNumber: formData.get('taxNumber') as string,
             taxes: taxes,
             menuCategories: (formData.get('menuCategories') as string).split(',').map(c => c.trim()).filter(Boolean),
-            dynamicQrEnabled: defaultDynamicQrEnabled,
             dineInOtpEnabled: defaultDineInOtpEnabled,
         };
 
@@ -181,13 +178,6 @@ export default function DefaultSettingsPage() {
                             <CardDescription>These feature defaults are applied to every newly created restaurant. You can still override them per restaurant.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="flex items-center justify-between rounded-lg border p-4">
-                                <div className="space-y-0.5">
-                                    <Label htmlFor="defaultDynamicQrEnabled" className="text-base">Dynamic QR Codes</Label>
-                                    <p className="text-sm text-muted-foreground">Allow new restaurants to use rotating dynamic QR codes on tables.</p>
-                                </div>
-                                <Switch id="defaultDynamicQrEnabled" checked={defaultDynamicQrEnabled} onCheckedChange={setDefaultDynamicQrEnabled} />
-                            </div>
                             <div className="flex items-center justify-between rounded-lg border p-4">
                                 <div className="space-y-0.5">
                                     <Label htmlFor="defaultDineInOtpEnabled" className="text-base">Dine-in OTP Verification</Label>

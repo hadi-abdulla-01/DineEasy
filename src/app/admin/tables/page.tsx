@@ -133,11 +133,6 @@ function TableList({ tables, settings, restaurantId, onFloorChange, onToggleDyna
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {!dynamicQrAllowed && (
-                <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-                    Dynamic QR codes are disabled by the Super Admin for this restaurant — tables use static QR codes.
-                </div>
-            )}
             {tables.map((table) => {
                 const displayHref = `/display?tableId=${table.id}&restaurantId=${table.restaurantId}${dynamicQrAllowed && table.isDynamicQR && table.qrToken ? `&token=${table.qrToken}` : ''}`;
                 return (

@@ -419,7 +419,6 @@ export async function updateRestaurantValidity(restaurantId: string, nextBilling
 
 export type RestaurantFeatureFlags = {
     dynamicQrEnabled: boolean;
-    dynamicQrDuration: number;
     dineInOtpEnabled: boolean;
 };
 
@@ -439,12 +438,11 @@ export async function getRestaurantFeatureFlags(restaurantId: string): Promise<R
         const defaultsData = defaultsSnap.exists ? (defaultsSnap.data() || {}) : {};
         return {
             dynamicQrEnabled: restaurantData.dynamicQrEnabled ?? defaultsData.dynamicQrEnabled ?? true,
-            dynamicQrDuration: restaurantData.dynamicQrDuration ?? defaultsData.dynamicQrDuration ?? 300,
             dineInOtpEnabled: restaurantData.dineInOtpEnabled ?? defaultsData.dineInOtpEnabled ?? true,
         };
     } catch (error: any) {
         console.error('Error getting restaurant feature flags:', error);
-        return { dynamicQrEnabled: true, dynamicQrDuration: 300, dineInOtpEnabled: true };
+        return { dynamicQrEnabled: true, dineInOtpEnabled: true };
     }
 }
 
@@ -457,9 +455,6 @@ export async function updateRestaurantFeatureFlags(
     flags: Partial<RestaurantFeatureFlags>
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        if (flags.dynamicQrDuration !== undefined && (isNaN(flags.dynamicQrDuration) || flags.dynamicQrDuration < 30)) {
-            return { success: false, error: 'Dynamic QR duration must be at least 30 seconds.' };
-        }
         const firestore = await getAdminFirestoreInstance();
         const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
         await restaurantRef.set(flags, { merge: true });

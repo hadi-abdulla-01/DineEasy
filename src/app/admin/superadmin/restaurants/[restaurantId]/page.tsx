@@ -198,7 +198,7 @@ export default function RestaurantDetailsPage() {
                                 <div className="flex items-center justify-between rounded-lg border p-4">
                                     <div className="space-y-0.5">
                                         <Label className="text-base">Dynamic QR Codes</Label>
-                                        <p className="text-sm text-muted-foreground">When off, tables fall back to static QR codes and the duration setting is hidden.</p>
+                                        <p className="text-sm text-muted-foreground">When off, tables use static QR codes.</p>
                                     </div>
                                     <Switch
                                         checked={featureFlags.dynamicQrEnabled}

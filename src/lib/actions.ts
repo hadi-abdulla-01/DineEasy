@@ -1214,7 +1214,7 @@ export async function toggleTableDynamicQRAction(tableId: string, isDynamic: boo
         try {
             const restaurantSettings = await getSettings(undefined, restaurantId);
             if (restaurantSettings && restaurantSettings.dynamicQrEnabled === false) {
-                return { success: false, message: 'Dynamic QR codes are disabled by the Super Admin for this restaurant.' };
+                return { success: false, message: 'Cannot enable dynamic QR for this table.' };
             }
         } catch {
             // If settings can't be loaded, fall through and let the update attempt proceed.
@@ -1298,7 +1298,7 @@ export async function autoRotateQRTokenAction(tableId: string, restaurantId: str
         try {
             const restaurantSettings = await getSettings(undefined, restaurantId);
             if (restaurantSettings && restaurantSettings.dynamicQrEnabled === false) {
-                return { success: false, message: 'Dynamic QR is disabled for this restaurant.' };
+                return { success: false, message: 'Cannot rotate QR token.' };
             }
         } catch {
             // Fall through on settings load failure.
@@ -1440,11 +1440,13 @@ export async function requestOrderAccessAction(
             return { redirectTo: `/order/${tableId}/status/${existingOrder.id}?restaurantId=${restaurantId}` };
         }
 
-        const settings = await getSettings(table.branchId, restaurantId);
-        // Super Admin master switch AND per-branch toggle must both allow OTP.
-        // Now using Firebase Phone Authentication for direct SMS OTP
+        const branchSettings = await getSettings(table.branchId, restaurantId);
+        const restaurantSettings = await getSettings(undefined, restaurantId);
+        
+        // Super Admin master switch controls whether OTP can be required
         // If Super Admin has disabled dineInOtpEnabled, no OTP is required regardless of branch setting
-        const usePhoneVerification = (settings.dineInOtpEnabled ?? true) && settings.posSettings?.enableDineInOTP;
+        // Otherwise, check the branch-level POS setting
+        const usePhoneVerification = (restaurantSettings.dineInOtpEnabled ?? true) && branchSettings.posSettings?.enableDineInOTP;
 
         if (usePhoneVerification) {
             // Use new phone verification flow
