@@ -34,16 +34,17 @@ function SubmitButton() {
 export default function PosSettingsPage() {
     const searchParams = useSearchParams();
     const branchId = searchParams.get('branchId');
-    const { getBranchById, restaurantId } = useRestaurantData();
+    const { getBranchById, getSettings, restaurantId } = useRestaurantData();
     const [branch, setBranch] = useState<Branch | null>(null);
     const [posSettings, setPosSettings] = useState<POSSettings>(defaultPosSettings);
     const [newDenomination, setNewDenomination] = useState('');
     const [isLoading, setIsLoading] = useState(true);
+    const [otpAllowed, setOtpAllowed] = useState(true);
     const { toast } = useToast();
 
     useEffect(() => {
         if(branchId) {
-            getBranchById(branchId).then(b => {
+            Promise.all([getBranchById(branchId), getSettings(undefined)]).then(([b, restaurantSettings]) => {
                 setBranch(b);
                 if (b) {
                     setPosSettings({
@@ -51,12 +52,13 @@ export default function PosSettingsPage() {
                         ...(b.posSettings || {}),
                     });
                 }
+                setOtpAllowed(restaurantSettings?.dineInOtpEnabled ?? true);
                 setIsLoading(false);
             });
         } else {
             setIsLoading(false);
         }
-    }, [branchId, getBranchById]);
+    }, [branchId, getBranchById, getSettings]);
 
     const handleFormAction = async (formData: FormData) => {
         const newFormData = new FormData();
@@ -203,6 +205,11 @@ export default function PosSettingsPage() {
                     
                     <div className="space-y-4">
                         <h3 className="text-lg font-medium">Dine-in OTP Verification</h3>
+                        {!otpAllowed && (
+                            <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+                                OTP verification is disabled by the Super Admin for this restaurant. Contact the Super Admin to enable this feature.
+                            </div>
+                        )}
                         <div className="flex items-center justify-between rounded-lg border p-4">
                             <div className="space-y-0.5">
                                 <Label htmlFor="enableDineInOTPSwitch" className="text-base">
@@ -214,7 +221,8 @@ export default function PosSettingsPage() {
                             </div>
                             <Switch
                                 id="enableDineInOTPSwitch"
-                                checked={posSettings.enableDineInOTP}
+                                checked={otpAllowed && posSettings.enableDineInOTP}
+                                disabled={!otpAllowed}
                                 onCheckedChange={(checked) => setPosSettings(prev => ({...prev, enableDineInOTP: checked}))}
                             />
                         </div>

@@ -254,7 +254,14 @@ export async function updateOrderStatusAction(formData: FormData) {
                     const table = await getTableById(tableId, restaurantId);
                     if (table) {
                         const tableUpdateData: Partial<Table> = { status: 'available' };
-                        if (table.isDynamicQR) {
+                        let dynamicQrAllowed = true;
+                        try {
+                            const restaurantSettings = await getSettings(undefined, restaurantId);
+                            dynamicQrAllowed = restaurantSettings?.dynamicQrEnabled ?? true;
+                        } catch {
+                            dynamicQrAllowed = true;
+                        }
+                        if (dynamicQrAllowed && table.isDynamicQR) {
                             tableUpdateData.qrToken = randomUUID();
                             // Fetch duration from settings for new expiry
                             try {
@@ -1184,6 +1191,18 @@ export async function toggleTableDynamicQRAction(tableId: string, isDynamic: boo
         return { success: false, message: 'Missing required data.' };
     }
 
+    // Enforce the Super Admin master switch: cannot enable Dynamic QR when disabled for this restaurant.
+    if (isDynamic) {
+        try {
+            const restaurantSettings = await getSettings(undefined, restaurantId);
+            if (restaurantSettings && restaurantSettings.dynamicQrEnabled === false) {
+                return { success: false, message: 'Dynamic QR codes are disabled by the Super Admin for this restaurant.' };
+            }
+        } catch {
+            // If settings can't be loaded, fall through and let the update attempt proceed.
+        }
+    }
+
     try {
         let expiresAt: number | undefined;
         if (isDynamic) {
@@ -1257,7 +1276,15 @@ export async function autoRotateQRTokenAction(tableId: string, restaurantId: str
         const docSnap = await getDocFromServer(docRef);
         if (!docSnap.exists()) return { success: false, message: 'Table not found.' };
         const tableData = docSnap.data() as Table;
-        // Guard: only rotate if it is a dynamic QR and it's actually expired
+        // Guard: only rotate if Dynamic QR is allowed for this restaurant and the table uses it
+        try {
+            const restaurantSettings = await getSettings(undefined, restaurantId);
+            if (restaurantSettings && restaurantSettings.dynamicQrEnabled === false) {
+                return { success: false, message: 'Dynamic QR is disabled for this restaurant.' };
+            }
+        } catch {
+            // Fall through on settings load failure.
+        }
         if (!tableData.isDynamicQR) return { success: false, message: 'Not a dynamic QR table.' };
         if (tableData.qrExpiresAt && Date.now() < tableData.qrExpiresAt) {
             return { success: false, message: 'Token not yet expired.' };
@@ -1321,8 +1348,17 @@ export async function validateTableAction(
     }
 
     const table: Table = { ...tableData, id: docSnap.id, restaurantId };
-    
-    if (table.isDynamicQR) {
+
+    // Super Admin master switch: when Dynamic QR is disabled, all tables behave as static QR.
+    let dynamicQrAllowed = true;
+    try {
+        const restaurantSettings = await getSettings(undefined, restaurantId);
+        dynamicQrAllowed = restaurantSettings?.dynamicQrEnabled ?? true;
+    } catch {
+        dynamicQrAllowed = true;
+    }
+
+    if (dynamicQrAllowed && table.isDynamicQR) {
       // Normalise empty string to null
       const providedToken = token || null;
 
@@ -1387,7 +1423,8 @@ export async function requestOrderAccessAction(
         }
 
         const settings = await getSettings(table.branchId, restaurantId);
-        const useOtp = settings.posSettings?.enableDineInOTP;
+        // Super Admin master switch AND per-branch toggle must both allow OTP.
+        const useOtp = (settings.dineInOtpEnabled ?? true) && settings.posSettings?.enableDineInOTP;
 
         if (useOtp) {
             const otpRequest = await createOtpRequest(tableId, restaurantId, customerName, customerPhone);

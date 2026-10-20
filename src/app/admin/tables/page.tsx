@@ -129,10 +129,17 @@ function TableList({ tables, settings, restaurantId, onFloorChange, onToggleDyna
         }
     };
 
+    const dynamicQrAllowed = settings?.dynamicQrEnabled ?? true;
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {!dynamicQrAllowed && (
+                <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+                    Dynamic QR codes are disabled by the Super Admin for this restaurant — tables use static QR codes.
+                </div>
+            )}
             {tables.map((table) => {
-                const displayHref = `/display?tableId=${table.id}&restaurantId=${table.restaurantId}${table.isDynamicQR && table.qrToken ? `&token=${table.qrToken}` : ''}`;
+                const displayHref = `/display?tableId=${table.id}&restaurantId=${table.restaurantId}${dynamicQrAllowed && table.isDynamicQR && table.qrToken ? `&token=${table.qrToken}` : ''}`;
                 return (
                     <div key={table.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6 hover:shadow-lg transition-shadow border dark:border-gray-700 space-y-4">
                         <div className="flex items-center justify-between">
@@ -197,6 +204,7 @@ function TableList({ tables, settings, restaurantId, onFloorChange, onToggleDyna
                         </div>
 
 
+                        {dynamicQrAllowed && (
                         <div className="flex items-center justify-between pt-4 border-t dark:border-gray-700">
                             <Label htmlFor={`dynamic-qr-${table.id}`} className="text-sm font-medium flex-1 cursor-pointer">
                                 Dynamic QR Code
@@ -220,6 +228,7 @@ function TableList({ tables, settings, restaurantId, onFloorChange, onToggleDyna
                                 />
                             </div>
                         </div>
+                        )}
 
                         <div id={`qr-code-wrapper-${table.id}`} className="flex flex-col items-center justify-center py-4 bg-white dark:bg-gray-700 rounded-xl border dark:border-gray-600">
                             {settings ? (
@@ -234,7 +243,7 @@ function TableList({ tables, settings, restaurantId, onFloorChange, onToggleDyna
                         </div>
 
                         {/* Countdown bar for dynamic QR */}
-                        {table.isDynamicQR && table.qrExpiresAt ? (
+                        {dynamicQrAllowed && table.isDynamicQR && table.qrExpiresAt ? (
                             <QRCountdownBar
                                 key={table.qrToken}
                                 expiresAt={table.qrExpiresAt}

@@ -27,27 +27,31 @@ function SubmitButton() {
 function QRCodeSettingsContent() {
     const searchParams = useSearchParams();
     const branchId = searchParams.get('branchId');
-    const { getBranchById, restaurantId } = useRestaurantData();
+    const { getBranchById, getSettings, restaurantId } = useRestaurantData();
     const [branch, setBranch] = useState<Branch | null>(null);
     const [qrCodeLogoPreview, setQrCodeLogoPreview] = useState<string | null>(null);
     const [restaurantPrintLogoPreview, setRestaurantPrintLogoPreview] = useState<string | null>(null);
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(true);
+    const [dynamicQrAllowed, setDynamicQrAllowed] = useState(true);
+    const [restaurantDefaultDuration, setRestaurantDefaultDuration] = useState(300);
 
     useEffect(() => {
         if (branchId) {
-            getBranchById(branchId).then(b => {
+            Promise.all([getBranchById(branchId), getSettings(undefined)]).then(([b, restaurantSettings]) => {
                 setBranch(b);
                 if (b) {
                     setQrCodeLogoPreview(b.qrCodeLogo || null);
                     setRestaurantPrintLogoPreview(b.printSettings?.restaurantPrintLogo || null);
                 }
+                setDynamicQrAllowed(restaurantSettings?.dynamicQrEnabled ?? true);
+                setRestaurantDefaultDuration(restaurantSettings?.dynamicQrDuration ?? 300);
                 setIsLoading(false);
             });
         } else {
             setIsLoading(false);
         }
-    }, [branchId, getBranchById]);
+    }, [branchId, getBranchById, getSettings]);
 
     const handleFormAction = async (formData: FormData) => {
         if (qrCodeLogoPreview) {
@@ -170,8 +174,13 @@ function QRCodeSettingsContent() {
                     <Separator />
 
                     {/* ── Dynamic QR duration ── */}
+                    {!dynamicQrAllowed && (
+                        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+                            Dynamic QR codes are disabled by the Super Admin for this restaurant. Tables use static QR codes. Contact the Super Admin to enable this feature.
+                        </div>
+                    )}
                     <div className="space-y-2">
-                        <Label htmlFor="dynamicQrDuration">Dynamic QR Code Duration</Label>
+                        <Label htmlFor="dynamicQrDuration">Dynamic QR Code Duration (timeout)</Label>
                         <div className="flex items-center gap-3 max-w-xs">
                             <Input
                                 id="dynamicQrDuration"
@@ -180,13 +189,14 @@ function QRCodeSettingsContent() {
                                 min={30}
                                 max={86400}
                                 step={30}
-                                defaultValue={branch.dynamicQrDuration ?? 300}
+                                disabled={!dynamicQrAllowed}
+                                defaultValue={branch.dynamicQrDuration ?? restaurantDefaultDuration}
                             />
                             <span className="text-sm text-muted-foreground whitespace-nowrap">seconds</span>
                         </div>
                         <p className="text-xs text-muted-foreground">
                             How long a dynamic QR code is valid before it auto-rotates and the old one expires.
-                            Default: 300 s (5 min). Minimum: 30 s.
+                            Restaurant default: {restaurantDefaultDuration} s. Minimum: 30 s. Leave empty to use the restaurant default.
                         </p>
                     </div>
 

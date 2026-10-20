@@ -9,9 +9,13 @@ import type { AppUser, Branch, ActivityLog } from '@/lib/definitions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import Link from 'next/link';
-import { ArrowLeft, Building2, Users, GitBranch, User, Eye, EyeOff, BookOpen, Clock, Edit } from 'lucide-react';
-import { getRestaurantById, getAdminForRestaurant } from '@/lib/server-actions';
+import { ArrowLeft, Building2, Users, GitBranch, User, Eye, EyeOff, BookOpen, Clock, Edit, QrCode, KeyRound, LoaderCircle } from 'lucide-react';
+import { getRestaurantById, getAdminForRestaurant, getRestaurantFeatureFlags, updateRestaurantFeatureFlags, type RestaurantFeatureFlags } from '@/lib/server-actions';
+import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { PasswordCell } from '@/components/password-cell';
@@ -29,6 +33,9 @@ export default function RestaurantDetailsPage() {
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
+    const [featureFlags, setFeatureFlags] = useState<RestaurantFeatureFlags | null>(null);
+    const [isSavingFlags, setIsSavingFlags] = useState(false);
+    const { toast } = useToast();
 
     useEffect(() => {
         if (!user || !user.isSuperAdmin) {
@@ -41,13 +48,15 @@ export default function RestaurantDetailsPage() {
                 setIsLoading(true);
                 setFetchError(null);
                 try {
-                    const [restaurantData, usersData, branchesData, logsData, adminData] = await Promise.all([
+                    const [restaurantData, usersData, branchesData, logsData, adminData, flagsData] = await Promise.all([
                         getRestaurantById(restaurantId),
                         getUsers(restaurantId),
                         getBranches(restaurantId),
                         getActivityLogs(50, restaurantId),
-                        getAdminForRestaurant(restaurantId)
+                        getAdminForRestaurant(restaurantId),
+                        getRestaurantFeatureFlags(restaurantId)
                     ]);
+                    setFeatureFlags(flagsData);
 
                     if (!restaurantData) {
                         router.push('/admin/superadmin');
@@ -168,6 +177,107 @@ export default function RestaurantDetailsPage() {
                         </Link>
                     </Button>
                 </div>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <QrCode className="w-5 h-5 text-red-600" />
+                            Feature Controls
+                        </CardTitle>
+                        <CardDescription>
+                            Enable or disable OTP verification and Dynamic QR codes for this restaurant. Changes reflect immediately in the restaurant's settings.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {!featureFlags ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <LoaderCircle className="h-4 w-4 animate-spin" /> Loading feature flags…
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex items-center justify-between rounded-lg border p-4">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-base">Dynamic QR Codes</Label>
+                                        <p className="text-sm text-muted-foreground">When off, tables fall back to static QR codes and the duration setting is hidden.</p>
+                                    </div>
+                                    <Switch
+                                        checked={featureFlags.dynamicQrEnabled}
+                                        disabled={isSavingFlags}
+                                        onCheckedChange={async (checked) => {
+                                            const prev = featureFlags;
+                                            setFeatureFlags({ ...prev, dynamicQrEnabled: checked });
+                                            setIsSavingFlags(true);
+                                            const result = await updateRestaurantFeatureFlags(restaurantId, { dynamicQrEnabled: checked });
+                                            setIsSavingFlags(false);
+                                            if (result.success) {
+                                                toast({ title: 'Saved', description: `Dynamic QR ${checked ? 'enabled' : 'disabled'} for this restaurant.` });
+                                            } else {
+                                                setFeatureFlags(prev);
+                                                toast({ variant: 'destructive', title: 'Error', description: result.error || 'Failed to update.' });
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between rounded-lg border p-4">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-base">Dine-in OTP Verification</Label>
+                                        <p className="text-sm text-muted-foreground">When off, the restaurant cannot require OTP for dine-in orders.</p>
+                                    </div>
+                                    <Switch
+                                        checked={featureFlags.dineInOtpEnabled}
+                                        disabled={isSavingFlags}
+                                        onCheckedChange={async (checked) => {
+                                            const prev = featureFlags;
+                                            setFeatureFlags({ ...prev, dineInOtpEnabled: checked });
+                                            setIsSavingFlags(true);
+                                            const result = await updateRestaurantFeatureFlags(restaurantId, { dineInOtpEnabled: checked });
+                                            setIsSavingFlags(false);
+                                            if (result.success) {
+                                                toast({ title: 'Saved', description: `Dine-in OTP ${checked ? 'enabled' : 'disabled'} for this restaurant.` });
+                                            } else {
+                                                setFeatureFlags(prev);
+                                                toast({ variant: 'destructive', title: 'Error', description: result.error || 'Failed to update.' });
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="feature-qr-duration">Dynamic QR Timeout Duration (seconds)</Label>
+                                    <div className="flex items-center gap-3 max-w-xs">
+                                        <Input
+                                            id="feature-qr-duration"
+                                            type="number"
+                                            min={30}
+                                            step={30}
+                                            value={featureFlags.dynamicQrDuration}
+                                            disabled={isSavingFlags || !featureFlags.dynamicQrEnabled}
+                                            onChange={(e) => setFeatureFlags({ ...featureFlags, dynamicQrDuration: Number(e.target.value) })}
+                                            onBlur={async () => {
+                                                const duration = featureFlags.dynamicQrDuration;
+                                                if (isNaN(duration) || duration < 30) {
+                                                    toast({ variant: 'destructive', title: 'Invalid value', description: 'Duration must be at least 30 seconds.' });
+                                                    const fresh = await getRestaurantFeatureFlags(restaurantId);
+                                                    setFeatureFlags(fresh);
+                                                    return;
+                                                }
+                                                setIsSavingFlags(true);
+                                                const result = await updateRestaurantFeatureFlags(restaurantId, { dynamicQrDuration: duration });
+                                                setIsSavingFlags(false);
+                                                if (result.success) {
+                                                    toast({ title: 'Saved', description: `QR timeout set to ${duration} seconds.` });
+                                                } else {
+                                                    toast({ variant: 'destructive', title: 'Error', description: result.error || 'Failed to update.' });
+                                                }
+                                            }}
+                                        />
+                                        <span className="text-sm text-muted-foreground whitespace-nowrap">seconds</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">Used as the default rotation timeout for this restaurant's tables and branches.</p>
+                                </div>
+                            </>
+                        )}
+                    </CardContent>
+                </Card>
 
                 {usersWithoutBranch.length > 0 && (
                     <Card>

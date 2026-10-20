@@ -90,7 +90,9 @@ export type RestaurantSettings = {
     qrCodeColor?: string;
     qrCodeBackgroundColor?: string;
     qrCodeLogo?: string;
+    dynamicQrEnabled?: boolean; // master switch for Dynamic QR, controlled by Super Admin (default true)
     dynamicQrDuration?: number; // seconds before dynamic QR auto-rotates (default 300 = 5 min)
+    dineInOtpEnabled?: boolean; // master switch for Dine-in OTP, controlled by Super Admin (default true; per-branch toggle still applies)
     onlineOrderingEnabled?: boolean;
     deliveryFee?: number;
     minimumOrderValue?: number;

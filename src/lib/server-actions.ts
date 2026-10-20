@@ -417,6 +417,61 @@ export async function updateRestaurantValidity(restaurantId: string, nextBilling
     }
 }
 
+export type RestaurantFeatureFlags = {
+    dynamicQrEnabled: boolean;
+    dynamicQrDuration: number;
+    dineInOtpEnabled: boolean;
+};
+
+/**
+ * Get the effective feature flags for a restaurant.
+ * Falls back to platform defaults, then hardcoded defaults (all enabled, 300s).
+ */
+export async function getRestaurantFeatureFlags(restaurantId: string): Promise<RestaurantFeatureFlags> {
+    noStore();
+    try {
+        const firestore = await getAdminFirestoreInstance();
+        const [restaurantSnap, defaultsSnap] = await Promise.all([
+            firestore.doc(`restaurants/${restaurantId}`).get(),
+            firestore.doc('platform/default-settings').get(),
+        ]);
+        const restaurantData = restaurantSnap.exists ? (restaurantSnap.data() || {}) : {};
+        const defaultsData = defaultsSnap.exists ? (defaultsSnap.data() || {}) : {};
+        return {
+            dynamicQrEnabled: restaurantData.dynamicQrEnabled ?? defaultsData.dynamicQrEnabled ?? true,
+            dynamicQrDuration: restaurantData.dynamicQrDuration ?? defaultsData.dynamicQrDuration ?? 300,
+            dineInOtpEnabled: restaurantData.dineInOtpEnabled ?? defaultsData.dineInOtpEnabled ?? true,
+        };
+    } catch (error: any) {
+        console.error('Error getting restaurant feature flags:', error);
+        return { dynamicQrEnabled: true, dynamicQrDuration: 300, dineInOtpEnabled: true };
+    }
+}
+
+/**
+ * Update feature flags for a single restaurant (Super Admin only).
+ * These act as master switches reflected in that restaurant's settings.
+ */
+export async function updateRestaurantFeatureFlags(
+    restaurantId: string,
+    flags: Partial<RestaurantFeatureFlags>
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        if (flags.dynamicQrDuration !== undefined && (isNaN(flags.dynamicQrDuration) || flags.dynamicQrDuration < 30)) {
+            return { success: false, error: 'Dynamic QR duration must be at least 30 seconds.' };
+        }
+        const firestore = await getAdminFirestoreInstance();
+        const restaurantRef = firestore.doc(`restaurants/${restaurantId}`);
+        await restaurantRef.set(flags, { merge: true });
+        revalidatePath('/admin/superadmin');
+        revalidatePath('/admin/settings', 'layout');
+        return { success: true };
+    } catch (error: any) {
+        console.error('Error updating restaurant feature flags:', error);
+        return { success: false, error: error.message || 'Failed to update feature flags' };
+    }
+}
+
 // --- Subscription Plan Management ---
 export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
     noStore();
