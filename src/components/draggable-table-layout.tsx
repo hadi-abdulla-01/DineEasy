@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ChangeTableDialog } from "./change-table-dialog";
+import { TableLayoutSkeleton } from "./skeletons";
 import React from "react";
 
 type TableWithOrders = Table & {
@@ -332,15 +333,8 @@ export default function DraggableTableLayout({ branchId, floorFilter, onTableSel
         return tables.filter(table => table.floor === floorFilter);
     }, [tables, floorFilter]);
 
-    if (isLoading) {
-        return (
-            <div className="relative h-[80vh] w-full rounded-lg border border-dashed bg-muted/50 overflow-hidden flex items-center justify-center">
-                <div className="flex flex-col items-center gap-2">
-                    <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="text-muted-foreground">Loading tables...</p>
-                </div>
-            </div>
-        );
+    if (isLoading && tables.length === 0) {
+        return <TableLayoutSkeleton />;
     }
 
 

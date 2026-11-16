@@ -2,7 +2,13 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import {
+    getAuth,
+    initializeAuth,
+    browserLocalPersistence,
+    browserSessionPersistence,
+    inMemoryPersistence,
+} from 'firebase/auth';
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -15,8 +21,18 @@ const firebaseConfig = {
 };
 
 export function getClientFirebase() {
-    const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    const isNew = getApps().length === 0;
+    const app = isNew ? initializeApp(firebaseConfig) : getApp();
     const firestore = getFirestore(app);
-    const auth = getAuth(app);
+    let auth;
+    try {
+        auth = isNew
+            ? initializeAuth(app, {
+                  persistence: [browserLocalPersistence, browserSessionPersistence, inMemoryPersistence],
+              })
+            : getAuth(app);
+    } catch {
+        auth = getAuth(app);
+    }
     return { app, firestore, auth };
 }

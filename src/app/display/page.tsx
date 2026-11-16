@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { Table, RestaurantSettings } from '@/lib/definitions';
 import { QRCode } from '@/components/qr-code';
-import { LoaderCircle } from 'lucide-react';
 import Logo from '@/components/logo';
 import KioskHeader from '@/components/kiosk-header';
 import { getSettings } from '@/lib/data';
@@ -12,6 +11,8 @@ import { useFirebase } from '@/firebase/provider';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { autoRotateQRTokenAction } from '@/lib/actions';
 import { QRCountdownBar } from '@/components/qr-countdown-bar';
+import { DisplayQrSkeleton } from '@/components/skeletons';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function DisplayContent() {
     const searchParams = useSearchParams();
@@ -68,11 +69,7 @@ function DisplayContent() {
     };
 
     if (isLoading) {
-        return (
-            <div className="flex-1 bg-gray-200 flex items-center justify-center p-4">
-                <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
-            </div>
-        );
+        return <DisplayQrSkeleton />;
     }
 
     if (error || !table) {
@@ -100,7 +97,7 @@ function DisplayContent() {
                             settings={settings}
                         />
                     ) : (
-                        <div className="h-[150px] w-[150px] bg-gray-300 animate-pulse rounded-md" />
+                        <Skeleton className="h-[150px] w-[150px] rounded-md" />
                     )}
                 </div>
 
@@ -130,7 +127,7 @@ export default function DisplayPage() {
     return (
         <div className="min-h-screen bg-muted flex flex-col">
             <KioskHeader />
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><LoaderCircle className="h-8 w-8 animate-spin" /></div>}>
+            <Suspense fallback={<DisplayQrSkeleton />}>
                 <DisplayContent />
             </Suspense>
         </div>

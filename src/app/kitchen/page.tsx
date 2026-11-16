@@ -17,6 +17,7 @@ import { getSettings, getTableById } from "@/lib/data";
 import { extractRestaurantId } from "@/lib/auth-utils";
 import { Badge } from "@/components/ui/badge";
 import { useNewOrderSound } from '@/hooks/use-new-order-sound';
+import { TableGridSkeleton } from '@/components/skeletons';
 
 type OrderWithTable = Order & { table?: Table };
 
@@ -293,7 +294,7 @@ export default function KitchenPage() {
     }
 
     if (!user || !settings) {
-        return <div>Loading...</div>
+        return <TableGridSkeleton count={6} />
     }
 
     if (filteredOrders.length === 0) {

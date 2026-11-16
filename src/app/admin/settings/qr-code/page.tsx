@@ -13,7 +13,9 @@ import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { useRestaurantData } from '@/lib/client-data';
 import { Separator } from '@/components/ui/separator';
-import { LoaderCircle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { useAuth } from '@/app/admin/auth-provider';
+import { AdminPageSkeleton } from '@/components/skeletons';
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -27,6 +29,7 @@ function SubmitButton() {
 function QRCodeSettingsContent() {
     const searchParams = useSearchParams();
     const branchId = searchParams.get('branchId');
+    const { user } = useAuth();
     const { getBranchById, getSettings, restaurantId } = useRestaurantData();
     const [branch, setBranch] = useState<Branch | null>(null);
     const [qrCodeLogoPreview, setQrCodeLogoPreview] = useState<string | null>(null);
@@ -35,6 +38,16 @@ function QRCodeSettingsContent() {
     const [isLoading, setIsLoading] = useState(true);
     const [dynamicQrAllowed, setDynamicQrAllowed] = useState(true);
     const [restaurantDefaultDuration, setRestaurantDefaultDuration] = useState(300);
+    const [multipleGuestEnabled, setMultipleGuestEnabled] = useState(false);
+    const [otpAllowed, setOtpAllowed] = useState(true);
+    const [requireCustomerPhoneOTP, setRequireCustomerPhoneOTP] = useState(false);
+
+    const canEditSettings = Boolean(
+        user?.isSuperAdmin ||
+        user?.role === 'Admin' ||
+        user?.role === 'Manager' ||
+        user?.permissions?.settingsQr?.edit
+    );
 
     useEffect(() => {
         if (branchId) {
@@ -43,8 +56,11 @@ function QRCodeSettingsContent() {
                 if (b) {
                     setQrCodeLogoPreview(b.qrCodeLogo || null);
                     setRestaurantPrintLogoPreview(b.printSettings?.restaurantPrintLogo || null);
+                    setMultipleGuestEnabled(Boolean(b.multipleGuestEnabled));
+                    setRequireCustomerPhoneOTP(Boolean(b.posSettings?.enableDineInOTP));
                 }
                 setDynamicQrAllowed(restaurantSettings?.dynamicQrEnabled ?? true);
+                setOtpAllowed(restaurantSettings?.dineInOtpEnabled ?? true);
                 setRestaurantDefaultDuration(restaurantSettings?.dynamicQrDuration ?? 300);
                 setIsLoading(false);
             });
@@ -54,6 +70,14 @@ function QRCodeSettingsContent() {
     }, [branchId, getBranchById, getSettings]);
 
     const handleFormAction = async (formData: FormData) => {
+        if (!canEditSettings) {
+            toast({
+                variant: 'destructive',
+                title: 'Unauthorized',
+                description: 'Only authorized supervisors or administrators can modify these settings.',
+            });
+            return;
+        }
         if (qrCodeLogoPreview) {
             formData.append('qrCodeLogo', qrCodeLogoPreview);
         } else {
@@ -66,8 +90,21 @@ function QRCodeSettingsContent() {
             restaurantPrintLogo: restaurantPrintLogoPreview,
         }));
 
+        const currentPosSettings = branch?.posSettings || { cashDenominations: [10, 20, 50, 100], enableOnScreenKeyboard: false };
+        formData.append('posSettings', JSON.stringify({
+            ...currentPosSettings,
+            enableDineInOTP: requireCustomerPhoneOTP,
+        }));
+
+        formData.append('multipleGuestEnabled', String(multipleGuestEnabled));
         formData.append('restaurantId', restaurantId);
-        await updateSettingsAction(formData);
+        if (user?.id) formData.append('actorUserId', user.id);
+
+        const res = await updateSettingsAction(formData);
+        if (res?.message) {
+            toast({ variant: 'destructive', title: 'Error', description: res.message });
+            return;
+        }
         toast({ title: 'Settings Saved', description: 'Your QR code settings have been updated.' });
     };
 
@@ -84,13 +121,7 @@ function QRCodeSettingsContent() {
     };
 
     if (isLoading) {
-        return (
-            <Card>
-                <CardContent className="flex h-64 items-center justify-center">
-                    <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                </CardContent>
-            </Card>
-        );
+        return <AdminPageSkeleton label="Loading QR code settings" />;
     }
 
     if (!branch) {
@@ -198,6 +229,46 @@ function QRCodeSettingsContent() {
 
                     <Separator />
 
+                    {/* ── QR Ordering Behaviour ── */}
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-medium">QR Ordering Behaviour</h3>
+                        <div className="flex items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                                <Label htmlFor="multipleGuestSwitch" className="text-base">
+                                    Multiple Guest
+                                </Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Allow multiple customers to scan the same QR code and create independent guest sessions. When OFF, only one active session is permitted per QR/table at a time.
+                                </p>
+                            </div>
+                            <Switch
+                                id="multipleGuestSwitch"
+                                checked={multipleGuestEnabled}
+                                disabled={!canEditSettings}
+                                onCheckedChange={setMultipleGuestEnabled}
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                                <Label htmlFor="requireCustomerPhoneOTPSwitch" className="text-base">
+                                    Require Customer Phone OTP
+                                </Label>
+                                <p className="text-sm text-muted-foreground">
+                                    When ON, customers must verify their mobile number via SMS OTP before ordering. When OFF, customers can order without phone OTP verification.
+                                </p>
+                            </div>
+                            <Switch
+                                id="requireCustomerPhoneOTPSwitch"
+                                checked={otpAllowed && requireCustomerPhoneOTP}
+                                disabled={!otpAllowed || !canEditSettings}
+                                onCheckedChange={setRequireCustomerPhoneOTP}
+                            />
+                        </div>
+                    </div>
+
+                    <Separator />
+
                     {/* ── Print logo ── */}
                     <div className="space-y-2">
                         <Label htmlFor="print-logo">Restaurant Logo (for Printing)</Label>
@@ -262,13 +333,7 @@ function QRCodeSettingsContent() {
 
 export default function QRCodeSettingsPage() {
     return (
-        <Suspense fallback={
-            <Card>
-                <CardContent className="flex h-64 items-center justify-center">
-                    <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                </CardContent>
-            </Card>
-        }>
+        <Suspense fallback={<AdminPageSkeleton label="Loading QR code settings" />}>
             <QRCodeSettingsContent />
         </Suspense>
     );

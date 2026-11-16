@@ -117,72 +117,48 @@ export async function sendPhoneOTP(phoneNumber: string): Promise<ConfirmationRes
 }
 
 /**
- * Verify the OTP entered by the user
+ * Verify the OTP entered by the user via Firebase Phone Auth
  * @param phoneNumber - The phone number used for verification
  * @param otp - The OTP code entered by the user
- * @returns Promise<boolean> - True if verification successful
+ * @returns Promise<{ idToken: string; uid: string }> - Firebase ID token and UID on success
  */
-export async function verifyPhoneOTP(phoneNumber: string, otp: string): Promise<boolean> {
-    // Try to use the stored confirmation result first
-    if (confirmationResult) {
-        try {
-            const result = await confirmationResult.confirm(otp);
-            // Verification successful, user is now authenticated
-            console.log('Phone verification successful, user:', result.user.uid);
-            return true;
-        } catch (error: any) {
-            // If the stored confirmation result doesn't work, try to restore from session
-            console.log('Stored confirmation result failed, trying to restore...');
+export async function verifyPhoneOTP(phoneNumber: string, otp: string): Promise<{ idToken: string; uid: string }> {
+    const session = verificationSessions.get(phoneNumber);
+    if (session) {
+        const sessionAge = Date.now() - session.timestamp;
+        const maxSessionAge = 10 * 60 * 1000; // 10 minutes
+        if (sessionAge > maxSessionAge) {
+            verificationSessions.delete(phoneNumber);
+            confirmationResult = null;
+            throw new Error('OTP has expired. Please request a new one.');
         }
     }
-    
-    // Try to restore from verification sessions
-    const session = verificationSessions.get(phoneNumber);
-    if (!session) {
-        throw new Error('No pending verification found for this phone number. Please request a new OTP.');
+
+    if (!confirmationResult) {
+        throw new Error('Verification session expired or lost. Please click "Resend OTP" to request a new code.');
     }
-    
-    // Check if session is expired (Firebase OTP expires in ~5-10 minutes)
-    const sessionAge = Date.now() - session.timestamp;
-    const maxSessionAge = 10 * 60 * 1000; // 10 minutes
-    
-    if (sessionAge > maxSessionAge) {
-        verificationSessions.delete(phoneNumber);
-        throw new Error('Verification session expired. Please request a new OTP.');
-    }
-    
-    // We need to create a new confirmation result using the verification ID
-    // This is not directly possible with Firebase client SDK
-    // We need to use a workaround - we'll use the PhoneAuthProvider
+
     try {
-        const { auth } = getClientFirebase();
-        const credential = PhoneAuthProvider.credential(session.verificationId, otp);
-        
-        // Sign in with the credential
-        const result = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier || getRecaptchaVerifier(auth));
-        
-        // This won't work as expected - we need a different approach
-        // For now, we'll use the admin SDK on the server side for verification
-        
-        throw new Error('Client-side verification requires stored confirmation result. Please ensure you verify immediately after receiving OTP.');
-        
+        const result = await confirmationResult.confirm(otp);
+        const idToken = await result.user.getIdToken();
+        return { idToken, uid: result.user.uid };
     } catch (error: any) {
         console.error('Error verifying phone OTP:', error);
-        
+
         let errorMessage = 'Invalid or expired OTP. Please try again.';
-        
+
         if (error.code === 'auth/invalid-verification-code') {
             errorMessage = 'Invalid OTP. Please check and try again.';
-        } else if (error.code === 'auth/session-expired') {
+        } else if (error.code === 'auth/session-expired' || error.code === 'auth/code-expired') {
             errorMessage = 'OTP has expired. Please request a new one.';
         } else if (error.code === 'auth/invalid-verification-id') {
             errorMessage = 'Verification session expired. Please request a new OTP.';
-        } else if (error.code === 'auth/quota-exceeded') {
+        } else if (error.code === 'auth/too-many-requests' || error.code === 'auth/quota-exceeded') {
             errorMessage = 'Too many attempts. Please wait before trying again.';
         } else if (error.message) {
             errorMessage = error.message;
         }
-        
+
         throw new Error(errorMessage);
     }
 }

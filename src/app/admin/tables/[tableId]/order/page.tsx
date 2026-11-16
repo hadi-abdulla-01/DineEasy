@@ -7,7 +7,8 @@ import { notFound, useParams, useRouter, useSearchParams } from "next/navigation
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { OrderStatusBadge } from "@/components/order-status-badge";
-import { CheckCircle, LoaderCircle } from "lucide-react";
+import { CheckCircle } from "lucide-react";
+import { AdminMenuSkeleton } from "@/components/skeletons";
 import type { Order, Table, MenuItem, RestaurantSettings } from "@/lib/definitions";
 import { useEffect, useState } from "react";
 import { useRestaurantData } from "@/lib/client-data";
@@ -106,14 +107,7 @@ export default function AdminOrderPage() {
 
 
     if (isLoading) {
-        return (
-            <div className="flex h-[80vh] items-center justify-center">
-                <div className="flex flex-col items-center gap-2">
-                    <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="text-muted-foreground">Loading menu...</p>
-                </div>
-            </div>
-        );
+        return <AdminMenuSkeleton label="Loading table menu" />;
     }
 
     if (!table) {

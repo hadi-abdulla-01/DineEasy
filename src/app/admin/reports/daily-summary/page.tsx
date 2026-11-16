@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Calendar as CalendarIcon, LoaderCircle, Printer, DollarSign, ShoppingCart, CreditCard, Users, ChefHat } from 'lucide-react';
+import { Calendar as CalendarIcon, Printer, DollarSign, ShoppingCart, CreditCard, Users, ChefHat } from 'lucide-react';
+import { DashboardSkeleton } from '@/components/skeletons';
 import { cn } from '@/lib/utils';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
@@ -217,15 +218,8 @@ export default function DailySummaryPage() {
         setPrintDialogOpen(false);
     };
 
-    if (isLoading || !settings || !user) {
-        return (
-          <div className="flex h-[80vh] items-center justify-center">
-            <div className="flex flex-col items-center gap-2">
-              <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-              <p className="text-muted-foreground">Loading Daily Summary...</p>
-            </div>
-          </div>
-        );
+    if ((isLoading && !settings) || !settings || !user) {
+        return <DashboardSkeleton />;
     }
     
     const currencySymbol = settings.currencySymbol || '$';

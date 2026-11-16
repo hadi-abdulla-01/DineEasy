@@ -6,7 +6,8 @@ import { OrderForm } from "@/components/order-form";
 import { notFound, redirect, useParams, useRouter, useSearchParams } from "next/navigation";
 import type { Order, MenuItem, MealSession, RestaurantSettings } from "@/lib/definitions";
 import { useEffect, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { CustomerOrderPageSkeleton } from "@/components/skeletons";
+import { getCustomerSessionStorage } from "@/lib/customer-session-storage";
 import { OrderHeader } from "@/components/order-header";
 
 type CustomerInfo = {
@@ -33,18 +34,9 @@ export default function OrderPage() {
     useEffect(() => {
         if (!tableId) return;
 
-        const storedCustomerInfo = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
-        if (storedCustomerInfo) {
-            try {
-                const info = JSON.parse(storedCustomerInfo);
-                if (info.phone) {
-                    setCustomerInfo(info);
-                } else {
-                    router.replace(`/order/${tableId}/welcome`);
-                }
-            } catch {
-                router.replace(`/order/${tableId}/welcome`);
-            }
+        const info = getCustomerSessionStorage<CustomerInfo>(tableId);
+        if (info && info.phone) {
+            setCustomerInfo(info);
         } else {
             router.replace(`/order/${tableId}/welcome`);
         }
@@ -173,14 +165,7 @@ export default function OrderPage() {
     }
 
     if (!customerInfo || isLoading) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-[var(--order-status-bg)]">
-                <div className="flex flex-col items-center gap-2">
-                    <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="text-muted-foreground">Loading menu...</p>
-                </div>
-            </div>
-        );
+        return <CustomerOrderPageSkeleton />;
     }
 
     return (

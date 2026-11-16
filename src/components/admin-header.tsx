@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { useRestaurantData } from '@/lib/client-data';
 import { useFirebase } from '@/firebase/provider';
 import { collection, query, where, onSnapshot, type Timestamp } from 'firebase/firestore';
-import type { Order, OTPRequest } from '@/lib/definitions';
+import type { Order } from '@/lib/definitions';
 import { formatDistanceToNow } from 'date-fns';
 import {
   DropdownMenu,
@@ -104,58 +104,6 @@ export default function AdminHeader({ isSidebarOpen, setIsSidebarOpen }: AdminHe
           setNotifications(prev => [newNotification, ...prev.slice(0, 4)]);
           setUnreadCount(prev => prev + 1);
 
-          if (Notification.permission === 'granted') {
-            new Notification(newNotification.title, {
-              body: newNotification.body,
-              icon: '/logo.svg',
-            });
-          }
-        }
-      });
-    });
-
-    return () => unsubscribe();
-  }, [firestore, user, restaurantId]);
-
-  // Listen for new OTP requests
-  useEffect(() => {
-    if (!firestore || !user || !restaurantId || !user.permissions?.receiveOtp?.view) return;
-
-    const initialOtpsLoadDone = { current: false };
-
-    const otpRequestsRef = collection(firestore, `restaurants/${restaurantId}/otpRequests`);
-    let q = query(otpRequestsRef);
-
-    const isGlobalAdmin = (user?.role === 'Admin' && !user?.branchId) || user?.isSuperAdmin;
-    if (!isGlobalAdmin && user.branchId) {
-      q = query(q, where('branchId', '==', user.branchId));
-    }
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!initialOtpsLoadDone.current) {
-        initialOtpsLoadDone.current = true;
-        return;
-      }
-
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const otpRequest = change.doc.data() as OTPRequest;
-          const createdAtTimestamp = otpRequest.createdAt as Timestamp;
-
-          const newNotification: AppNotification = {
-            id: change.doc.id,
-            type: 'otp',
-            title: `OTP for Table ${otpRequest.tableNumber}`,
-            body: `Code: ${otpRequest.otp} for ${otpRequest.customerName}`,
-            createdAt: createdAtTimestamp?.toDate ? createdAtTimestamp.toDate().toISOString() : new Date().toISOString(),
-            href: '#', // OTP notifications are not clickable for navigation
-            icon: <KeyRound className="h-4 w-4" />
-          };
-
-          setNotifications(prev => [newNotification, ...prev.slice(0, 4)]);
-          setUnreadCount(prev => prev + 1);
-
-          // Show browser notification
           if (Notification.permission === 'granted') {
             new Notification(newNotification.title, {
               body: newNotification.body,

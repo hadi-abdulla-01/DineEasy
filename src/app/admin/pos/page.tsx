@@ -22,6 +22,7 @@ import { Separator } from '@/components/ui/separator';
 import { createOrderAction, updateOrderStatusAction } from "@/lib/actions";
 import { Textarea } from '@/components/ui/textarea';
 import { AddonDialog } from '@/components/addon-dialog';
+import { AdminMenuSkeleton } from '@/components/skeletons';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
@@ -1036,7 +1037,7 @@ export default function POSPage() {
         return <Utensils />;
     };
 
-    if (isLoading) return <div className="flex h-full items-center justify-center"><LoaderCircle className="h-10 w-10 animate-spin text-muted-foreground" /></div>;
+    if (isLoading && !settings) return <div className="p-4"><AdminMenuSkeleton label="Loading POS" /></div>;
     if (!settings) return <div className="flex h-full items-center justify-center p-4"><Card><CardContent><p>Select a branch to get started.</p>{isGlobalAdmin && <Select value={selectedBranchId} onValueChange={setSelectedBranchId}><SelectTrigger><SelectValue placeholder="Select a branch" /></SelectTrigger><SelectContent>{branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select>}</CardContent></Card></div >;
 
     return (

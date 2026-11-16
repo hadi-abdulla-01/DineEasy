@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { OrderStatusView } from '@/components/order-status-view';
 import { getSettings, getOrderById } from '@/lib/data';
 import type { Order, RestaurantSettings } from '@/lib/definitions';
-import { LoaderCircle } from 'lucide-react';
+import { OrderStatusSkeleton } from '@/components/skeletons';
+import { getCustomerSessionStorage } from '@/lib/customer-session-storage';
 
-export default function OrderStatusPage() {
+function OrderStatusPageContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -22,14 +23,9 @@ export default function OrderStatusPage() {
   useEffect(() => {
     if (!orderId || !tableId || !restaurantIdFromUrl) return;
 
-    // Verify the customer owns this order via session storage
-    const storedCustomerInfo = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
-    let customerPhone: string | null = null;
-    if (storedCustomerInfo) {
-      try {
-        customerPhone = JSON.parse(storedCustomerInfo)?.phone ?? null;
-      } catch {}
-    }
+    // Verify the customer owns this order via safe customer session storage
+    const stored = getCustomerSessionStorage(tableId);
+    const customerPhone: string | null = stored?.phone ?? null;
 
     if (!customerPhone) {
       router.replace(`/order/${tableId}/welcome?restaurantId=${restaurantIdFromUrl}`);
@@ -67,10 +63,7 @@ export default function OrderStatusPage() {
   if (isLoading || !order || !settings) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--order-status-bg)]">
-        <div className="flex flex-col items-center gap-2">
-          <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="text-muted-foreground">Loading order status...</p>
-        </div>
+        <OrderStatusSkeleton />
       </div>
     );
   }
@@ -84,5 +77,19 @@ export default function OrderStatusPage() {
         restaurantId={restaurantIdFromUrl || ''}
       />
     </div>
+  );
+}
+
+export default function OrderStatusPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[var(--order-status-bg)]">
+          <OrderStatusSkeleton />
+        </div>
+      }
+    >
+      <OrderStatusPageContent />
+    </Suspense>
   );
 }

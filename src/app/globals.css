@@ -1,6 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=League+Spartan:wght@300;400;500;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
-
+/*
+ * NOTE: Google Fonts are intentionally NOT loaded with a CSS @import here.
+ * An @import inside the main stylesheet is render-blocking: if fonts.googleapis.com is
+ * slow or unreachable, the browser paints nothing (blank white page) and the app never
+ * hydrates. "League Spartan" is now loaded non-blocking by <DeferredFonts /> (see
+ * src/components/deferred-fonts.tsx); Poppins is already self-hosted via next/font.
+ */
 
 @tailwind base;
 @tailwind components;
@@ -146,5 +150,61 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+
+/* ── Skeleton loading (see src/components/ui/skeleton.tsx) ─────────────────────────────
+   A soft shimmer sweep over the existing --muted colour. Disabled for users who prefer
+   reduced motion (they get a static placeholder). */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--muted);
+}
+
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.dark .skeleton-shimmer::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer::after {
+    animation: none;
+    display: none;
+  }
+}
+
+/* Smooth skeleton → content hand-off (opacity only, no layout shift). */
+.content-fade-in {
+  animation: content-fade-in 180ms ease-out both;
+}
+
+@keyframes content-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content-fade-in {
+    animation: none;
   }
 }

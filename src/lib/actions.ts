@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { revalidatePath, unstable_noStore as noStore } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { OrderItem, OrderStatus, MenuItem, Table, Order, AppUser, RestaurantSettings, AddonGroup, SelectedAddon, UserRole, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, RemoteOrder, DayOfWeek, Discount, DiscountApplicability, OTPRequest, Payment } from './definitions';
+import type { OrderItem, OrderStatus, MenuItem, Table, Order, AppUser, RestaurantSettings, AddonGroup, SelectedAddon, UserRole, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, RemoteOrder, DayOfWeek, Discount, DiscountApplicability, Payment } from './definitions';
 import {
     createOrder,
     updateTableStatus,
@@ -44,15 +44,16 @@ import {
     addDiscount,
     updateDiscount,
     getFirestoreInstance,
-    sendOtpNotification,
-    createOtpRequest,
-    verifyOtp,
     getUsers,
     getMenuItems,
     createPhoneVerificationRequest,
     verifyPhoneVerification,
-    getPhoneVerificationRequest,
+    recordPhoneVerificationFailure,
     cleanupTemporaryPhoneUser,
+    getActiveGuestSessionsForTable,
+    getGuestSessionById,
+    createGuestSession,
+    closeGuestSessionsForTable,
 } from './data';
 import { getRestaurantById, getSubscriptionPlanById } from './server-actions';
 import { randomUUID } from 'crypto';
@@ -104,9 +105,11 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
     const customerName = formData.get('customerName') as string;
     const customerPhone = formData.get('customerPhone') as string;
     const isCustomerFacing = formData.get('isCustomerFacing') === 'true';
+    const isTableDevice = formData.get('isTableDevice') === 'true';
     const createdByForm = formData.get('createdBy') as string | null;
     const existingOrderId = formData.get('existingOrderId') as string | null;
     const tempUserUid = formData.get('tempUserUid') as string | null;
+    const guestSessionId = formData.get('guestSessionId') as string | null;
 
 
     if (isCustomerFacing) {
@@ -166,6 +169,47 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
     let finalOrder: Order | undefined;
 
     try {
+        // Authoritative backend validation for customer-facing QR orders
+        let validatedGuestSessionId: string | undefined;
+        if (isCustomerFacing && !isTableDevice) {
+            const [branchSettings, restaurantSettings] = await Promise.all([
+                getSettings(branchId, restaurantId),
+                getSettings(undefined, restaurantId),
+            ]);
+
+            if (!guestSessionId) {
+                return { message: 'Active QR guest session is required. Please scan the QR code again.' };
+            }
+
+            const guestSession = await getGuestSessionById(guestSessionId, restaurantId);
+            if (!guestSession || guestSession.status !== 'active' || guestSession.tableId !== tableId) {
+                return { message: 'Your QR ordering session has expired or been closed. Please scan the QR code again.' };
+            }
+
+            const requireOtp = (restaurantSettings.dineInOtpEnabled ?? true) && Boolean(branchSettings.posSettings?.enableDineInOTP);
+            if (requireOtp && !guestSession.isPhoneVerified) {
+                return { message: 'Phone OTP verification is required before placing an order.' };
+            }
+
+            const multipleGuest = Boolean(branchSettings.multipleGuestEnabled);
+            if (!multipleGuest) {
+                const activeSessions = await getActiveGuestSessionsForTable(tableId, restaurantId);
+                const otherSession = activeSessions.find(s => s.id !== guestSession.id);
+                if (otherSession) {
+                    return { message: 'This QR ordering session is already active for another guest at this table.' };
+                }
+            }
+
+            if (existingOrderId) {
+                const existing = await getOrderById(existingOrderId, restaurantId);
+                if (!existing || existing.tableId !== tableId || (existing.guestSessionId && existing.guestSessionId !== guestSession.id)) {
+                    return { message: 'Cannot add items to another guest’s order.' };
+                }
+            }
+
+            validatedGuestSessionId = guestSession.id;
+        }
+
         if (existingOrderId) {
             finalOrder = await addItemsToOrder(existingOrderId, newItems, orderNotes, restaurantId);
             if (finalOrder && finalOrder.status === 'ready') {
@@ -181,7 +225,8 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
                 items: newItems,
                 orderType: 'Dine-in' as Order['orderType'],
                 notes: orderNotes,
-                createdByName: createdByName
+                createdByName: createdByName,
+                ...(validatedGuestSessionId ? { guestSessionId: validatedGuestSessionId } : {}),
             };
             finalOrder = await createOrder(orderToCreate, restaurantId);
         }
@@ -291,6 +336,7 @@ export async function updateOrderStatusAction(formData: FormData) {
                             }
                         }
                         await updateTable(tableId, tableUpdateData, restaurantId);
+                        await closeGuestSessionsForTable(tableId, restaurantId);
                     }
                 }
             }
@@ -494,6 +540,9 @@ export async function updateTableStatusAction(tableId: string, status: Table['st
         await updateTableStatus(tableId, status, restaurantId);
         if (status === 'available') {
             await cancelOrdersForTable(tableId, restaurantId);
+            if (restaurantId) {
+                await closeGuestSessionsForTable(tableId, restaurantId);
+            }
         }
     } catch (error) {
         return { message: 'Database Error: Failed to Update Table Status.' };
@@ -768,6 +817,21 @@ export async function updateTablePositionAction(tableId: string, position: { x: 
 export async function updateSettingsAction(formData: FormData) {
     const branchId = formData.get('branchId') as string | undefined;
     const restaurantId = formData.get('restaurantId') as string;
+    const actorUserId = formData.get('actorUserId') as string | null;
+
+    if (actorUserId && restaurantId) {
+        const actor = await getUserById(actorUserId, restaurantId);
+        const isAuthorized = actor && (
+            actor.isSuperAdmin ||
+            actor.role === 'Admin' ||
+            actor.role === 'Manager' ||
+            actor.permissions?.settingsQr?.edit ||
+            actor.permissions?.settingsPos?.edit
+        );
+        if (!isAuthorized) {
+            return { message: 'Unauthorized: Only authorized supervisors or administrators can modify these settings.' };
+        }
+    }
 
     const newSettings: Partial<RestaurantSettings & Branch> = {};
 
@@ -838,6 +902,9 @@ export async function updateSettingsAction(formData: FormData) {
     
     if (formData.has('multiFloorEnabled')) {
         newSettings.multiFloorEnabled = formData.get('multiFloorEnabled') === 'true';
+    }
+    if (formData.has('multipleGuestEnabled')) {
+        newSettings.multipleGuestEnabled = formData.get('multipleGuestEnabled') === 'true';
     }
 
     if (formData.has('floors')) {
@@ -1402,10 +1469,51 @@ export async function validateTableAction(
 }
       
 
+export async function checkTableSessionStatusAction(
+    tableId: string,
+    restaurantId: string
+): Promise<{
+    success: boolean;
+    error?: string;
+    multipleGuestEnabled: boolean;
+    hasActiveSession: boolean;
+    requireOtp: boolean;
+}> {
+    noStore();
+    try {
+        const table = await getTableById(tableId, restaurantId);
+        if (!table || !table.branchId) {
+            return { success: false, error: 'Table not found.', multipleGuestEnabled: false, hasActiveSession: false, requireOtp: false };
+        }
+
+        const [branchSettings, restaurantSettings, activeSessions, activeOrders] = await Promise.all([
+            getSettings(table.branchId, restaurantId),
+            getSettings(undefined, restaurantId),
+            getActiveGuestSessionsForTable(tableId, restaurantId),
+            getActiveOrders(table.branchId, restaurantId),
+        ]);
+
+        const multipleGuestEnabled = Boolean(branchSettings.multipleGuestEnabled);
+        const requireOtp = (restaurantSettings.dineInOtpEnabled ?? true) && Boolean(branchSettings.posSettings?.enableDineInOTP);
+        const activeCustomerOrders = activeOrders.filter(o => o.tableId === tableId && o.createdByName === 'Customer');
+        const hasActiveSession = activeSessions.length > 0 || activeCustomerOrders.length > 0;
+
+        return {
+            success: true,
+            multipleGuestEnabled,
+            hasActiveSession,
+            requireOtp,
+        };
+    } catch (e: any) {
+        console.error('Error in checkTableSessionStatusAction:', e);
+        return { success: false, error: e.message || 'Failed to check table session.', multipleGuestEnabled: false, hasActiveSession: false, requireOtp: false };
+    }
+}
+
 export async function requestOrderAccessAction(
-    prevState: { error?: string; redirectTo?: string; success?: boolean } | null,
+    prevState: { error?: string; redirectTo?: string; success?: boolean; guestSessionId?: string } | null,
     formData: FormData
-): Promise<{ error?: string; redirectTo?: string; success?: boolean }> {
+): Promise<{ error?: string; redirectTo?: string; success?: boolean; guestSessionId?: string }> {
     noStore();
     const tableId = formData.get('tableId') as string;
     const restaurantId = formData.get('restaurantId') as string;
@@ -1428,29 +1536,41 @@ export async function requestOrderAccessAction(
             return { error: 'Could not determine the branch for this table.' };
         }
 
+        const [branchSettings, restaurantSettings, activeSessions, activeOrders] = await Promise.all([
+            getSettings(table.branchId, restaurantId),
+            getSettings(undefined, restaurantId),
+            getActiveGuestSessionsForTable(tableId, restaurantId),
+            getActiveOrders(table.branchId, restaurantId),
+        ]);
+
+        const multipleGuest = Boolean(branchSettings.multipleGuestEnabled);
+        const usePhoneVerification = (restaurantSettings.dineInOtpEnabled ?? true) && Boolean(branchSettings.posSettings?.enableDineInOTP);
+
         // Check for an existing active order for this customer at this table
-        const activeOrders = await getActiveOrders(table.branchId, restaurantId);
         const existingOrder = activeOrders.find(order =>
             order.tableId === tableId &&
             order.customerPhone === customerPhone
         );
 
+        // Enforce single-guest session lock when Multiple Guest is OFF
+        if (!multipleGuest) {
+            const otherActiveSession = activeSessions.find(s => s.customerPhone !== customerPhone);
+            const otherActiveCustomerOrder = activeOrders.find(
+                o => o.tableId === tableId && o.createdByName === 'Customer' && o.customerPhone !== customerPhone
+            );
+            if (otherActiveSession || otherActiveCustomerOrder) {
+                return {
+                    error: 'This QR ordering session is already active for this table. Please ask your host or staff if you need assistance.'
+                };
+            }
+        }
+
         if (existingOrder) {
-            // If an active order exists, redirect straight to the status page, bypassing OTP
+            // If an active order exists for this exact customer, redirect straight to the status page
             return { redirectTo: `/order/${tableId}/status/${existingOrder.id}?restaurantId=${restaurantId}` };
         }
 
-        const branchSettings = await getSettings(table.branchId, restaurantId);
-        const restaurantSettings = await getSettings(undefined, restaurantId);
-        
-        // Super Admin master switch controls whether OTP can be required
-        // If Super Admin has disabled dineInOtpEnabled, no OTP is required regardless of branch setting
-        // Otherwise, check the branch-level POS setting
-        const usePhoneVerification = (restaurantSettings.dineInOtpEnabled ?? true) && branchSettings.posSettings?.enableDineInOTP;
-
         if (usePhoneVerification) {
-            // Use new phone verification flow
-            // Create phone verification request
             const phoneResult = await createPhoneVerificationRequest(
                 tableId,
                 restaurantId,
@@ -1460,48 +1580,27 @@ export async function requestOrderAccessAction(
             
             if (phoneResult.success) {
                 const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-                // Redirect to new phone verification page
                 return { redirectTo: `/order/${tableId}/verify-phone?restaurantId=${restaurantId}&name=${encodeURIComponent(customerName)}&phone=${encodeURIComponent(customerPhone)}&verificationId=${encodeURIComponent(phoneResult.verificationId || '')}${tokenParam}` };
             } else {
                 return { error: phoneResult.error || 'Failed to create verification request.' };
             }
         } else {
-            // For non-OTP, save customer info and return success. Client will handle sessionStorage and redirect.
-            // Save customer info to session storage format
-            return { success: true };
+            // Reuse existing active session for this phone if present, else create a new guest session
+            const existingSession = activeSessions.find(s => s.customerPhone === customerPhone);
+            const session = existingSession || await createGuestSession({
+                tableId,
+                branchId: table.branchId,
+                restaurantId,
+                customerName,
+                customerPhone,
+                isPhoneVerified: false,
+                qrType: (restaurantSettings.dynamicQrEnabled ?? true) && table.isDynamicQR ? 'dynamic' : 'static',
+            });
+            return { success: true, guestSessionId: session.id };
         }
     } catch (e: any) {
         console.error(e);
         return { error: e.message || 'An unexpected error occurred.' };
-    }
-}
-
-
-export async function verifyOtpAction(
-    prevState: { error?: string; success?: boolean; message?: string } | null,
-    formData: FormData
-): Promise<{ error?: string; success?: boolean; message?: string; }> {
-    noStore();
-    const reqId = formData.get('reqId') as string;
-    const otp = formData.get('otp') as string;
-    const restaurantId = formData.get('restaurantId') as string;
-
-    if (!reqId || !otp || !restaurantId) {
-        return { error: 'Missing required data.' };
-    }
-
-    try {
-        const isValid = await verifyOtp(reqId, otp, restaurantId);
-
-        if (isValid) {
-            return { success: true, message: 'OTP Verified Successfully!' };
-        } else {
-            return { success: false, error: 'Invalid or expired OTP. Please try again.' };
-        }
-
-    } catch (e: any) {
-        console.error(e);
-        return { error: e.message || 'An unexpected error occurred during verification.' };
     }
 }
 
@@ -1513,11 +1612,12 @@ type PhoneVerificationState = {
     message?: string;
     verificationId?: string;
     tempUserUid?: string;
+    guestSessionId?: string;
 } | null;
 
 /**
- * Request phone verification - sends OTP via Firebase Phone Auth
- * This creates a verification request and triggers Firebase to send SMS
+ * Request phone verification - validates table/session and creates a rate-limited server verification request.
+ * Client uses Firebase Client SDK to send the actual SMS OTP.
  */
 export async function requestPhoneVerificationAction(
     prevState: PhoneVerificationState,
@@ -1535,11 +1635,7 @@ export async function requestPhoneVerificationAction(
     }
 
     try {
-        // Validate and format phone number
-        let phoneNumber = customerPhone.trim();
-        phoneNumber = phoneNumber.replace(/\s+/g, '');
-        
-        // Add country code if not present (default to +91 for India)
+        let phoneNumber = customerPhone.trim().replace(/\s+/g, '');
         if (!phoneNumber.startsWith('+')) {
             if (phoneNumber.startsWith('91')) {
                 phoneNumber = '+' + phoneNumber;
@@ -1547,14 +1643,40 @@ export async function requestPhoneVerificationAction(
                 phoneNumber = '+91' + phoneNumber;
             }
         }
-        
-        // Validate E.164 format
+
         const phoneRegex = /^\+[1-9]\d{1,14}$/;
         if (!phoneRegex.test(phoneNumber)) {
             return { error: 'Invalid phone number format. Please use international format with country code (e.g., +919876543210).' };
         }
 
-        // Create phone verification request in database
+        const validation = await validateTableAction(tableId, restaurantId, token);
+        if (!validation.success) {
+            return { error: validation.error };
+        }
+
+        const table = await getTableById(tableId, restaurantId);
+        if (!table || !table.branchId) {
+            return { error: 'Could not determine the branch for this table.' };
+        }
+
+        const [branchSettings, activeSessions, activeOrders] = await Promise.all([
+            getSettings(table.branchId, restaurantId),
+            getActiveGuestSessionsForTable(tableId, restaurantId),
+            getActiveOrders(table.branchId, restaurantId),
+        ]);
+
+        if (!branchSettings.multipleGuestEnabled) {
+            const otherActiveSession = activeSessions.find(s => s.customerPhone !== phoneNumber);
+            const otherActiveCustomerOrder = activeOrders.find(
+                o => o.tableId === tableId && o.createdByName === 'Customer' && o.customerPhone !== phoneNumber
+            );
+            if (otherActiveSession || otherActiveCustomerOrder) {
+                return {
+                    error: 'This QR ordering session is already active for this table. Please ask your host or staff if you need assistance.'
+                };
+            }
+        }
+
         const result = await createPhoneVerificationRequest(
             tableId,
             restaurantId,
@@ -1566,17 +1688,10 @@ export async function requestPhoneVerificationAction(
             return { error: result.error || 'Failed to create verification request.' };
         }
 
-        // In a real implementation, we would use Firebase Admin Auth to send the OTP
-        // For now, we'll return the verification ID
-        // The client will use Firebase client SDK to send the actual SMS
-        
-        // Note: Firebase Phone Auth requires client-side SDK for sending OTP
-        // The server can only verify the OTP using the Admin SDK
-        
         return { 
             success: true, 
             verificationId: result.verificationId,
-            message: 'OTP request created. Please use Firebase client SDK to send OTP.'
+            message: 'OTP request created.'
         };
 
     } catch (e: any) {
@@ -1586,8 +1701,17 @@ export async function requestPhoneVerificationAction(
 }
 
 /**
- * Verify phone OTP - validates the OTP entered by the user
- * This uses Firebase Admin Auth to verify the phone number and OTP
+ * Record a failed OTP attempt from client-side Firebase confirmation
+ */
+export async function recordPhoneVerificationFailureAction(
+    verificationId: string,
+    restaurantId: string
+): Promise<{ locked: boolean; attemptsRemaining: number; error?: string }> {
+    return recordPhoneVerificationFailure(verificationId, restaurantId);
+}
+
+/**
+ * Verify phone OTP - validates Firebase ID token on backend and activates GuestSession
  */
 export async function verifyPhoneVerificationAction(
     prevState: PhoneVerificationState,
@@ -1595,27 +1719,55 @@ export async function verifyPhoneVerificationAction(
 ): Promise<PhoneVerificationState> {
     noStore();
     const verificationId = formData.get('verificationId') as string;
-    const otp = formData.get('otp') as string;
+    const idToken = formData.get('idToken') as string;
     const restaurantId = formData.get('restaurantId') as string;
     const tableId = formData.get('tableId') as string;
 
-    if (!verificationId || !otp || !restaurantId) {
-        return { error: 'Missing required data.' };
+    if (!verificationId || !idToken || !restaurantId || !tableId) {
+        return { error: 'Missing required verification data.' };
     }
 
     try {
-        // Verify the OTP using server-side validation
-        const result = await verifyPhoneVerification(verificationId, otp, restaurantId);
+        const result = await verifyPhoneVerification(verificationId, idToken, restaurantId);
 
         if (!result.success) {
             return { error: result.error || 'Invalid or expired OTP.' };
         }
 
-        // Return success with temp user UID if available
+        const table = await getTableById(tableId, restaurantId);
+        if (!table || !table.branchId) {
+            return { error: 'Table not found.' };
+        }
+
+        const [branchSettings, restaurantSettings, activeSessions] = await Promise.all([
+            getSettings(table.branchId, restaurantId),
+            getSettings(undefined, restaurantId),
+            getActiveGuestSessionsForTable(tableId, restaurantId),
+        ]);
+
+        const phone = result.customerPhone || '';
+        if (!branchSettings.multipleGuestEnabled) {
+            const otherActiveSession = activeSessions.find(s => s.customerPhone !== phone);
+            if (otherActiveSession) {
+                return { error: 'This QR ordering session is already active for this table.' };
+            }
+        }
+
+        const session = await createGuestSession({
+            tableId,
+            branchId: table.branchId,
+            restaurantId,
+            customerName: result.customerName || 'Guest',
+            customerPhone: phone,
+            isPhoneVerified: true,
+            qrType: (restaurantSettings.dynamicQrEnabled ?? true) && table.isDynamicQR ? 'dynamic' : 'static',
+        });
+
         return { 
             success: true, 
             message: 'Phone verified successfully!',
-            tempUserUid: result.tempUserUid
+            tempUserUid: result.tempUserUid,
+            guestSessionId: session.id,
         };
 
     } catch (e: any) {

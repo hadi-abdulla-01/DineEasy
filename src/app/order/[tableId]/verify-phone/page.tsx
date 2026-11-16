@@ -8,7 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Logo from '@/components/logo';
 import { verifyPhoneOTP, sendPhoneOTP, signOutPhoneAuth, clearVerificationState, setConfirmationResult } from '@/firebase/phone-auth';
-import { verifyPhoneVerificationAction } from '@/lib/actions';
+import { verifyPhoneVerificationAction, requestPhoneVerificationAction, recordPhoneVerificationFailureAction } from '@/lib/actions';
+import { getCustomerSessionStorage, setCustomerSessionStorage, clearCustomerSessionStorage } from '@/lib/customer-session-storage';
+import { CustomerFormCardSkeleton } from '@/components/skeletons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { CheckCircle, XCircle, LoaderCircle, Clock, ArrowLeft, RefreshCw } from 'lucide-react';
 import { getAuth, ConfirmationResult, PhoneAuthProvider } from 'firebase/auth';
@@ -120,24 +122,19 @@ function VerifyPhoneForm() {
     const [otp, setOtp] = useState('');
     const [isPending, setIsPending] = useState(false);
     const [actionState, setActionState] = useState<ActionState>(null);
-    const [resendCooldown, setResendCooldown] = useState(0);
+    const [resendCooldown, setResendCooldown] = useState(60);
     const [verificationId, setVerificationId] = useState<string | null>(null);
     const [phoneNumber, setPhoneNumber] = useState<string>('');
     
-    // Get stored verification ID from sessionStorage
+    // Get stored verification ID from customer session storage
     useEffect(() => {
-        const storedData = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
-        if (storedData) {
-            try {
-                const data = JSON.parse(storedData);
-                if (data.verificationId) {
-                    setVerificationId(data.verificationId);
-                }
-                if (data.phone) {
-                    setPhoneNumber(data.phone);
-                }
-            } catch {
-                // Invalid stored data
+        const data = getCustomerSessionStorage(tableId);
+        if (data) {
+            if (data.verificationId) {
+                setVerificationId(data.verificationId);
+            }
+            if (data.phone) {
+                setPhoneNumber(data.phone);
             }
         }
         
@@ -184,109 +181,74 @@ function VerifyPhoneForm() {
         setActionState(null);
 
         try {
-            // First, try to verify using Firebase client SDK
-            const storedData = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
-            let clientVerificationId: string | null = null;
-            let serverVerificationId: string | null = null;
+            const data = getCustomerSessionStorage(tableId);
+            let clientVerificationId: string | null = verificationId;
+            let serverVerificationId: string | null = searchParams.get('verificationId');
             let phoneNumber: string = displayPhone || '';
             
-            if (storedData) {
-                try {
-                    const data = JSON.parse(storedData);
-                    clientVerificationId = data.verificationId;
-                    serverVerificationId = data.serverVerificationId;
-                    phoneNumber = data.phone;
-                } catch {
-                    // Use the one from URL
-                    clientVerificationId = verificationId;
-                }
+            if (data) {
+                clientVerificationId = data.verificationId || clientVerificationId;
+                serverVerificationId = data.serverVerificationId || serverVerificationId;
+                phoneNumber = data.phone || phoneNumber;
             }
-            
-            // Try client-side verification first
-            let clientSuccess = false;
-            if (clientVerificationId) {
-                try {
-                    clientSuccess = await verifyPhoneOTP(phoneNumber, otp);
-                } catch {
-                    // Client verification failed, try server-side
-                }
-            }
-            
-            if (clientSuccess) {
-                // Client-side verification succeeded
-                // Save verified customer info
-                sessionStorage.setItem(
-                    `dineeasy-customer-${tableId}`,
-                    JSON.stringify({ 
-                        name: name || '', 
-                        phone: displayPhone || '',
-                        verificationId: clientVerificationId,
-                        isVerified: true,
-                        verifiedAt: Date.now()
-                    })
-                );
-                
-                setActionState({ 
-                    success: true, 
-                    message: 'Phone verified successfully!' 
-                });
-                
-                // Redirect after success
-                setTimeout(() => {
-                    const tokenParam = token ? `&token=${token}` : '';
-                    router.push(`/order/${tableId}?restaurantId=${restaurantId}${tokenParam}`);
-                }, 1500);
-                
+
+            if (!serverVerificationId || !restaurantId) {
+                setActionState({ error: 'Verification session not found. Please start over.' });
                 setIsPending(false);
                 return;
             }
-            
-            // Fall back to server-side verification
-            if (serverVerificationId) {
-                const formData = new FormData();
-                formData.set('verificationId', serverVerificationId);
-                formData.set('otp', otp);
-                formData.set('restaurantId', restaurantId || '');
-                formData.set('tableId', tableId);
-                
-                const result = await verifyPhoneVerificationAction(null, formData);
-                
-                if (result?.error) {
-                    setActionState({ error: result.error });
-                    setIsPending(false);
-                    return;
-                }
-                
-                if (result?.success) {
-                    // Save verified customer info
-                    sessionStorage.setItem(
-                        `dineeasy-customer-${tableId}`,
-                        JSON.stringify({ 
-                            name: name || '', 
-                            phone: displayPhone || '',
-                            verificationId: serverVerificationId,
-                            isVerified: true,
-                            verifiedAt: Date.now(),
-                            tempUserUid: result.tempUserUid
-                        })
-                    );
-                    
-                    setActionState({ 
-                        success: true, 
-                        message: result.message || 'Phone verified successfully!' 
-                    });
-                    
-                    // Redirect after success
-                    setTimeout(() => {
-                        const tokenParam = token ? `&token=${token}` : '';
-                        router.push(`/order/${tableId}?restaurantId=${restaurantId}${tokenParam}`);
-                    }, 1500);
-                } else {
-                    setActionState({ error: 'Invalid or expired OTP. Please try again.' });
-                }
-            } else {
-                setActionState({ error: 'Verification session expired. Please request a new OTP.' });
+
+            // 1. Verify OTP via Firebase Client SDK to obtain cryptographic ID token
+            let authResult: { idToken: string; uid: string };
+            try {
+                authResult = await verifyPhoneOTP(phoneNumber, otp);
+            } catch (otpErr: any) {
+                // Record failed attempt on the server to prevent brute-force / abuse
+                const failureState = await recordPhoneVerificationFailureAction(serverVerificationId, restaurantId);
+                setActionState({
+                    error: failureState.locked
+                        ? (failureState.error || 'Too many incorrect OTP attempts. Please request a new OTP.')
+                        : (otpErr?.message || 'Invalid or expired OTP. Please try again.')
+                });
+                setIsPending(false);
+                return;
             }
+
+            // 2. Authoritative backend verification of Firebase ID token + GuestSession activation
+            const formData = new FormData();
+            formData.set('verificationId', serverVerificationId);
+            formData.set('idToken', authResult.idToken);
+            formData.set('restaurantId', restaurantId);
+            formData.set('tableId', tableId);
+
+            const result = await verifyPhoneVerificationAction(null, formData);
+
+            if (result?.error || !result?.success || !result?.guestSessionId) {
+                setActionState({ error: result?.error || 'Verification failed. Please try again.' });
+                setIsPending(false);
+                return;
+            }
+
+            setCustomerSessionStorage(tableId, { 
+                name: name || '', 
+                phone: phoneNumber,
+                verificationId: clientVerificationId,
+                serverVerificationId,
+                isVerified: true,
+                verifiedAt: Date.now(),
+                tempUserUid: result.tempUserUid || authResult.uid,
+                guestSessionId: result.guestSessionId,
+            });
+
+            setActionState({ 
+                success: true, 
+                message: result.message || 'Phone verified successfully!' 
+            });
+
+            setTimeout(() => {
+                const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+                router.push(`/order/${tableId}?restaurantId=${restaurantId}${tokenParam}`);
+            }, 1200);
         } catch (err: any) {
             setActionState({ error: err?.message || 'An unexpected error occurred during verification.' });
         } finally {
@@ -298,44 +260,43 @@ function VerifyPhoneForm() {
         if (resendCooldown > 0 || isPending) return;
         
         setIsPending(true);
+        setActionState(null);
         
         try {
-            // Resend OTP to the same phone number
             const fullPhoneNumber = displayPhone || phoneNumber;
-            if (!fullPhoneNumber) {
+            if (!fullPhoneNumber || !restaurantId) {
                 throw new Error('Phone number not found. Please start over.');
+            }
+
+            // Enforce server-side rate limits and create a new verification request
+            const reqFormData = new FormData();
+            reqFormData.set('tableId', tableId);
+            reqFormData.set('restaurantId', restaurantId);
+            reqFormData.set('customerName', name || 'Guest');
+            reqFormData.set('customerPhone', fullPhoneNumber);
+            if (token) reqFormData.set('token', token);
+
+            const reqResult = await requestPhoneVerificationAction(null, reqFormData);
+            if (reqResult?.error || !reqResult?.verificationId) {
+                throw new Error(reqResult?.error || 'Failed to request a new OTP.');
             }
             
             // Resend using Firebase client SDK
             const confirmationResult = await sendPhoneOTP(fullPhoneNumber);
             
-            // Update stored verification ID
-            const storedData = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
-            let existingData: any = {};
+            const existingData = getCustomerSessionStorage(tableId) || {};
             
-            if (storedData) {
-                try {
-                    existingData = JSON.parse(storedData);
-                } catch {
-                    // Use empty object
-                }
-            }
-            
-            sessionStorage.setItem(
-                `dineeasy-customer-${tableId}`,
-                JSON.stringify({ 
-                    ...existingData,
-                    phone: fullPhoneNumber,
-                    verificationId: confirmationResult.verificationId
-                })
-            );
+            setCustomerSessionStorage(tableId, { 
+                ...existingData,
+                phone: fullPhoneNumber,
+                verificationId: confirmationResult.verificationId,
+                serverVerificationId: reqResult.verificationId,
+            });
             
             setVerificationId(confirmationResult.verificationId);
             setOtp('');
             setActionState({ message: 'New OTP sent successfully!' });
             setResendCooldown(60); // 60 second cooldown
-            
-            // Store the confirmation result for verification
             setConfirmationResult(confirmationResult);
             
         } catch (err: any) {
@@ -348,7 +309,7 @@ function VerifyPhoneForm() {
     const handleChangePhone = () => {
         // Clear state and go back to welcome page
         clearVerificationState();
-        sessionStorage.removeItem(`dineeasy-customer-${tableId}`);
+        clearCustomerSessionStorage(tableId);
         const tokenParam = token ? `&token=${token}` : '';
         router.push(`/order/${tableId}/welcome?restaurantId=${restaurantId}${tokenParam}`);
     };
@@ -461,11 +422,7 @@ function VerifyPhoneForm() {
 
 export default function VerifyPhonePage() {
     return (
-        <Suspense fallback={
-            <div className="flex min-h-screen items-center justify-center">
-                <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-        }>
+        <Suspense fallback={<CustomerFormCardSkeleton />}>
             <VerifyPhoneForm />
         </Suspense>
     );

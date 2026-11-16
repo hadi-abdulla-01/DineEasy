@@ -5,6 +5,7 @@ import DraggableTableLayout from "@/components/draggable-table-layout";
 import { useAuth } from "../auth-provider";
 import type { Branch, RestaurantSettings } from "@/lib/definitions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TableLayoutSkeleton } from "@/components/skeletons";
 import { useRestaurantData } from "@/lib/client-data";
 
 
@@ -96,10 +97,8 @@ export default function TableOrderPage() {
                 </div>
             </div>
             <div>
-                {isLoadingSettings || !selectedBranchId ? (
-                    <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed">
-                        <p className="text-muted-foreground">Loading tables...</p>
-                    </div>
+                {(isLoadingSettings && !settings) || !selectedBranchId ? (
+                    <TableLayoutSkeleton />
                 ) : (
                     <DraggableTableLayout branchId={selectedBranchId} floorFilter={floorFilter} />
                 )}

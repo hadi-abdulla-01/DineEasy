@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Printer, Eye } from "lucide-react";
 import { Invoice } from "@/components/ui/invoice";
 import { useAuth } from "../../auth-provider";
+import { TableRowsSkeleton } from "@/components/skeletons";
 
 function OrderDetailsDialog({ order, isOpen, onOpenChange, settings }: { order: RemoteOrder | null, isOpen: boolean, onOpenChange: (isOpen: boolean) => void, settings: RestaurantSettings | null }) {
     if (!order) return null;
@@ -175,7 +176,7 @@ export default function OnlineOrderHistoryPage() {
     };
 
     if (!user) {
-        return <div>Loading...</div>;
+        return <TableRowsSkeleton label="Loading order history" />;
     }
 
     return (

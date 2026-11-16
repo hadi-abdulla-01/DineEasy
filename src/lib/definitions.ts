@@ -93,6 +93,7 @@ export type RestaurantSettings = {
     dynamicQrEnabled?: boolean; // master switch for Dynamic QR, controlled by Super Admin (default true)
     dynamicQrDuration?: number; // seconds before dynamic QR auto-rotates (default 300 = 5 min)
     dineInOtpEnabled?: boolean; // master switch for Dine-in OTP, controlled by Super Admin (default true; per-branch toggle still applies)
+    multipleGuestEnabled?: boolean; // allow multiple independent guest sessions on one QR/table (default false)
     onlineOrderingEnabled?: boolean;
     deliveryFee?: number;
     minimumOrderValue?: number;
@@ -243,6 +244,7 @@ export type Order = {
     takeAwayTime?: string;
     branchId: string;
     createdByName?: string;
+    guestSessionId?: string;
     table?: Table;
 };
 
@@ -340,6 +342,21 @@ export type OTPRequest = {
 };
 
 // Phone verification types for Firebase Phone Authentication
+export type GuestSession = {
+  id: string;
+  tableId: string;
+  branchId: string;
+  restaurantId: string;
+  customerName: string;
+  customerPhone: string;
+  status: 'active' | 'closed';
+  isPhoneVerified: boolean;
+  qrType: 'dynamic' | 'static';
+  createdAt: any; // Firestore Timestamp
+  expiresAt: number; // Unix ms timestamp
+  closedAt?: any; // Firestore Timestamp
+};
+
 export type PhoneVerificationState = {
   phoneNumber: string;
   verificationId: string;

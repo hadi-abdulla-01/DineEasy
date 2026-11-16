@@ -4,7 +4,8 @@
 import { createContext, useContext, useState, useEffect, type ReactNode, useCallback, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { AppUser, NavMenuKey, RestaurantSettings } from '@/lib/definitions';
-import { LoaderCircle, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import { AdminPageSkeleton } from '@/components/skeletons';
 import { getUserById, getSettings } from '@/lib/data';
 import { useUser } from '@/firebase/provider';
 import { extractRestaurantId } from '@/lib/auth-utils';
@@ -244,14 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const combinedIsLoading = isLoading || isFirebaseUserLoading;
 
   if (combinedIsLoading && isProtectedRoute(pathname)) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-lg text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
+    return <AdminPageSkeleton label="Loading" />;
   }
 
   return (

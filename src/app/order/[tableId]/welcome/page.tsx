@@ -1,18 +1,19 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Logo from '@/components/logo';
-import { requestPhoneVerificationAction, requestOrderAccessAction } from '@/lib/actions';
+import { requestPhoneVerificationAction, requestOrderAccessAction, checkTableSessionStatusAction } from '@/lib/actions';
 import { sendPhoneOTP, clearVerificationState } from '@/firebase/phone-auth';
 import { LoaderCircle, ChevronDown } from 'lucide-react';
-import { getSettings } from '@/lib/data';
+import { setCustomerSessionStorage } from '@/lib/customer-session-storage';
+import { CustomerFormCardSkeleton } from '@/components/skeletons';
 
-export default function WelcomePage() {
+function WelcomePageContent() {
     const router = useRouter();
     const params = useParams();
     const searchParams = useSearchParams();
@@ -47,23 +48,29 @@ export default function WelcomePage() {
     }, []);
 
     const [requiresOTP, setRequiresOTP] = useState<boolean | null>(null);
+    const [sessionActiveNotice, setSessionActiveNotice] = useState<string | null>(null);
 
-    // Check if OTP is required for this restaurant
+    // Check branch OTP setting & active session status for this table
     useEffect(() => {
         if (restaurantId && tableId) {
-            const checkOTPRequired = async () => {
+            const checkStatus = async () => {
                 try {
-                    const restaurantSettings = await getSettings(undefined, restaurantId);
-                    // Check Super Admin master switch first
-                    // If Super Admin has disabled dineInOtpEnabled, no OTP is required
-                    const otpRequired = (restaurantSettings?.dineInOtpEnabled ?? true) && restaurantSettings?.posSettings?.enableDineInOTP;
-                    setRequiresOTP(otpRequired);
+                    const status = await checkTableSessionStatusAction(tableId, restaurantId);
+                    if (status.success) {
+                        setRequiresOTP(status.requireOtp);
+                        if (!status.multipleGuestEnabled && status.hasActiveSession) {
+                            setSessionActiveNotice('This table already has an active QR ordering session. Only the original guest can resume with their phone number.');
+                        } else {
+                            setSessionActiveNotice(null);
+                        }
+                    } else {
+                        setRequiresOTP(false);
+                    }
                 } catch {
-                    // If we can't check, assume OTP is required for safety
-                    setRequiresOTP(true);
+                    setRequiresOTP(false);
                 }
             };
-            checkOTPRequired();
+            checkStatus();
         }
     }, [restaurantId, tableId]);
 
@@ -112,15 +119,13 @@ export default function WelcomePage() {
                 if (result?.redirectTo) {
                     router.push(result.redirectTo);
                 } else if (result?.success) {
-                    // No OTP required, save customer info and redirect
-                    sessionStorage.setItem(
-                        `dineeasy-customer-${tableId}`,
-                        JSON.stringify({ 
-                            name: customerName.trim(), 
-                            phone: fullPhoneNumber,
-                            isVerified: true
-                        })
-                    );
+                    // No OTP required, save customer info + guestSessionId and redirect
+                    setCustomerSessionStorage(tableId, { 
+                        name: customerName.trim(), 
+                        phone: fullPhoneNumber,
+                        isVerified: true,
+                        guestSessionId: result.guestSessionId,
+                    });
                     const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
                     router.push(`/order/${tableId}?restaurantId=${restaurantId}${tokenParam}`);
                 }
@@ -138,8 +143,8 @@ export default function WelcomePage() {
 
                 const result = await requestPhoneVerificationAction(null, formData);
 
-                if (result?.error) {
-                    setError(result.error);
+                if (result?.error || !result?.verificationId) {
+                    setError(result?.error || 'Failed to create verification request.');
                     isSubmitting.current = false;
                     setIsPending(false);
                     return;
@@ -150,15 +155,12 @@ export default function WelcomePage() {
                 const confirmationResult = await sendPhoneOTP(fullPhoneNumber);
 
                 // Save customer info and verification state to session storage
-                sessionStorage.setItem(
-                    `dineeasy-customer-${tableId}`,
-                    JSON.stringify({ 
-                        name: customerName.trim(), 
-                        phone: fullPhoneNumber,
-                        verificationId: confirmationResult.verificationId,
-                        serverVerificationId: result.verificationId // Server-side tracking
-                    })
-                );
+                setCustomerSessionStorage(tableId, { 
+                    name: customerName.trim(), 
+                    phone: fullPhoneNumber,
+                    verificationId: confirmationResult.verificationId,
+                    serverVerificationId: result.verificationId
+                });
 
                 // Redirect to phone verification page
                 const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
@@ -184,15 +186,13 @@ export default function WelcomePage() {
                 if (result?.redirectTo) {
                     router.push(result.redirectTo);
                 } else if (result?.success) {
-                    // Save customer info and redirect
-                    sessionStorage.setItem(
-                        `dineeasy-customer-${tableId}`,
-                        JSON.stringify({ 
-                            name: customerName.trim(), 
-                            phone: fullPhoneNumber,
-                            isVerified: true
-                        })
-                    );
+                    // Save customer info + guestSessionId and redirect
+                    setCustomerSessionStorage(tableId, { 
+                        name: customerName.trim(), 
+                        phone: fullPhoneNumber,
+                        isVerified: true,
+                        guestSessionId: result.guestSessionId,
+                    });
                     const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
                     router.push(`/order/${tableId}?restaurantId=${restaurantId}${tokenParam}`);
                 }
@@ -220,6 +220,11 @@ export default function WelcomePage() {
 
                 <form onSubmit={handleSubmit}>
                     <CardContent className="space-y-4">
+                        {sessionActiveNotice && !error && (
+                            <div className="text-sm text-center p-3 rounded-md bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800">
+                                {sessionActiveNotice}
+                            </div>
+                        )}
                         {error && (
                             <div className={`text-sm text-center p-3 rounded-md ${
                                 error.toLowerCase().includes('expired')
@@ -310,5 +315,13 @@ export default function WelcomePage() {
             {/* Invisible reCAPTCHA container */}
             <div id="recaptcha-container"></div>
         </div>
+    );
+}
+
+export default function WelcomePage() {
+    return (
+        <Suspense fallback={<CustomerFormCardSkeleton />}>
+            <WelcomePageContent />
+        </Suspense>
     );
 }

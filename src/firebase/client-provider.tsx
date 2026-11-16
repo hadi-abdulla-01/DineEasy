@@ -4,13 +4,19 @@ import React, { useState, useEffect, type ReactNode } from 'react';
 import { FirebaseProvider } from '@/firebase/provider';
 import { initializeFirebase } from '@/firebase';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Terminal, LoaderCircle } from 'lucide-react';
+import { Terminal } from 'lucide-react';
+import { AdminPageSkeleton } from '@/components/skeletons';
 
 interface FirebaseClientProviderProps {
   children: ReactNode;
+  /**
+   * Placeholder shown while Firebase initialises. Pass a skeleton that matches the page the
+   * provider wraps; defaults to a generic page skeleton.
+   */
+  fallback?: ReactNode;
 }
 
-export function FirebaseClientProvider({ children }: FirebaseClientProviderProps) {
+export function FirebaseClientProvider({ children, fallback }: FirebaseClientProviderProps) {
   const [firebaseServices, setFirebaseServices] = useState<ReturnType<typeof initializeFirebase> | null>(null);
   const [initError, setInitError] = useState<Error | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -56,14 +62,7 @@ export function FirebaseClientProvider({ children }: FirebaseClientProviderProps
   }
 
   if (isInitializing) {
-    return (
-        <div className="flex h-screen items-center justify-center bg-background">
-            <div className="flex flex-col items-center gap-4">
-                <LoaderCircle className="h-12 w-12 animate-spin text-primary" />
-                <p className="text-lg text-muted-foreground">Connecting to Firebase...</p>
-            </div>
-        </div>
-    );
+    return <>{fallback ?? <AdminPageSkeleton label="Loading" />}</>;
   }
   
   if (!firebaseServices) {

@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import type { ChartConfig } from '@/components/ui/chart';
-import { Banknote, ShoppingCart, Users, TrendingUp, LoaderCircle } from 'lucide-react';
+import { Banknote, ShoppingCart, Users, TrendingUp } from 'lucide-react';
+import { DashboardSkeleton } from '@/components/skeletons';
 import { useAuth } from './auth-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -124,15 +125,8 @@ export default function AdminDashboardPage() {
     }, [allOrders, menuItems]);
 
 
-    if (isLoading || !settings || !user) {
-        return (
-            <div className="flex h-[80vh] items-center justify-center">
-                <div className="flex flex-col items-center gap-2">
-                    <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="text-muted-foreground">Loading dashboard...</p>
-                </div>
-            </div>
-        );
+    if ((isLoading && !settings) || !settings || !user) {
+        return <DashboardSkeleton />;
     }
 
     const currencySymbol = settings.currencySymbol || '$';

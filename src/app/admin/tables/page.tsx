@@ -5,8 +5,10 @@ import { createTableAction, toggleTableDynamicQRAction, updateTableFloorAction, 
 import { Button } from "@/components/ui/button";
 import { useEffect, useState, useRef } from "react";
 import type { Table, RestaurantSettings, Branch } from "@/lib/definitions";
-import { Printer, Trash2, QrCode, RefreshCw, LoaderCircle } from "lucide-react";
+import { Printer, Trash2, QrCode, RefreshCw } from "lucide-react";
 import { QRCode } from "@/components/qr-code";
+import { AdminPageSkeleton, TableGridSkeleton } from "@/components/skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "../auth-provider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { deleteTableAction } from "@/lib/actions";
@@ -233,7 +235,7 @@ function TableList({ tables, settings, restaurantId, onFloorChange, onToggleDyna
                                     settings={settings}
                                 />
                             ) : (
-                                <div className="w-32 h-32 bg-gray-200 dark:bg-gray-600 animate-pulse rounded" />
+                                <Skeleton className="w-32 h-32 rounded" />
                             )}
                         </div>
 
@@ -503,11 +505,7 @@ export default function TableManagementPage() {
         });
 
     if (!user) {
-        return (
-            <div className="flex h-screen items-center justify-center">
-                <LoaderCircle className="h-10 w-10 animate-spin text-muted-foreground" />
-            </div>
-        );
+        return <AdminPageSkeleton label="Loading tables" />;
     }
 
     return (
@@ -565,10 +563,8 @@ export default function TableManagementPage() {
                     </CardContent>
                 </Card>
 
-                {isLoading ? (
-                    <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed">
-                        <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
+                {isLoading && tables.length === 0 ? (
+                    <TableGridSkeleton />
                 ) : filteredTables.length > 0 ? (
                     <TableList
                         tables={filteredTables}

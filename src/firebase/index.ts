@@ -1,7 +1,14 @@
 
 'use client';
 import { initializeApp, getApps, getApp, FirebaseApp, type FirebaseOptions } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import {
+  getAuth,
+  initializeAuth,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  inMemoryPersistence,
+  type Auth,
+} from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'
 
 // This function constructs the config object from environment variables
@@ -38,10 +45,25 @@ export function initializeFirebase() {
   return getSdks(getApp());
 }
 
+function getOrInitAuth(firebaseApp: FirebaseApp): Auth {
+  if (typeof window === 'undefined') {
+    return getAuth(firebaseApp);
+  }
+  try {
+    // Avoid indexedDBLocalPersistence on client startup: iOS WebKit cold-starts from the
+    // native Camera QR scanner can deadlock waiting on IndexedDB (firebaseLocalStorageDb).
+    return initializeAuth(firebaseApp, {
+      persistence: [browserLocalPersistence, browserSessionPersistence, inMemoryPersistence],
+    });
+  } catch {
+    return getAuth(firebaseApp);
+  }
+}
+
 export function getSdks(firebaseApp: FirebaseApp) {
   return {
     firebaseApp,
-    auth: getAuth(firebaseApp),
+    auth: getOrInitAuth(firebaseApp),
     firestore: getFirestore(firebaseApp)
   };
 }

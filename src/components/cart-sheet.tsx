@@ -26,7 +26,7 @@ type CartSheetProps = {
   existingOrder?: Order;
   branchId?: string;
   settings: RestaurantSettings | null;
-  customerInfo?: { name: string; phone: string; tempUserUid?: string };
+  customerInfo?: { name: string; phone: string; tempUserUid?: string; guestSessionId?: string; isTableDevice?: boolean };
   restaurantId?: string;
 };
 
@@ -70,9 +70,15 @@ export function CartSheet({
       if (isCustomerFacing) {
         formData.set('customerName', customerInfo?.name || '');
         formData.set('customerPhone', customerInfo?.phone || '');
-        // Pass tempUserUid for cleanup after order placement
+        // Pass tempUserUid and guestSessionId for validation & cleanup
         if (customerInfo?.tempUserUid) {
           formData.set('tempUserUid', customerInfo.tempUserUid);
+        }
+        if (customerInfo?.guestSessionId) {
+          formData.set('guestSessionId', customerInfo.guestSessionId);
+        }
+        if (customerInfo?.isTableDevice) {
+          formData.set('isTableDevice', 'true');
         }
       } else {
         formData.set('customerName', adminCustomerName);

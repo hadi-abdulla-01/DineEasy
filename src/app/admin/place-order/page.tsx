@@ -4,7 +4,7 @@ import { OrderForm } from "@/components/order-form";
 import { notFound, useRouter } from "next/navigation";
 import type { Order, MenuItem, RestaurantSettings } from "@/lib/definitions";
 import { useEffect, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { AdminMenuSkeleton } from "@/components/skeletons";
 import { useAuth } from "@/app/admin/auth-provider";
 import { useRestaurantData } from "@/lib/client-data";
 
@@ -62,14 +62,7 @@ export default function PlaceOrderPage() {
     }, [user, restaurantId, getTableById, getMenuItems, getSettings, router]);
 
     if (isLoading) {
-        return (
-            <div className="flex h-[80vh] items-center justify-center">
-                <div className="flex flex-col items-center gap-2">
-                    <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="text-muted-foreground">Loading Order Screen...</p>
-                </div>
-            </div>
-        );
+        return <AdminMenuSkeleton label="Loading order screen" />;
     }
 
     if (!table) {

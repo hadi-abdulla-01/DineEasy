@@ -1,7 +1,7 @@
 
 
 'use server';
-import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, AppUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, SelectedAddon, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, RemoteOrder, DayOfWeek, Discount, DiscountApplicability, OTPRequest, Payment } from './definitions';
+import type { Table, MenuItem, Order, RemoteOrder, OrderStatus, AppUser, OrderItem, RestaurantSettings, UserRole, AddonGroup, SelectedAddon, InvoiceSettings, NavMenuKey, UserPermissions, AppliedTax, Tax, PrintSettings, Branch, MealSession, ActivityLog, CustomerDetails, DayOfWeek, Discount, DiscountApplicability, Payment, GuestSession } from './definitions';
 import { initializeFirebase } from '@/firebase/server';
 import { getAdminMessaging } from '@/firebase/admin';
 import {
@@ -226,6 +226,7 @@ export async function getSettings(branchId?: string, restaurantId: string = 'din
         },
         mealSessions: [],
         multiFloorEnabled: false,
+        multipleGuestEnabled: false,
         floors: [],
         defaultFloor: '',
         discounts: [],
@@ -1442,77 +1443,116 @@ export async function getActivityLogsByUser(userId: string, limitCount: number =
     return logs.slice(0, limitCount);
 }
 
-// --- OTP Management ---
+// --- Guest Session Management ---
 
-export async function createOtpRequest(tableId: string, restaurantId: string, customerName: string, customerPhone: string): Promise<OTPRequest | null> {
-    const firestore = await getFirestoreInstance();
-    const table = await getTableById(tableId, restaurantId);
-    if (!table) {
-        throw new Error('Table not found');
-    }
-    const otp = Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit OTP
-    const otpRequest: Omit<OTPRequest, 'id'> = {
-        tableId,
-        tableNumber: table.number,
-        branchId: table.branchId,
-        restaurantId,
-        otp,
-        customerName,
-        customerPhone,
-        createdAt: serverTimestamp(),
-    };
+const GUEST_SESSION_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
-    const otpRequestsRef = collection(firestore, `restaurants/${restaurantId}/otpRequests`);
-    const docRef = await addDoc(otpRequestsRef, otpRequest);
-    
-    const newOtpRequest = await getDoc(docRef);
-    return docToObj<OTPRequest>(newOtpRequest);
-}
-
-export async function verifyOtp(reqId: string, otp: string, restaurantId: string): Promise<boolean> {
+export async function getActiveGuestSessionsForTable(
+    tableId: string,
+    restaurantId: string
+): Promise<GuestSession[]> {
     noStore();
     const firestore = await getFirestoreInstance();
-    const otpRef = doc(firestore, `restaurants/${restaurantId}/otpRequests`, reqId);
-    const docSnap = await getDoc(otpRef);
+    const sessionsRef = collection(firestore, `restaurants/${restaurantId}/guestSessions`);
+    const q = query(sessionsRef, where('tableId', '==', tableId), where('status', '==', 'active'));
+    const snapshot = await getDocs(q);
 
-    if (!docSnap.exists()) {
-        console.error(`OTP request with ID ${reqId} not found in restaurant ${restaurantId}.`);
-        return false;
-    }
-    const request = docSnap.data() as OTPRequest;
+    const now = Date.now();
+    const active: GuestSession[] = [];
 
-    // Check if OTP matches and is not expired (e.g., 5 minutes)
-    const now = new Date();
-    const createdAt = (request.createdAt as Timestamp).toDate();
-    const fiveMinutes = 5 * 60 * 1000;
-
-    if (request.otp === otp && now.getTime() - createdAt.getTime() < fiveMinutes) {
-        // Optionally, delete the OTP request after successful verification
-        await deleteDoc(docSnap.ref);
-        return true;
+    for (const docSnap of snapshot.docs) {
+        const session = docToObj<GuestSession>(docSnap);
+        if (!session) continue;
+        if (session.expiresAt && now > session.expiresAt) {
+            await updateDoc(docSnap.ref, { status: 'closed', closedAt: serverTimestamp() });
+        } else {
+            active.push(session);
+        }
     }
 
-    return false;
+    return active;
 }
 
-/**
- * OLD FUNCTION - NO LONGER USED
- * This function sent OTP notifications to staff devices via FCM.
- * Now OTPs are sent directly to customers via Firebase Phone Authentication SMS.
- * Kept for backward compatibility but not called in the new flow.
- */
-export async function sendOtpNotification(otpRequest: OTPRequest): Promise<void> {
-    // This function is deprecated. OTPs are now sent directly to customers via SMS.
-    // Staff no longer receive or communicate OTPs to customers.
-    console.log('sendOtpNotification is deprecated. Using Firebase Phone Auth for direct SMS to customers.');
-    return;
+export async function getGuestSessionById(
+    sessionId: string,
+    restaurantId: string
+): Promise<GuestSession | null> {
+    noStore();
+    if (!sessionId || !restaurantId) return null;
+    const firestore = await getFirestoreInstance();
+    const sessionRef = doc(firestore, `restaurants/${restaurantId}/guestSessions`, sessionId);
+    const docSnap = await getDoc(sessionRef);
+    if (!docSnap.exists()) return null;
+
+    const session = docToObj<GuestSession>(docSnap);
+    if (!session) return null;
+
+    if (session.status === 'active' && session.expiresAt && Date.now() > session.expiresAt) {
+        await updateDoc(sessionRef, { status: 'closed', closedAt: serverTimestamp() });
+        return { ...session, status: 'closed' };
+    }
+
+    return session;
+}
+
+export async function createGuestSession(params: {
+    tableId: string;
+    branchId: string;
+    restaurantId: string;
+    customerName: string;
+    customerPhone: string;
+    isPhoneVerified: boolean;
+    qrType: 'dynamic' | 'static';
+}): Promise<GuestSession> {
+    const firestore = await getFirestoreInstance();
+    const sessionsRef = collection(firestore, `restaurants/${params.restaurantId}/guestSessions`);
+    const now = Date.now();
+    const newSessionData = {
+        tableId: params.tableId,
+        branchId: params.branchId,
+        restaurantId: params.restaurantId,
+        customerName: params.customerName,
+        customerPhone: params.customerPhone,
+        status: 'active' as const,
+        isPhoneVerified: params.isPhoneVerified,
+        qrType: params.qrType,
+        createdAt: serverTimestamp(),
+        expiresAt: now + GUEST_SESSION_TTL_MS,
+    };
+
+    const docRef = await addDoc(sessionsRef, newSessionData);
+    return {
+        ...newSessionData,
+        id: docRef.id,
+        createdAt: new Date(now).toISOString(),
+    };
+}
+
+export async function closeGuestSessionsForTable(
+    tableId: string,
+    restaurantId: string
+): Promise<void> {
+    const firestore = await getFirestoreInstance();
+    const sessionsRef = collection(firestore, `restaurants/${restaurantId}/guestSessions`);
+    const q = query(sessionsRef, where('tableId', '==', tableId), where('status', '==', 'active'));
+    const snapshot = await getDocs(q);
+
+    await Promise.all(
+        snapshot.docs.map(docSnap =>
+            updateDoc(docSnap.ref, { status: 'closed', closedAt: serverTimestamp() })
+        )
+    );
 }
 
 // --- Phone Verification Management ---
 
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds
+const OTP_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const OTP_RATE_LIMIT_MAX_REQUESTS = 5;
+
 /**
  * Create a phone verification request for Firebase Phone Auth
- * This stores the verification state in Firestore for server-side validation
+ * Enforces per-phone rate limiting and stores verification state in Firestore
  */
 export async function createPhoneVerificationRequest(
     tableId: string,
@@ -1528,8 +1568,31 @@ export async function createPhoneVerificationRequest(
     }
 
     try {
-        // Generate a verification ID (Firebase format)
-        const verificationId = `phone-verification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const requestsRef = collection(firestore, `restaurants/${restaurantId}/phoneVerificationRequests`);
+
+        // Rate limiting: check recent requests for this phone number
+        const recentQuery = query(requestsRef, where('customerPhone', '==', customerPhone));
+        const recentSnap = await getDocs(recentQuery);
+        const now = Date.now();
+        let recentCount = 0;
+
+        for (const existingDoc of recentSnap.docs) {
+            const data = existingDoc.data();
+            const createdMs = data.createdAtMs || (data.createdAt?.toDate ? data.createdAt.toDate().getTime() : 0);
+            if (createdMs && now - createdMs < OTP_RESEND_COOLDOWN_MS) {
+                const waitSec = Math.ceil((OTP_RESEND_COOLDOWN_MS - (now - createdMs)) / 1000);
+                return { success: false, error: `Please wait ${waitSec} seconds before requesting another OTP.` };
+            }
+            if (createdMs && now - createdMs < OTP_RATE_LIMIT_WINDOW_MS) {
+                recentCount++;
+            }
+        }
+
+        if (recentCount >= OTP_RATE_LIMIT_MAX_REQUESTS) {
+            return { success: false, error: 'Too many OTP requests for this phone number. Please try again later.' };
+        }
+
+        const verificationId = `phone-verification-${now}-${Math.random().toString(36).substring(2, 11)}`;
         
         const verificationRequest = {
             tableId,
@@ -1540,13 +1603,13 @@ export async function createPhoneVerificationRequest(
             customerPhone,
             verificationId,
             createdAt: serverTimestamp(),
-            expiresAt: Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)), // 10 minutes
+            createdAtMs: now,
+            expiresAt: Timestamp.fromDate(new Date(now + 10 * 60 * 1000)), // 10 minutes
             isVerified: false,
             attempts: 0,
             maxAttempts: 5,
         };
 
-        const requestsRef = collection(firestore, `restaurants/${restaurantId}/phoneVerificationRequests`);
         await addDoc(requestsRef, verificationRequest);
 
         return { success: true, verificationId };
@@ -1557,24 +1620,61 @@ export async function createPhoneVerificationRequest(
 }
 
 /**
- * Verify phone OTP server-side
- * This validates the OTP and marks the request as verified
+ * Record a failed OTP verification attempt and lock/delete if maxAttempts reached.
+ */
+export async function recordPhoneVerificationFailure(
+    verificationId: string,
+    restaurantId: string
+): Promise<{ locked: boolean; attemptsRemaining: number; error?: string }> {
+    noStore();
+    const firestore = await getFirestoreInstance();
+    const requestsRef = collection(firestore, `restaurants/${restaurantId}/phoneVerificationRequests`);
+    const q = query(requestsRef, where('verificationId', '==', verificationId));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+        return { locked: true, attemptsRemaining: 0, error: 'Verification session not found or expired. Please request a new OTP.' };
+    }
+
+    const docSnap = snapshot.docs[0];
+    const request = docSnap.data();
+    const nextAttempts = (request.attempts || 0) + 1;
+    const maxAttempts = request.maxAttempts || 5;
+
+    if (nextAttempts >= maxAttempts) {
+        await deleteDoc(docSnap.ref);
+        return { locked: true, attemptsRemaining: 0, error: 'Too many incorrect OTP attempts. Please request a new OTP.' };
+    }
+
+    await updateDoc(docSnap.ref, { attempts: nextAttempts });
+    return { locked: false, attemptsRemaining: maxAttempts - nextAttempts };
+}
+
+/**
+ * Verify phone OTP server-side using Firebase Admin Auth ID Token
  */
 export async function verifyPhoneVerification(
     verificationId: string,
-    otp: string,
+    idToken: string,
     restaurantId: string
-): Promise<{ success: boolean; error?: string; tempUserUid?: string }> {
+): Promise<{
+    success: boolean;
+    error?: string;
+    tempUserUid?: string;
+    tableId?: string;
+    branchId?: string;
+    customerName?: string;
+    customerPhone?: string;
+}> {
     noStore();
     const firestore = await getFirestoreInstance();
     
-    // Find the verification request
     const requestsRef = collection(firestore, `restaurants/${restaurantId}/phoneVerificationRequests`);
     const q = query(requestsRef, where('verificationId', '==', verificationId));
     const snapshot = await getDocs(q);
     
     if (snapshot.empty) {
-        return { success: false, error: 'Verification request not found or expired' };
+        return { success: false, error: 'Verification request not found or expired.' };
     }
     
     const docSnap = snapshot.docs[0];
@@ -1589,67 +1689,54 @@ export async function verifyPhoneVerification(
     
     // Check attempts
     const attempts = request.attempts || 0;
-    if (attempts >= request.maxAttempts) {
+    if (attempts >= (request.maxAttempts || 5)) {
         await deleteDoc(docSnap.ref);
         return { success: false, error: 'Too many failed attempts. Please request a new OTP.' };
     }
-    
-    // In a real implementation, we would use Firebase Admin Auth to verify the OTP
-    // For now, we'll use a simple comparison (in production, use Firebase Admin Auth)
-    // Note: Firebase Phone Auth OTPs are 6 digits and generated by Firebase
-    
-    // For this implementation, we'll assume the OTP is valid if it's 6 digits
-    // In production, you should use Firebase Admin Auth to verify the phone number
-    // and OTP combination properly
-    
-    if (otp.length !== 6 || !/^\d+$/.test(otp)) {
-        // Increment attempts
+
+    if (!idToken) {
         await updateDoc(docSnap.ref, { attempts: attempts + 1 });
-        return { success: false, error: 'Invalid OTP. Please try again.' };
+        return { success: false, error: 'Missing Firebase verification token.' };
     }
-    
-    // Mark as verified
-    await updateDoc(docSnap.ref, {
-        isVerified: true,
-        verifiedAt: serverTimestamp(),
-        verifiedOtp: otp // Store for audit (optional, can be omitted for security)
-    });
-    
-    // Create a temporary Firebase Auth user for this session
-    // This will be used for authorization during the ordering process
+
+    const { getAdminAuth } = await import('@/firebase/admin');
+    const adminAuth = getAdminAuth();
+    if (!adminAuth) {
+        return { success: false, error: 'Server phone verification is not configured. Please contact support.' };
+    }
+
     try {
-        const { getAdminAuth } = await import('@/firebase/admin');
-        const adminAuth = getAdminAuth();
-        
-        if (adminAuth) {
-            // Create a temporary user with the phone number
-            // Note: Firebase requires phone numbers in E.164 format
-            let phoneNumber = request.customerPhone;
-            if (!phoneNumber.startsWith('+')) {
-                phoneNumber = '+91' + phoneNumber.replace(/^0+/, '');
-            }
-            
-            // Create temporary user
-            const tempUser = await adminAuth.createUser({
-                phoneNumber,
-                disabled: false
-            });
-            
-            console.log(`Created temporary phone auth user: ${tempUser.uid}`);
-            
-            // Store the temp user UID in the verification request
-            await updateDoc(docSnap.ref, { tempUserUid: tempUser.uid });
-            
-            return { success: true, tempUserUid: tempUser.uid };
-        } else {
-            console.warn('Firebase Admin Auth not available, skipping temporary user creation');
-            return { success: true };
+        const decodedToken = await adminAuth.verifyIdToken(idToken);
+        const verifiedPhone = decodedToken.phone_number;
+
+        if (!verifiedPhone || verifiedPhone !== request.customerPhone) {
+            await updateDoc(docSnap.ref, { attempts: attempts + 1 });
+            return { success: false, error: 'Verified phone number does not match the requested number.' };
         }
+
+        // Ensure auth_time is recent (within 15 minutes)
+        if (decodedToken.auth_time && Date.now() / 1000 - decodedToken.auth_time > 15 * 60) {
+            return { success: false, error: 'OTP session expired. Please request a new OTP.' };
+        }
+
+        await updateDoc(docSnap.ref, {
+            isVerified: true,
+            verifiedAt: serverTimestamp(),
+            tempUserUid: decodedToken.uid,
+        });
+
+        return {
+            success: true,
+            tempUserUid: decodedToken.uid,
+            tableId: request.tableId,
+            branchId: request.branchId,
+            customerName: request.customerName,
+            customerPhone: request.customerPhone,
+        };
     } catch (authError: any) {
-        console.error('Error creating temporary Firebase user:', authError);
-        // Even if we can't create the temp user, the verification is still valid
-        // The client can proceed with the session
-        return { success: true };
+        console.error('Error verifying Firebase Phone Auth token:', authError);
+        await updateDoc(docSnap.ref, { attempts: attempts + 1 });
+        return { success: false, error: 'Invalid or expired OTP verification token.' };
     }
 }
 

@@ -5,7 +5,7 @@ import type { MenuItem, RestaurantSettings } from "@/lib/definitions";
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "../auth-provider";
 import { useRestaurantData } from "@/lib/client-data";
-import { LoaderCircle } from "lucide-react";
+import { AdminMenuSkeleton } from "@/components/skeletons";
 
 export default function OnlineOrdersPage() {
     const { user } = useAuth();
@@ -57,15 +57,8 @@ export default function OnlineOrdersPage() {
         }
     }, [branchId, fetchItemsAndSettings]);
 
-    if (!user || isLoading) {
-        return (
-            <div className="flex h-[80vh] items-center justify-center">
-                <div className="flex flex-col items-center gap-2">
-                    <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="text-muted-foreground">Loading menu...</p>
-                </div>
-            </div>
-        );
+    if (!user || (isLoading && !settings)) {
+        return <AdminMenuSkeleton label="Loading online order menu" />;
     }
 
     if (!branchId) {

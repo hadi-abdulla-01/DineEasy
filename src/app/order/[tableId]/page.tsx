@@ -5,17 +5,18 @@ import { getMenuItems, getTableById, getActiveOrders, getSettings, getOrderById,
 import { OrderForm } from "@/components/order-form";
 import { notFound, redirect, useParams, useRouter, useSearchParams } from "next/navigation";
 import type { Order, MenuItem, MealSession, RestaurantSettings } from "@/lib/definitions";
-import { useEffect, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
+import { CustomerOrderPageSkeleton } from "@/components/skeletons";
 import { OrderHeader } from "@/components/order-header";
 import { useAuth } from "@/app/admin/auth-provider";
+import { getCustomerSessionStorage } from "@/lib/customer-session-storage";
 
 type CustomerInfo = {
     name: string;
     phone: string;
 };
 
-export default function OrderPage() {
+function OrderPageContent() {
     const params = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -30,7 +31,7 @@ export default function OrderPage() {
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [currentSession, setCurrentSession] = useState<MealSession | null | undefined>(undefined);
     const [activeOrderForCustomer, setActiveOrderForCustomer] = useState<Order | undefined>(undefined);
-    const [customerInfo, setCustomerInfo] = useState<{ name: string; phone: string; tempUserUid?: string } | null>(null);
+    const [customerInfo, setCustomerInfo] = useState<{ name: string; phone: string; tempUserUid?: string; guestSessionId?: string; isTableDevice?: boolean } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
@@ -42,40 +43,29 @@ export default function OrderPage() {
 
         const isTableDevice = loggedInUser?.role === 'Table' && loggedInUser.assignedTableId === tableId;
         const tokenParam = searchParams.get('token');
-        const tokenSuffix = tokenParam ? `&token=${tokenParam}` : '';
+        const queryParts = new URLSearchParams();
+        if (restaurantIdFromUrl) queryParts.set('restaurantId', restaurantIdFromUrl);
+        if (tokenParam) queryParts.set('token', tokenParam);
+        const welcomeQuery = queryParts.toString() ? `?${queryParts.toString()}` : '';
 
         if (isTableDevice) {
             // For a logged-in table device, bypass welcome screen.
-            setCustomerInfo({ name: `Table ${tableId}`, phone: `table-user-${tableId}` });
+            setCustomerInfo({ name: `Table ${tableId}`, phone: `table-user-${tableId}`, isTableDevice: true });
         } else {
             // Logic for regular QR code customers
-            const storedCustomerInfo = sessionStorage.getItem(`dineeasy-customer-${tableId}`);
-            if (storedCustomerInfo) {
-                try {
-                    const info = JSON.parse(storedCustomerInfo);
-                    if (info.phone) {
-                        // Check if phone verification is complete
-                        if (info.isVerified) {
-                            setCustomerInfo({
-                                name: info.name,
-                                phone: info.phone,
-                                tempUserUid: info.tempUserUid
-                            });
-                        } else {
-                            // Not verified yet, redirect to welcome or verify page
-                            router.replace(`/order/${tableId}/welcome?restaurantId=${restaurantIdFromUrl}${tokenSuffix}`);
-                        }
-                    } else {
-                        router.replace(`/order/${tableId}/welcome?restaurantId=${restaurantIdFromUrl}${tokenSuffix}`);
-                    }
-                } catch {
-                    router.replace(`/order/${tableId}/welcome?restaurantId=${restaurantIdFromUrl}${tokenSuffix}`);
-                }
+            const info = getCustomerSessionStorage(tableId);
+            if (info && info.phone && info.isVerified && info.guestSessionId) {
+                setCustomerInfo({
+                    name: info.name,
+                    phone: info.phone,
+                    tempUserUid: info.tempUserUid,
+                    guestSessionId: info.guestSessionId,
+                });
             } else {
-                router.replace(`/order/${tableId}/welcome?restaurantId=${restaurantIdFromUrl}${tokenSuffix}`);
+                router.replace(`/order/${encodeURIComponent(tableId)}/welcome${welcomeQuery}`);
             }
         }
-    }, [tableId, loggedInUser, router, restaurantIdFromUrl]);
+    }, [tableId, loggedInUser, router, restaurantIdFromUrl, searchParams]);
 
 
     useEffect(() => {
@@ -101,7 +91,7 @@ export default function OrderPage() {
                 }
                 
                 if (loggedInUser?.role === 'Table') {
-                    setCustomerInfo({ name: `Table ${fetchedTable.number}`, phone: `table-user-${tableId}` });
+                    setCustomerInfo({ name: `Table ${fetchedTable.number}`, phone: `table-user-${tableId}`, isTableDevice: true });
                 }
 
                 setTable({
@@ -166,18 +156,11 @@ export default function OrderPage() {
     }
 
     if (!customerInfo || isLoading) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-[var(--order-status-bg)]">
-                <div className="flex flex-col items-center gap-2">
-                    <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="text-muted-foreground">Loading menu...</p>
-                </div>
-            </div>
-        );
+        return <CustomerOrderPageSkeleton />;
     }
 
     return (
-        <div className="min-h-screen bg-[#f5f5f5] pb-20">
+        <div className="min-h-screen bg-[#f5f5f5] pb-20 content-fade-in">
             <OrderHeader
                 restaurantName={settings?.restaurantName || 'DineEasy'}
                 tableNumber={table?.number || 0}
@@ -198,5 +181,13 @@ export default function OrderPage() {
                 />
             </main>
         </div>
+    );
+}
+
+export default function OrderPage() {
+    return (
+        <Suspense fallback={<CustomerOrderPageSkeleton />}>
+            <OrderPageContent />
+        </Suspense>
     );
 }

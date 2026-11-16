@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Printer, Trash2, Edit, LoaderCircle } from 'lucide-react';
+import { Printer, Trash2, Edit } from 'lucide-react';
+import { TableRowsSkeleton } from '@/components/skeletons';
 import { Invoice } from '@/components/ui/invoice';
 import Link from 'next/link';
 import {
@@ -160,15 +161,8 @@ export default function SalesHistoryPage() {
     }
   };
 
-  if (isLoading || !settings) {
-    return (
-      <div className="flex h-[80vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-2">
-          <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="text-muted-foreground">Loading sales history...</p>
-        </div>
-      </div>
-    );
+  if ((isLoading && !settings) || !settings) {
+    return <TableRowsSkeleton label="Loading sales history" />;
   }
 
 

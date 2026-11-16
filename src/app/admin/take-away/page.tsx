@@ -8,6 +8,7 @@ import { useAuth } from "../auth-provider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRestaurantData } from "@/lib/client-data";
 import { getOrderById, getRemoteOrderById } from "@/lib/data";
+import { AdminMenuSkeleton } from "@/components/skeletons";
 
 export default function TakeAwayPage() {
     const { user } = useAuth();
@@ -70,7 +71,7 @@ export default function TakeAwayPage() {
 
 
     if (!user) {
-        return <div>Loading...</div>;
+        return <AdminMenuSkeleton label="Loading take-away menu" />;
     }
 
     return (
@@ -99,12 +100,14 @@ export default function TakeAwayPage() {
                     branchId={selectedBranchId}
                     settings={settings}
                 />
-            ) : (
+            ) : isGlobalAdmin && !selectedBranchId ? (
                 <div className="flex h-40 items-center justify-center border-2 border-dashed rounded-lg">
                     <p className="text-muted-foreground">
-                        {isGlobalAdmin ? "Select a branch to start a Take Away order." : "Loading menu..."}
+                        Select a branch to start a Take Away order.
                     </p>
                 </div>
+            ) : (
+                <AdminMenuSkeleton label="Loading take-away menu" />
             )}
         </div>
     );

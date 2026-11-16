@@ -14,6 +14,7 @@ import { DollarSign, CreditCard, LoaderCircle, Scissors } from "lucide-react";
 import { useFormStatus } from "react-dom";
 import { useRestaurantData } from "@/lib/client-data";
 import { SplitBillDialog } from "@/components/split-bill-dialog";
+import { AdminPageSkeleton } from "@/components/skeletons";
 
 type OrderWithTable = Order & { table?: Table };
 
@@ -73,14 +74,7 @@ export default function PaymentPage() {
     }, [orderId, getOrderById, getSettings, getTableById]);
 
     if (!order || !settings) {
-        return (
-            <div className="flex h-screen items-center justify-center">
-                <div className="flex flex-col items-center gap-2">
-                    <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-                    <p className="text-muted-foreground">Loading payment details...</p>
-                </div>
-            </div>
-        );
+        return <AdminPageSkeleton label="Loading payment details" />;
     }
 
     const currencyDecimalPlaces = settings.currencyDecimalPlaces ?? 2;

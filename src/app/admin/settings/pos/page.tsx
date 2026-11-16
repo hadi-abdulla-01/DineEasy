@@ -15,6 +15,7 @@ import { useSearchParams } from 'next/navigation';
 import { useRestaurantData } from '@/lib/client-data';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
+import { useAuth } from '@/app/admin/auth-provider';
 
 const defaultPosSettings: POSSettings = {
     cashDenominations: [10, 20, 50, 100],
@@ -34,17 +35,23 @@ function SubmitButton() {
 export default function PosSettingsPage() {
     const searchParams = useSearchParams();
     const branchId = searchParams.get('branchId');
-    const { getBranchById, getSettings, restaurantId } = useRestaurantData();
+    const { user } = useAuth();
+    const { getBranchById, restaurantId } = useRestaurantData();
+    const canEditSettings = Boolean(
+        user?.isSuperAdmin ||
+        user?.role === 'Admin' ||
+        user?.role === 'Manager' ||
+        user?.permissions?.settingsPos?.edit
+    );
     const [branch, setBranch] = useState<Branch | null>(null);
     const [posSettings, setPosSettings] = useState<POSSettings>(defaultPosSettings);
     const [newDenomination, setNewDenomination] = useState('');
     const [isLoading, setIsLoading] = useState(true);
-    const [otpAllowed, setOtpAllowed] = useState(true);
     const { toast } = useToast();
 
     useEffect(() => {
         if(branchId) {
-            Promise.all([getBranchById(branchId), getSettings(undefined)]).then(([b, restaurantSettings]) => {
+            getBranchById(branchId).then((b) => {
                 setBranch(b);
                 if (b) {
                     setPosSettings({
@@ -52,21 +59,37 @@ export default function PosSettingsPage() {
                         ...(b.posSettings || {}),
                     });
                 }
-                setOtpAllowed(restaurantSettings?.dineInOtpEnabled ?? true);
                 setIsLoading(false);
             });
         } else {
             setIsLoading(false);
         }
-    }, [branchId, getBranchById, getSettings]);
+    }, [branchId, getBranchById]);
 
     const handleFormAction = async (formData: FormData) => {
+        if (!canEditSettings) {
+            toast({
+                variant: "destructive",
+                title: "Unauthorized",
+                description: "Only authorized supervisors or administrators can modify these settings.",
+            });
+            return;
+        }
         const newFormData = new FormData();
         newFormData.append('posSettings', JSON.stringify(posSettings));
         newFormData.append('branchId', branchId!);
         newFormData.append('restaurantId', restaurantId);
+        if (user?.id) newFormData.append('actorUserId', user.id);
 
-        await updateSettingsAction(newFormData);
+        const res = await updateSettingsAction(newFormData);
+        if (res?.message) {
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: res.message,
+            });
+            return;
+        }
         toast({
             title: "Settings Saved",
             description: "Your POS settings have been updated.",
@@ -197,28 +220,6 @@ export default function PosSettingsPage() {
                                 id="onScreenKeyboardSwitch"
                                 checked={posSettings.enableOnScreenKeyboard}
                                 onCheckedChange={(checked) => setPosSettings(prev => ({...prev, enableOnScreenKeyboard: checked}))}
-                            />
-                        </div>
-                    </div>
-
-                    <Separator />
-                    
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-medium">Dine-in OTP Verification</h3>
-                        <div className="flex items-center justify-between rounded-lg border p-4">
-                            <div className="space-y-0.5">
-                                <Label htmlFor="enableDineInOTPSwitch" className="text-base">
-                                    Enable OTP for Dine-in Orders
-                                </Label>
-                                <p className="text-sm text-muted-foreground">
-                                    If enabled, customers must verify their phone number via SMS OTP before they can place an order. If disabled, customers can place orders directly without verification.
-                                </p>
-                            </div>
-                            <Switch
-                                id="enableDineInOTPSwitch"
-                                checked={otpAllowed && posSettings.enableDineInOTP}
-                                disabled={!otpAllowed}
-                                onCheckedChange={(checked) => setPosSettings(prev => ({...prev, enableDineInOTP: checked}))}
                             />
                         </div>
                     </div>

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { LoaderCircle, MinusCircle, PlusCircle } from 'lucide-react';
+import { MenuListSkeleton } from '@/components/skeletons';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { CartSheet } from './cart-sheet';
@@ -167,14 +168,7 @@ function MenuDisplay({ isCustomerFacing, menu, onSelectItem, getQuantity, onAddT
   const [showFeatured, setShowFeatured] = useState(isCustomerFacing);
 
   if (!settings) {
-    return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-2">
-          <LoaderCircle className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="text-muted-foreground">Loading menu...</p>
-        </div>
-      </div>
-    );
+    return <MenuListSkeleton />;
   }
 
   const currencySymbol = settings.currencySymbol || '$';
@@ -292,7 +286,7 @@ function MenuDisplay({ isCustomerFacing, menu, onSelectItem, getQuantity, onAddT
 }
 
 
-export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existingOrder, currentSession, customerInfo, settings, restaurantId }: { menu: MenuItem[]; tableId: string, isCustomerFacing: boolean, existingOrder?: Order, currentSession?: MealSession | null, customerInfo?: { name: string, phone: string }, settings: RestaurantSettings | null, restaurantId?: string }) {
+export function OrderForm({ menu: initialMenu, tableId, isCustomerFacing, existingOrder, currentSession, customerInfo, settings, restaurantId }: { menu: MenuItem[]; tableId: string, isCustomerFacing: boolean, existingOrder?: Order, currentSession?: MealSession | null, customerInfo?: { name: string, phone: string, tempUserUid?: string, guestSessionId?: string, isTableDevice?: boolean }, settings: RestaurantSettings | null, restaurantId?: string }) {
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [table, setTable] = useState<{ id: string, branchId: string } | null>(null);
   const [selectedItemForDetails, setSelectedItemForDetails] = useState<MenuItem | null>(null);
