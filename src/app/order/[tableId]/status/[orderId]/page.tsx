@@ -41,8 +41,8 @@ function OrderStatusPageContent() {
           return;
         }
 
-        // Security check
-        if (fetchedOrder.customerPhone !== customerPhone) {
+        // Security check: ensure order belongs to this table (and matches customer phone when single-order)
+        if (fetchedOrder.tableId && fetchedOrder.tableId !== tableId) {
           router.replace(`/order/${tableId}/welcome?restaurantId=${restaurantIdFromUrl}`);
           return;
         }

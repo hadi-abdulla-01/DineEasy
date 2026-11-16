@@ -825,7 +825,29 @@ export async function addItemsToOrder(orderId: string, items: OrderItem[], notes
     const order = docToObj<Order>(orderDoc);
 
     if (order) {
-        const updatedItems = [...order.items, ...items];
+        const mergedItems: OrderItem[] = order.items.map(existing => ({ ...existing }));
+        for (const incoming of items) {
+            const incomingAddonsKey = JSON.stringify(incoming.selectedAddons || []);
+            const incomingNotes = (incoming.notes || '').trim();
+            const matchIndex = mergedItems.findIndex(
+                existing =>
+                    existing.menuItemId === incoming.menuItemId &&
+                    existing.status !== 'cancelled' &&
+                    !existing.isReady &&
+                    (existing.notes || '').trim() === incomingNotes &&
+                    JSON.stringify(existing.selectedAddons || []) === incomingAddonsKey
+            );
+            if (matchIndex >= 0) {
+                mergedItems[matchIndex] = {
+                    ...mergedItems[matchIndex],
+                    quantity: mergedItems[matchIndex].quantity + incoming.quantity,
+                };
+            } else {
+                mergedItems.push(incoming);
+            }
+        }
+
+        const updatedItems = mergedItems;
         const settings = await getSettings(order.branchId, restaurantId);
         const subtotal = updatedItems.reduce((sum, item) => item.status !== 'cancelled' ? sum + item.price * item.quantity : sum, 0);
         const appliedTaxes: AppliedTax[] = (settings.taxes || []).map(tax => ({ name: tax.name, rate: tax.rate, amount: subtotal * (tax.rate / 100) }));

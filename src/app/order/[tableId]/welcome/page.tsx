@@ -117,6 +117,14 @@ function WelcomePageContent() {
                 }
                 
                 if (result?.redirectTo) {
+                    if (result.guestSessionId) {
+                        setCustomerSessionStorage(tableId, {
+                            name: customerName.trim(),
+                            phone: fullPhoneNumber,
+                            isVerified: true,
+                            guestSessionId: result.guestSessionId,
+                        });
+                    }
                     router.push(result.redirectTo);
                 } else if (result?.success) {
                     // No OTP required, save customer info + guestSessionId and redirect
@@ -184,6 +192,14 @@ function WelcomePageContent() {
                 }
                 
                 if (result?.redirectTo) {
+                    if (result.guestSessionId) {
+                        setCustomerSessionStorage(tableId, {
+                            name: customerName.trim(),
+                            phone: fullPhoneNumber,
+                            isVerified: true,
+                            guestSessionId: result.guestSessionId,
+                        });
+                    }
                     router.push(result.redirectTo);
                 } else if (result?.success) {
                     // Save customer info + guestSessionId and redirect

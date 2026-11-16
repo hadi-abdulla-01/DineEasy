@@ -6,6 +6,8 @@ import { OrderForm } from "@/components/order-form";
 import { notFound, redirect, useParams, useRouter, useSearchParams } from "next/navigation";
 import type { Order, MenuItem, MealSession, RestaurantSettings } from "@/lib/definitions";
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, ClipboardList } from "lucide-react";
 import { CustomerOrderPageSkeleton } from "@/components/skeletons";
 import { OrderHeader } from "@/components/order-header";
 import { useAuth } from "@/app/admin/auth-provider";
@@ -103,11 +105,42 @@ function OrderPageContent() {
 
                 const targetRestaurantId = restaurantIdFromUrl;
 
-                const [fetchedSettings, allMenuItems, session] = await Promise.all([
+                const [fetchedSettings, allMenuItems, session, branchActiveOrders] = await Promise.all([
                     getSettings(fetchedTable.branchId, targetRestaurantId),
                     getMenuItems(fetchedTable.branchId, targetRestaurantId),
                     getCurrentSession(fetchedTable.branchId, targetRestaurantId),
+                    getActiveOrders(fetchedTable.branchId, targetRestaurantId),
                 ]);
+
+                const tableActiveOrders = branchActiveOrders.filter(o => o.tableId === tableId);
+                let matchingOrder: Order | undefined;
+
+                if (orderId) {
+                    matchingOrder = tableActiveOrders.find(o => o.id === orderId) || await getOrderById(orderId, targetRestaurantId);
+                }
+                if (!matchingOrder) {
+                    matchingOrder =
+                        tableActiveOrders.find(o =>
+                            (customerInfo?.guestSessionId && o.guestSessionId === customerInfo.guestSessionId) ||
+                            (customerInfo?.phone && o.customerPhone === customerInfo.phone)
+                        ) ||
+                        (!fetchedSettings?.multipleGuestEnabled ? tableActiveOrders[0] : undefined);
+                }
+
+                // If the customer already has an active order and did NOT click "Add More Items",
+                // take them straight to their live Order Status page when they scan the QR again.
+                if (
+                    matchingOrder &&
+                    matchingOrder.status !== 'completed' &&
+                    matchingOrder.status !== 'cancelled' &&
+                    !addItems &&
+                    !customerInfo?.isTableDevice
+                ) {
+                    router.replace(
+                        `/order/${encodeURIComponent(tableId)}/status/${encodeURIComponent(matchingOrder.id)}?restaurantId=${encodeURIComponent(targetRestaurantId)}`
+                    );
+                    return;
+                }
 
                 setSettings(fetchedSettings);
                 setCurrentSession(session);
@@ -121,16 +154,15 @@ function OrderPageContent() {
                 });
                 setMenuItems(availableMenuItems);
 
-                if (addItems && orderId) {
-                    const orderToModify = await getOrderById(orderId, targetRestaurantId);
-                    setActiveOrderForCustomer(orderToModify);
+                if (matchingOrder && matchingOrder.status !== 'completed' && matchingOrder.status !== 'cancelled') {
+                    setActiveOrderForCustomer(matchingOrder);
                 } else {
                     setActiveOrderForCustomer(undefined);
                 }
+                setIsLoading(false);
             } catch (err) {
                 console.error("Error fetching order data:", err);
                 setError("Failed to load menu. Please try again.");
-            } finally {
                 setIsLoading(false);
             }
         }
@@ -169,6 +201,30 @@ function OrderPageContent() {
             />
 
             <main className="container mx-auto px-4 py-6 max-w-md">
+                {activeOrderForCustomer && (
+                    <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[#E95322]/30 bg-white p-3.5 shadow-sm">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#F5CB58]/30 text-[#CB1E1D]">
+                                <ClipboardList className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-xs font-semibold text-[#391713] truncate">
+                                    Adding to {activeOrderForCustomer.invoiceNumber ? `Invoice #${activeOrderForCustomer.invoiceNumber}` : `Order #${activeOrderForCustomer.id.slice(-6)}`}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                    New items will be added to your current order
+                                </p>
+                            </div>
+                        </div>
+                        <Link
+                            href={`/order/${encodeURIComponent(tableId)}/status/${encodeURIComponent(activeOrderForCustomer.id)}?restaurantId=${encodeURIComponent(table?.restaurantId || restaurantIdFromUrl || '')}`}
+                            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-[#CB1E1D] px-3 py-2 text-xs font-semibold text-white hover:bg-[#E95322] transition-colors"
+                        >
+                            <ArrowLeft className="h-3.5 w-3.5" />
+                            Order Status
+                        </Link>
+                    </div>
+                )}
                 <OrderForm
                     menu={menuItems}
                     tableId={tableId}

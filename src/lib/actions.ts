@@ -202,16 +202,32 @@ export async function placeOrder(prevState: PlaceOrderState, formData: FormData)
 
             if (existingOrderId) {
                 const existing = await getOrderById(existingOrderId, restaurantId);
-                if (!existing || existing.tableId !== tableId || (existing.guestSessionId && existing.guestSessionId !== guestSession.id)) {
-                    return { message: 'Cannot add items to another guest’s order.' };
+                if (!existing || existing.tableId !== tableId) {
+                    return { message: 'Cannot add items to another table’s order.' };
                 }
             }
 
             validatedGuestSessionId = guestSession.id;
         }
 
-        if (existingOrderId) {
-            finalOrder = await addItemsToOrder(existingOrderId, newItems, orderNotes, restaurantId);
+        // If an active Dine-in order already exists for this table, merge into that single order
+        // so Kitchen View always keeps one consolidated order per active table.
+        let targetExistingOrderId = existingOrderId;
+        if (!targetExistingOrderId && tableId) {
+            const activeBranchOrders = await getActiveOrders(branchId, restaurantId);
+            const activeOrdersForTable = activeBranchOrders.filter(o => o.tableId === tableId);
+            const matchingTableOrder =
+                activeOrdersForTable.find(o =>
+                    (validatedGuestSessionId && o.guestSessionId === validatedGuestSessionId) ||
+                    (customerPhone && o.customerPhone === customerPhone)
+                ) || activeOrdersForTable[0];
+            if (matchingTableOrder) {
+                targetExistingOrderId = matchingTableOrder.id;
+            }
+        }
+
+        if (targetExistingOrderId) {
+            finalOrder = await addItemsToOrder(targetExistingOrderId, newItems, orderNotes, restaurantId);
             if (finalOrder && finalOrder.status === 'ready') {
                 finalOrder = await updateOrderStatus(finalOrder.id, 'preparing', undefined, restaurantId);
             }
@@ -1563,8 +1579,21 @@ export async function requestOrderAccessAction(
         }
 
         if (existingOrder) {
-            // If an active order exists for this exact customer, redirect straight to the status page
-            return { redirectTo: `/order/${tableId}/status/${existingOrder.id}?restaurantId=${restaurantId}` };
+            // Ensure an active guest session exists so the customer can also use "Add More Items"
+            const existingSession = activeSessions.find(s => s.customerPhone === customerPhone);
+            const session = existingSession || await createGuestSession({
+                tableId,
+                branchId: table.branchId,
+                restaurantId,
+                customerName,
+                customerPhone,
+                isPhoneVerified: Boolean(existingOrder.guestSessionId),
+                qrType: (restaurantSettings.dynamicQrEnabled ?? true) && table.isDynamicQR ? 'dynamic' : 'static',
+            });
+            return {
+                redirectTo: `/order/${tableId}/status/${existingOrder.id}?restaurantId=${restaurantId}`,
+                guestSessionId: session.id,
+            };
         }
 
         if (usePhoneVerification) {
