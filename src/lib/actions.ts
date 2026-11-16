@@ -1310,7 +1310,6 @@ export async function toggleTableDynamicQRAction(tableId: string, isDynamic: boo
             qrExpiresAt: isDynamic ? expiresAt : deleteField() as any,
         };
         await updateTable(tableId, updateData, restaurantId);
-        revalidatePath('/admin/tables');
         return { success: true };
     } catch (error) {
         console.error("Failed to toggle dynamic QR for table:", error);
@@ -1339,7 +1338,6 @@ export async function resetTableQRTokenAction(tableId: string, restaurantId: str
             qrExpiresAt: Date.now() + duration,
         };
         await updateTable(tableId, updateData, restaurantId);
-        revalidatePath('/admin/tables');
         return { success: true };
     } catch (error) {
         console.error("Failed to reset QR token for table:", error);
@@ -1371,7 +1369,7 @@ export async function autoRotateQRTokenAction(tableId: string, restaurantId: str
             // Fall through on settings load failure.
         }
         if (!tableData.isDynamicQR) return { success: false, message: 'Not a dynamic QR table.' };
-        if (tableData.qrExpiresAt && Date.now() < tableData.qrExpiresAt) {
+        if (tableData.qrExpiresAt && Date.now() + 2000 < tableData.qrExpiresAt) {
             return { success: false, message: 'Token not yet expired.' };
         }
         const branchId = tableData.branchId;
@@ -1385,7 +1383,6 @@ export async function autoRotateQRTokenAction(tableId: string, restaurantId: str
             qrExpiresAt: Date.now() + duration,
         };
         await updateTable(tableId, updateData, restaurantId);
-        revalidatePath('/admin/tables');
         return { success: true };
     } catch (error) {
         console.error("Failed to auto-rotate QR token:", error);

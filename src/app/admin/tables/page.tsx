@@ -280,34 +280,57 @@ export default function TableManagementPage() {
             return;
         }
 
+        let cancelled = false;
         async function initializeBranch() {
             if (isGlobalAdmin) {
                 const [fetchedBranches, main] = await Promise.all([getBranches(), getMainBranch()]);
+                if (cancelled) return;
                 setAllBranches(fetchedBranches);
-                // Set initial branch selection only if it's not already set
+                const initialBranch = main?.id || fetchedBranches[0]?.id;
                 if (!selectedBranchId) {
-                    setSelectedBranchId(main?.id || fetchedBranches[0]?.id);
+                    if (initialBranch) {
+                        setSelectedBranchId(initialBranch);
+                    } else {
+                        setIsLoading(false);
+                    }
                 }
             } else {
-                setSelectedBranchId(user.branchId);
+                if (user.branchId) {
+                    setSelectedBranchId(user.branchId);
+                } else {
+                    setIsLoading(false);
+                }
             }
         }
         initializeBranch();
+        return () => {
+            cancelled = true;
+        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user, restaurantId, isGlobalAdmin]);
+    }, [user?.id, user?.branchId, restaurantId, isGlobalAdmin]);
 
     // Effect to fetch settings and subscribe to tables when a branch is selected
     useEffect(() => {
         if (!selectedBranchId || !restaurantId || !firestore) {
-            setTables([]);
-            setSettings(null);
-            setIsLoading(false);
             return;
         }
 
-        setIsLoading(true);
+        let settingsLoaded = false;
+        let tablesLoaded = false;
+        const checkDone = () => {
+            if (settingsLoaded && tablesLoaded) {
+                setIsLoading(false);
+            }
+        };
 
-        getSettings(selectedBranchId).then(setSettings);
+        getSettings(selectedBranchId)
+            .then((s) => {
+                setSettings(s);
+            })
+            .finally(() => {
+                settingsLoaded = true;
+                checkDone();
+            });
 
         const tablesRef = collection(firestore, `restaurants/${restaurantId}/tables`);
         const q = query(tablesRef, where('branchId', '==', selectedBranchId));
@@ -316,10 +339,12 @@ export default function TableManagementPage() {
             const fetchedTables = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), restaurantId } as Table));
             fetchedTables.sort((a, b) => String(a.number).localeCompare(String(b.number), undefined, { numeric: true }));
             setTables(fetchedTables);
-            setIsLoading(false);
+            tablesLoaded = true;
+            checkDone();
         }, (error) => {
             console.error("Error fetching tables in real-time:", error);
-            setIsLoading(false);
+            tablesLoaded = true;
+            checkDone();
         });
 
         return () => unsubscribe();

@@ -103,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedUser = sessionStorage.getItem('dineEasyUser');
       if (storedUser) {
         currentUser = JSON.parse(storedUser);
-        setUser(currentUser);
+        setUser(prev => (prev && JSON.stringify(prev) === storedUser ? prev : currentUser));
       }
     } catch (error) {
       console.error("Could not access session storage:", error);
